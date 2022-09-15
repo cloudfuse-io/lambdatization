@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+
+# This scripts runs bash on the CLI container.
+# - if no argument is provided, opens an interactive shell in the container
+# - arguments are passed to bash, e.g run `./l12n -c 'ls'` to run that command
+#   on the container
+
+# Environment:
+# - L12N_BUILD: set the path of the lambdatization repo to build the image
+
+# The CLI runs Docker commands from Docker, so it needs to have access to the
+# Docker socket. The calling user id and group id as well as the docker group id
+# are propagated to the image at build time. This enables the image to be runned
+# using the host user, but a rebuild is required when changing the calling user.
+
+set -e
+
+CURRENT_DIRNAME=$(pwd)
+# Take the provided credentials file location into account
+AWS_SHARED_CREDENTIALS_FILE="${AWS_SHARED_CREDENTIALS_FILE:=$HOME/.aws/credentials}"
+# Allow binding from host to run vast-cloud within vast-cloud
+export HOST_DIRNAME="${HOST_DIRNAME:=$CURRENT_DIRNAME}"
+export HOST_CREDENTIALS_FILE="${HOST_CREDENTIALS_FILE:=$AWS_SHARED_CREDENTIALS_FILE}"
+export HOST_DOCKER_SOCKET="${HOST_DOCKER_SOCKET:=/var/run/docker.sock}"
+
+export CALLER_UID=$(id -u)
+export CALLER_GID=$(id -g)
+export DOCKER_GID=$(stat -c '%g' ${HOST_DOCKER_SOCKET})
+
+build () {
+  docker build \
+    -t cloudfuse-io/cli \
+    --build-arg CALLER_UID \
+    --build-arg CALLER_GID \
+    --build-arg DOCKER_GID \
+    - < $L12N_BUILD/cli.Dockerfile  \
+  1>&2 \
+  || exit $? # call exit to fail CLI if build fails
+}
+
+docker image inspect cloudfuse-io/cli > /dev/null || [[ ! -z $L12N_BUILD ]] ||
+  (echo "Run this script with the environment variable L12N_BUILD=/path/to/lambdatization/repository to build the CLI image" && exit 1)
+
+# only build if explicitely required
+[[ -z $L12N_BUILD ]] || build
+
+# Run image with both AWS credentials file and env credentials if available
+# First argument passed to docker as flags
+# Second argument passed to the container as command arguments
+run () {
+  docker run \
+    $(echo "$1") \
+    --mount type=bind,source=$HOST_DOCKER_SOCKET,target=/var/run/docker.sock \
+    --mount type=bind,source=/,target=/host \
+    --mount source=l12n-cli-persistent-configs,target=/etc/persistent-configs \
+    --env-file default.env \
+    --env-file <(cat .env 2>/dev/null && true) \
+    -e AWS_PROFILE \
+    $([[ -f "$AWS_SHARED_CREDENTIALS_FILE" ]] && echo "-e AWS_SHARED_CREDENTIALS_FILE=/host$HOST_CREDENTIALS_FILE") \
+    -e AWS_ACCESS_KEY_ID \
+    -e AWS_SECRET_ACCESS_KEY \
+    --env-file <(env | grep L12N_) \
+    --env-file <(env | grep HOST_) \
+    --rm \
+    --workdir /host$HOST_DIRNAME \
+    cloudfuse-io/cli "${@:2}"
+}
+
+# The command is then executed with the resulting PTY_FLAG and enabling stdin
+run "-i $([[ $# -eq 0 ]] && echo '-t')" "$@"
