@@ -13,8 +13,6 @@
 # are propagated to the image at build time. This enables the image to be runned
 # using the host user, but a rebuild is required when changing the calling user.
 
-set -e
-
 CURRENT_DIRNAME=$(pwd)
 # Take the provided credentials file location into account
 AWS_SHARED_CREDENTIALS_FILE="${AWS_SHARED_CREDENTIALS_FILE:=$HOME/.aws/credentials}"
@@ -66,5 +64,7 @@ run () {
     cloudfuse-io/cli "${@:2}"
 }
 
-# The command is then executed with the resulting PTY_FLAG and enabling stdin
-run "-i $([[ $# -eq 0 ]] && echo '-t')" "$@"
+# if no argument is provided and no data is piped in, add the tty flag
+tty_flag=$([[ $# -eq 0 ]] && [ -t 0 ] && echo '-t')
+# run bash in the container with the provided arguments
+run "-i $tty_flag" "$@"
