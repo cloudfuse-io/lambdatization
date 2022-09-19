@@ -37,6 +37,7 @@ ARG UNAME=hostcaller
 ARG DOCKER_GID
 ARG CALLER_UID
 ARG CALLER_GID
+ARG REPO_DIR
 
 # Configure the host caller user/group and host docker group in the image
 RUN groupadd -g $CALLER_GID -o $UNAME && \
@@ -46,10 +47,15 @@ RUN groupadd -g $CALLER_GID -o $UNAME && \
 
 # Setup persistent folders for configs
 RUN owneddir() { mkdir -p $1 && chown $UNAME $1 ; } && \
-    owneddir /etc/persistant-configs/docker && \
-    owneddir /etc/persistant-configs/gcloud && \
-    owneddir /home/$UNAME/.config && \
-    ln -s /etc/persistant-configs/docker /home/$UNAME/.docker
+    ownedfile() { touch $1 && chown $UNAME $1 ; } && \
+    owneddir /etc/persistent-configs/docker && \
+    ownedfile /etc/persistent-configs/bash_history && \
+    ln -s /etc/persistent-configs/docker /home/$UNAME/.docker && \
+    ln -s /etc/persistent-configs/bash_history /home/$UNAME/.bash_history
+
+
+ENV REPO_DIR=$REPO_DIR
+ENV PATH=$PATH:$REPO_DIR
 
 USER $UNAME
 

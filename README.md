@@ -1,4 +1,4 @@
-# lambdatization
+# lambdatization (l12n)
 
 The goal of this project is to assess what process can realistically run inside
 lambda and have a first feeling about there performances. To do this we will try

@@ -1,4 +1,12 @@
-# The default provider manages VAST resources and other monitoring appliances
+variable "region_name" {
+  description = "The AWS region name (eu-west-1, us-east2...) in which the stack will be deployed"
+}
+
+module "env" {
+  source = "../common/env"
+}
+
+
 provider "aws" {
   region = var.region_name
   default_tags {
@@ -21,4 +29,12 @@ resource "aws_ecr_repository" "main" {
   lifecycle {
     ignore_changes = [tags]
   }
+}
+
+output "repository_url" {
+  value = aws_ecr_repository.main.repository_url
+}
+
+output "repository_arn" {
+  value = aws_ecr_repository.main.arn
 }

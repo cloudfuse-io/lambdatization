@@ -7,16 +7,17 @@
 
 # Environment:
 # - L12N_BUILD: set the path of the lambdatization repo to build the image
+# - L12N_TRACE: more verbose error messages when something unexpected happens
 
 # The CLI runs Docker commands from Docker, so it needs to have access to the
 # Docker socket. The calling user id and group id as well as the docker group id
 # are propagated to the image at build time. This enables the image to be runned
 # using the host user, but a rebuild is required when changing the calling user.
 
-CURRENT_DIRNAME=$(pwd)
 # Take the provided credentials file location into account
 AWS_SHARED_CREDENTIALS_FILE="${AWS_SHARED_CREDENTIALS_FILE:=$HOME/.aws/credentials}"
-# Allow binding from host to run vast-cloud within vast-cloud
+# Allow binding from host to run l12n-shell within l12n-shell
+CURRENT_DIRNAME=$(pwd)
 export HOST_DIRNAME="${HOST_DIRNAME:=$CURRENT_DIRNAME}"
 export HOST_CREDENTIALS_FILE="${HOST_CREDENTIALS_FILE:=$AWS_SHARED_CREDENTIALS_FILE}"
 export HOST_DOCKER_SOCKET="${HOST_DOCKER_SOCKET:=/var/run/docker.sock}"
@@ -31,13 +32,24 @@ build () {
     --build-arg CALLER_UID \
     --build-arg CALLER_GID \
     --build-arg DOCKER_GID \
+    --build-arg REPO_DIR=/host$(readlink -f $L12N_BUILD) \
     - < $L12N_BUILD/cli.Dockerfile  \
   1>&2 \
   || exit $? # call exit to fail CLI if build fails
 }
 
-docker image inspect cloudfuse-io/cli > /dev/null || [[ ! -z $L12N_BUILD ]] ||
-  (echo "Run this script with the environment variable L12N_BUILD=/path/to/lambdatization/repository to build the CLI image" && exit 1)
+docker image inspect cloudfuse-io/cli > /dev/null
+if [ $? -ne 0 ] && [[ -z $L12N_BUILD ]]
+  then
+    echo "Run this script with the environment variable L12N_BUILD=/path/to/lambdatization/repository to build the CLI image"
+    exit 1
+fi
+
+if [[ ! -z $L12N_BUILD ]] && [[ ! -f $L12N_BUILD/cli.Dockerfile ]] 
+  then
+    echo "The path provided by L12N_BUILD does not seem to lead to a valid repository"
+    exit 1
+fi
 
 # only build if explicitely required
 [[ -z $L12N_BUILD ]] || build
@@ -51,7 +63,6 @@ run () {
     --mount type=bind,source=$HOST_DOCKER_SOCKET,target=/var/run/docker.sock \
     --mount type=bind,source=/,target=/host \
     --mount source=l12n-cli-persistent-configs,target=/etc/persistent-configs \
-    --env-file default.env \
     --env-file <(cat .env 2>/dev/null && true) \
     -e AWS_PROFILE \
     $([[ -f "$AWS_SHARED_CREDENTIALS_FILE" ]] && echo "-e AWS_SHARED_CREDENTIALS_FILE=/host$HOST_CREDENTIALS_FILE") \
