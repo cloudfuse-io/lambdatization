@@ -57,6 +57,9 @@ RUN owneddir() { mkdir -p $1 && chown $UNAME $1 ; } && \
 ENV REPO_DIR=$REPO_DIR
 ENV PATH=$PATH:$REPO_DIR
 
+ENV REPO_DIR=$REPO_DIR
+ENV PATH=$PATH:$REPO_DIR
+
 USER $UNAME
 
 # Install Python dependencies
