@@ -14,8 +14,8 @@ output "module_name" {
 
 output "default_tags" {
   value = {
-      module      = local.module_name
-      provisioner = "terraform"
-      stage       = terraform.workspace
-    }
+    module      = local.module_name
+    provisioner = "terraform"
+    stage       = terraform.workspace
+  }
 }
