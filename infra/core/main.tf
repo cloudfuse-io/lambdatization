@@ -10,11 +10,7 @@ module "env" {
 provider "aws" {
   region = var.region_name
   default_tags {
-    tags = {
-      module      = module.env.module_name
-      provisioner = "terraform"
-      stage       = terraform.workspace
-    }
+    tags = module.env.default_tags
   }
 }
 
