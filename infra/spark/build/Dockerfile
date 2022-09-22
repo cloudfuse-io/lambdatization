@@ -70,6 +70,8 @@ RUN apt update && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=ric-dependency ${FUNCTION_DIR} ${FUNCTION_DIR}
+COPY ./spark-class /opt/spark/bin/
+COPY ./spark-defaults.conf /opt/spark/conf/
 
 WORKDIR ${FUNCTION_DIR}
 

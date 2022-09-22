@@ -3,16 +3,18 @@ services:
   spark:
     build: .
     image: cloudfuse-io/l12n:spark
-    user: root
+    cap_drop:
+      - ALL
+    user: daemon
+    read_only: true
+    volumes:
+      - spark-tmp:/tmp
     entrypoint:
-      - time
-      - /opt/spark/bin/spark-sql
-      - -e
-    command:
-      - "CREATE EXTERNAL TABLE nyc (trip_distance FLOAT, payment_type STRING) STORED AS PARQUET LOCATION 's3a://ursa-labs-taxi-data/2019/06/';SELECT payment_type, SUM(trip_distance) FROM nyc GROUP BY payment_type"
-    # command:
-    #   - "SELECT payment_type, SUM(trip_distance) FROM parquet.`s3a://ursa-labs-taxi-data/2019/06/` GROUP BY payment_type"
+      - bash
     environment:
-      - AWS_ACCESS_KEY_ID=AKIAZFOMGPO47E4BRVU2
-      - AWS_SECRET_ACCESS_KEY=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
+      - AWS_ACCESS_KEY_ID=$L12N_S3_AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY=$L12N_S3_AWS_SECRET_ACCESS_KEY
       - AWS_REGION=us-east-2
+
+volumes:
+  spark-tmp:
