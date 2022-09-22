@@ -1,6 +1,6 @@
 name: L12N
 on:
-  push_main:
+  push:
     branches:
       - main
   pull_request:
