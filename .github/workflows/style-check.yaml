@@ -37,4 +37,4 @@ jobs:
       - name: Markdown Lint
         run: |
           npm install --no-save markdownlint-cli
-          npx markdownlint .
+          npx markdownlint --ignore node_modules .
