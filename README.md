@@ -3,6 +3,7 @@
 <h4 align="center">
 
 [![L12N](https://github.com/cloudfuse-io/lambdatization/actions/workflows/l12n.yaml/badge.svg?branch=main)](https://github.com/cloudfuse-io/lambdatization/actions/workflows/l12n.yaml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 </h4>
 
