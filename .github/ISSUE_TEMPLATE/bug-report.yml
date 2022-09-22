@@ -25,6 +25,7 @@ body:
       label: Environment
       description: |
         Describe the environment you've encountered the bug in, e.g., the operating system, the config file and the version
+    validations:
       required: true
   - type: textarea
     attributes:
