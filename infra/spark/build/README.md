@@ -15,7 +15,7 @@
   `L12N_S3_AWS_SECRET_ACCESS_KEY` in you `.env` file and run `./l12n-shell`
   again). To navigate the resulting image with this "best effort" simultion
   settings, use `docker compose run spark`
-- we need to `cd` to `/tmp` before executing the `spark-sql` command so that the
+- We need to `cd` to `/tmp` before executing the `spark-sql` command so that the
   workdir is writeable
 - We override `spark-class` because it uses process substitution (`<(...)`)
   which is using `/dev/fd/63` as a tmp file and that is not allowed inside
