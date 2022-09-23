@@ -5,7 +5,9 @@ include "root" {
 dependency "core" {
   config_path = "../core"
 
-  mock_outputs = {}
+  mock_outputs = {
+    bucket_arn = "arn:aws:s3:::mock"
+  }
 }
 
 locals {
@@ -35,4 +37,5 @@ EOT
 inputs = {
   region_name = local.region_name
   spark_image = "dummy_overriden_by_before_hook"
+  bucket_arn  = dependency.core.outputs.bucket_arn
 }
