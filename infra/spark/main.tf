@@ -2,6 +2,8 @@ variable "region_name" {}
 
 variable "spark_image" {}
 
+variable "bucket_arn" {}
+
 module "env" {
   source = "../common/env"
 }
@@ -25,20 +27,20 @@ resource "aws_iam_policy" "s3_access" {
             "Sid": "objectlevel",
             "Effect": "Allow",
             "Action": "s3:*",
-            "Resource": "arn:aws:s3:::ursa-labs-taxi-data/*"
+            "Resource": "${var.bucket_arn}/*"
         },
         {
             "Sid": "bucketlevel",
             "Effect": "Allow",
             "Action": "s3:*",
-            "Resource": "arn:aws:s3:::ursa-labs-taxi-data"
+            "Resource": "${var.bucket_arn}"
         }
     ]
 }
 EOF
 }
 
-module "spark_client" {
+module "engine" {
   source = "../common/lambda"
 
   function_base_name = "spark"
@@ -53,5 +55,5 @@ module "spark_client" {
 }
 
 output "lambda_name" {
-  value = module.spark_client.lambda_name
+  value = module.engine.lambda_name
 }

@@ -278,3 +278,8 @@ def run_lambda(c, engine, cmd, env=[], json_output=False):
             pass
         raise Exit(message=mess, code=1)
     print_lambda_output(resp_payload, json_output, external_duration_sec)
+
+
+@task(autoprint=True)
+def bucket_name(c):
+    return terraform_output(c, "core", "bucket_name").strip()
