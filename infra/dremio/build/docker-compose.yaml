@@ -1,0 +1,23 @@
+version: "3.9"
+services:
+  dremio:
+    build: .
+    image: cloudfuse-io/l12n:dremio
+    cap_drop:
+      - ALL
+    user: daemon
+    # read_only: true
+    # volumes:
+    #   - dremio-tmp:/tmp
+    # entrypoint:
+    #   - bash
+    entrypoint:
+      - python3
+      - lambda-handler.py
+    environment:
+      - AWS_REGION=us-east-2
+      - AWS_ACCESS_KEY_ID=$L12N_S3_AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY=$L12N_S3_AWS_SECRET_ACCESS_KEY
+
+# volumes:
+#   dremio-tmp:
