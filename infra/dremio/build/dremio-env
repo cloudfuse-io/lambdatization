@@ -56,7 +56,7 @@ DREMIO_PID_DIR=/tmp/run
 # Garbage collection logging is enabled by default. Set the following
 # parameter to "no" to disable garbage collection logging.
 #
-#DREMIO_GC_LOGS_ENABLED="yes"
+DREMIO_GC_LOGS_ENABLED="no"
 
 #
 # Send GC logs to console and not to log files. The DREMIO_LOG_DIR is ignored if set.

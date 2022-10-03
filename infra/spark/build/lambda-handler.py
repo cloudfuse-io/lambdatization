@@ -65,6 +65,7 @@ def buff_and_print(stream, stream_name):
 @hide_command_exception
 def handler(event, context):
     """An AWS Lambda handler that runs the provided command with bash and returns the standard output"""
+    shutil.rmtree("/tmp", ignore_errors=True)
     start = time.time()
     global IS_COLD_START
     is_cold_start = IS_COLD_START
@@ -93,7 +94,6 @@ def handler(event, context):
     stdout = buff_and_print(process.stdout, "stdout").strip()
     stderr = stderr_thread.join().strip()
     returncode = process.wait()
-    shutil.rmtree("/tmp", ignore_errors=True)
     logging.info("returncode: %s", returncode)
     result = {
         "stdout": stdout,

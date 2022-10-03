@@ -5,12 +5,9 @@ services:
     image: cloudfuse-io/l12n:dremio
     cap_drop:
       - ALL
-    user: daemon
-    # read_only: true
-    # volumes:
-    #   - dremio-tmp:/tmp
-    # entrypoint:
-    #   - bash
+    read_only: true
+    volumes:
+      - dremio-tmp:/tmp
     entrypoint:
       - python3
       - lambda-handler.py
@@ -19,5 +16,5 @@ services:
       - AWS_ACCESS_KEY_ID=$L12N_S3_AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY=$L12N_S3_AWS_SECRET_ACCESS_KEY
 
-# volumes:
-#   dremio-tmp:
+volumes:
+  dremio-tmp:
