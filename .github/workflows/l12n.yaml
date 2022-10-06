@@ -30,4 +30,4 @@ jobs:
           ./l12n-shell l12n build-images -s spark
       - name: Dremio
         run: |
-          /l12n-shell l12n build-images -s dremio
+          ./l12n-shell l12n build-images -s dremio
