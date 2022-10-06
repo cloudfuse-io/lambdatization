@@ -1,7 +1,6 @@
 """Dremio on AWS Lambda"""
 
 from invoke import task
-from common import TFDIR
 import core
 
 
