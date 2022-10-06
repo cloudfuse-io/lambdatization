@@ -15,6 +15,7 @@ services:
       - AWS_REGION=us-east-2
       - AWS_ACCESS_KEY_ID=$L12N_S3_AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY=$L12N_S3_AWS_SECRET_ACCESS_KEY
+      - DATA_BUCKET_NAME
 
 volumes:
   dremio-tmp:

@@ -283,3 +283,12 @@ def run_lambda(c, engine, cmd, env=[], json_output=False):
 @task(autoprint=True)
 def bucket_name(c):
     return terraform_output(c, "core", "bucket_name").strip()
+
+
+@task
+def dockerized(c, engine):
+    """Run locally the engine docker image with configs similar to the Lambda runtime"""
+    compose = f"docker compose -f {TFDIR}/{engine}/build/docker-compose.yaml"
+    c.run(f"{compose} down -v")
+    c.run(f"{compose} build")
+    c.run(f"DATA_BUCKET_NAME={bucket_name(c)} {compose} up")

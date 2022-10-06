@@ -5,16 +5,17 @@ services:
     image: cloudfuse-io/l12n:spark
     cap_drop:
       - ALL
-    user: daemon
     read_only: true
     volumes:
       - spark-tmp:/tmp
     entrypoint:
-      - bash
+      - python3
+      - lambda-handler.py
     environment:
       - AWS_ACCESS_KEY_ID=$L12N_S3_AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY=$L12N_S3_AWS_SECRET_ACCESS_KEY
       - AWS_REGION=us-east-2
+      - DATA_BUCKET_NAME
 
 volumes:
   spark-tmp:

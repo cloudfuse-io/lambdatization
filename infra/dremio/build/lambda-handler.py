@@ -204,7 +204,7 @@ def handler(event, context):
     """An AWS Lambda handler that runs the provided command with bash and returns the standard output"""
     global IS_COLD_START, INIT_RESP
 
-    logging.warn("Dremio source init fails if user is not dremio or sbx_user1051")
+    logging.warning("Dremio source init fails if user is not dremio or sbx_user1051")
 
     is_cold_start = IS_COLD_START
     IS_COLD_START = False
@@ -248,15 +248,13 @@ def handler(event, context):
 
 
 if __name__ == "__main__":
-    print(
-        handler(
-            {
-                "cmd": base64.b64encode(
-                    f"""SELECT payment_type, SUM(trip_distance) FROM {SOURCE_NAME}."l12n-615900053518-eu-west-1-default"."nyc-taxi"."2019"."01" GROUP BY payment_type""".encode(
-                        "utf-8"
-                    )
-                )
-            },
-            {},
-        )
+    query_str = f"""
+SELECT payment_type, SUM(trip_distance) 
+FROM {SOURCE_NAME}."{os.getenv("DATA_BUCKET_NAME")}"."nyc-taxi"."2019"."01" 
+GROUP BY payment_type
+"""
+    res = handler(
+        {"cmd": base64.b64encode(query_str.encode("utf-8"))},
+        {},
     )
+    print(res)
