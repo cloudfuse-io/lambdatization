@@ -19,14 +19,16 @@ To get started:
 - clone this repository
 - `cd` into it
 - run `L12N_BUILD=. ./l12n-shell`
-  - the `L12N_BUILD` environment variable indicates to the `l12n-shell` script that it
-    needs to build the image
-  - the `./l12n-shell` without any argument runs an interactive bash terminal in the
-    CLI container
+  - the `L12N_BUILD` environment variable indicates to the `l12n-shell` script
+    that it needs to build the image
+  - the `./l12n-shell` without any argument runs an interactive bash terminal in
+    the CLI container
   - the same arguments can be provided to `./l12n-shell` as to `bash`, e.g
     `./l12n-shell -c "cmd"` and `echo "cmd" | ./l12n-shell` both run `cmd` in
     the CLI container
 
 ## Contribute
 
-We try to follow the [conventional commits standard](https://www.conventionalcommits.org/en/v1.0.0/).
+- We try to follow the [conventional commits
+  standard](https://www.conventionalcommits.org/en/v1.0.0/)
+- We use [black](https://github.com/psf/black) for linting
