@@ -4,7 +4,6 @@ import subprocess
 import logging
 import base64
 import sys
-import shutil
 import time
 from typing import Dict
 import requests
@@ -27,7 +26,6 @@ def setup_credentials():
         f.write(f'aws_secret_access_key = {os.environ["AWS_SECRET_ACCESS_KEY"]}\n')
         if "AWS_SESSION_TOKEN" in os.environ:
             f.write(f'aws_session_token = {os.environ["AWS_SESSION_TOKEN"]}\n')
-    # os.environ["AWS_CREDENTIAL_PROFILES_FILE"] = "/tmp/aws/credentials"
 
 
 @dataclass
@@ -61,18 +59,17 @@ def create_firstuser(timeout, start_time) -> Resp:
         return Resp(True, "")
     except requests.exceptions.ConnectionError:
         if time.time() - start_time < timeout:
-            time.sleep(0.1)
+            time.sleep(0.2)
             return create_firstuser(timeout, start_time)
         return Resp(False, "Failed to create first user: time out")
 
 
 def init() -> Resp:
     """Try to init Dremio, if success return token as msg"""
+    setup_credentials()
     if not os.path.exists("/tmp/log"):
         os.makedirs("/tmp/log")
-    process = subprocess.run(
-        ["/opt/dremio/bin/dremio", "start"], capture_output=True, env=os.environ
-    )
+    process = subprocess.run(["/opt/dremio/bin/dremio", "start"], capture_output=True)
     if process.returncode != 0:
         return f"`dremio start` exited with code {process.returncode}:\n{process.stdout}{process.stderr}"
     res = create_firstuser(120, time.time())
@@ -160,6 +157,7 @@ def query(query: str, token: str) -> Dict:
     resp.raise_for_status()
 
     job_id = resp.json()["jobId"]["id"]
+    logging.info(f"job_id: {job_id}")
 
     while True:
         job_resp = requests.get(
@@ -185,26 +183,40 @@ def query(query: str, token: str) -> Dict:
             return job_resp.json()
 
 
+# def clean():
+#     # subprocess.run(["tail", "/tmp/log/server.log"], capture_output=True)
+#     try:
+#         a_file = open("/tmp/log/server.log")
+#         file_contents = a_file.read()
+#         print("===============================================")
+#         print(file_contents)
+#         print("===============================================")
+#     except:
+#         print("couldn't read /tmp/log/server.log")
+#     subprocess.run(["/opt/dremio/bin/dremio", "stop"], capture_output=True)
+#     shutil.rmtree("/tmp", ignore_errors=True)
+
+
 IS_COLD_START = True
 
 
 def handler(event, context):
     """An AWS Lambda handler that runs the provided command with bash and returns the standard output"""
-    shutil.rmtree("/tmp", ignore_errors=True)
-    start = time.time()
-    global IS_COLD_START
+    global IS_COLD_START, INIT_RESP
+
+    logging.warn("Dremio source init fails if user is not dremio or sbx_user1051")
+
     is_cold_start = IS_COLD_START
     IS_COLD_START = False
 
+    start = time.time()
     # Init must run in handler because it is otherwise limited to 10S
-    # INIT_RESP can be moved to global to keep in memory accross lambda runs
-    INIT_RESP = None
     if is_cold_start:
-        setup_credentials()
         INIT_RESP = init()
+    init_duration = time.time() - start
+
     if not INIT_RESP.success:
         raise Exception(f"Init failed: {INIT_RESP.msg}")
-    init_duration = time.time() - start
 
     # input parameters
     logging.debug("event: %s", event)
@@ -219,8 +231,8 @@ def handler(event, context):
     query_err = ""
     try:
         query_res = query(src_command, INIT_RESP.msg)
-    except Exception as e:
-        query_err = repr(e)
+    except requests.exceptions.HTTPError as err:
+        query_err = f"Error calling {err.request.url} : {err}\n{err.response.text}"
 
     result = {
         "stdout": query_res,
@@ -235,13 +247,16 @@ def handler(event, context):
     return result
 
 
-# handler(
-#     {
-#         "cmd": base64.b64encode(
-#             f"""SELECT payment_type, SUM(trip_distance) FROM {SOURCE_NAME}."l12n-615900053518-eu-west-1-default"."nyc-taxi"."2019"."01" GROUP BY payment_type""".encode(
-#                 "utf-8"
-#             )
-#         )
-#     },
-#     {},
-# )
+if __name__ == "__main__":
+    print(
+        handler(
+            {
+                "cmd": base64.b64encode(
+                    f"""SELECT payment_type, SUM(trip_distance) FROM {SOURCE_NAME}."l12n-615900053518-eu-west-1-default"."nyc-taxi"."2019"."01" GROUP BY payment_type""".encode(
+                        "utf-8"
+                    )
+                )
+            },
+            {},
+        )
+    )

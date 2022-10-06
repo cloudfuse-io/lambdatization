@@ -2,6 +2,8 @@ variable "region_name" {}
 
 variable "dremio_image" {}
 
+variable "bucket_arn" {}
+
 module "env" {
   source = "../common/env"
 }
@@ -36,13 +38,13 @@ resource "aws_iam_policy" "s3_access" {
             "Sid": "objectlevel",
             "Effect": "Allow",
             "Action": "s3:*",
-            "Resource": "arn:aws:s3:::ursa-labs-taxi-data/*"
+            "Resource": "${var.bucket_arn}/*"
         },
         {
             "Sid": "bucketlevel",
             "Effect": "Allow",
             "Action": "s3:*",
-            "Resource": "arn:aws:s3:::ursa-labs-taxi-data"
+            "Resource": "${var.bucket_arn}"
         }
     ]
 }

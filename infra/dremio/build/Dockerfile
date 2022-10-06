@@ -38,7 +38,11 @@ ARG FUNCTION_DIR
 COPY --from=ric-dependency ${FUNCTION_DIR} ${FUNCTION_DIR}
 COPY ./dremio.conf /opt/dremio/conf/
 COPY ./dremio-env /opt/dremio/conf/
-ENV AWS_CREDENTIAL_PROFILES_FILE=/tmp/aws/credentials
+
+USER root
+RUN  mkdir -p /var/lib/dremio/dremio/.aws && ln -s /tmp/aws/credentials /var/lib/dremio/dremio/.aws/credentials
+RUN  mkdir -p /home/sbx_user1051/.aws && ln -s /tmp/aws/credentials /home/sbx_user1051/.aws/credentials
+USER dremio
 
 WORKDIR ${FUNCTION_DIR}
 
