@@ -19,7 +19,7 @@ def s3_regions():
 
 
 AWS_REGION_VALIDATOR = dynaconf.Validator(
-    "L12N_AWS_REGION", must_exist=True, is_in=s3_regions()
+    "L12N_AWS_REGION", default="eu-west-1", is_in=s3_regions()
 )
 
 # Path aliases
