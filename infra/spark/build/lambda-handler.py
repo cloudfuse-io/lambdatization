@@ -109,3 +109,16 @@ def handler(event, context):
     if returncode != 0:
         raise CommandException(json.dumps(result))
     return result
+
+
+if __name__ == "__main__":
+    query_str = f"""
+SELECT payment_type, SUM(trip_distance) 
+FROM parquet.\`s3a://{os.getenv("DATA_BUCKET_NAME")}/nyc-taxi/2019/01/\` 
+GROUP BY payment_type
+"""
+    res = handler(
+        {"cmd": base64.b64encode(query_str.encode("utf-8"))},
+        {},
+    )
+    print(res)
