@@ -13,7 +13,10 @@ to execute a list of engines as Lambdas.
 
 ## Lambdatizating yourself
 
-To get started:
+### The `l12n-shell`
+The `l12n-shell` provides a way to run all commands in an isolated docker
+environement. It is not strictly necessary, but simplifies the collaboration on
+the project. To set it up:
 
 - you must have docker installed, it is the only dependency
 - clone this repository
@@ -21,11 +24,46 @@ To get started:
 - run `L12N_BUILD=. ./l12n-shell`
   - the `L12N_BUILD` environment variable indicates to the `l12n-shell` script
     that it needs to build the image
+  - `./l12n-shell` looks for a `.env` file in the current directory to source
+    environment variables from (see section below)
   - the `./l12n-shell` without any argument runs an interactive bash terminal in
     the CLI container
-  - the same arguments can be provided to `./l12n-shell` as to `bash`, e.g
-    `./l12n-shell -c "cmd"` and `echo "cmd" | ./l12n-shell` both run `cmd` in
-    the CLI container
+  - the same arguments can be provided to `./l12n-shell` as to `bash`. For
+    example, `./l12n-shell cmd`, `./l12n-shell -c "cmd"` and `echo "cmd" |
+    ./l12n-shell` all run `cmd` in the `l12n-shell`
+
+## Configurations
+
+`./l12n-shell` can be configured through environement variables or a `.env` in
+the current directory:
+- `L12N_PLUGINS` is a comma seprated list of plugins to activate
+- `L12N_AWS_REGION` is the region where the stack should run
+- the credentials used by the query engine images when executed locally
+  - `L12N_S3_AWS_ACCESS_KEY_ID`
+  - `L12N_S3_AWS_SECRET_ACCESS_KEY`  
+
+You can also provide the
+[usual](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html) AWS variables:
+- `AWS_PROFILE`
+- `AWS_SHARED_CREDENTIALS_FILE`
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+
+## The `l12n` CLI
+
+Inside the `l12n-shell`, you can use the following commands:
+- `l12n -h` to see all the available commands
+- `l12n deploy -a` will run the terraform scripts and deploy the necessary
+  resources (buckets, functions, roles...)
+- `l12n destroy -a` to tear down the infrastructure and clean up your AWS
+  account
+- `l12n dockerized -e engine_name` runs a preconfigured query in the dockerized
+  version of the specified engine locally. It requires the core module to be
+  deployed to have access to the data
+- `l12n run-lambda -e engine_name -c sql_query` runs the specified sql query on
+  the given engine
+  - you can also run pre-configured queries using the examples. Run `l12n -h` to
+    see the list of examples.
 
 ## Contribute
 
