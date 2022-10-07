@@ -291,4 +291,10 @@ def dockerized(c, engine):
     compose = f"docker compose -f {TFDIR}/{engine}/build/docker-compose.yaml"
     c.run(f"{compose} down -v")
     c.run(f"{compose} build")
-    c.run(f"DATA_BUCKET_NAME={bucket_name(c)} {compose} up")
+    creds = aws("sts").get_session_token()["Credentials"]
+    creds_env = {
+        "LAMBDA_ACCESS_KEY_ID": creds["AccessKeyId"],
+        "LAMBDA_SECRET_ACCESS_KEY": creds["SecretAccessKey"],
+        "LAMBDA_SESSION_TOKEN": creds["SessionToken"],
+    }
+    c.run(f"DATA_BUCKET_NAME={bucket_name(c)} {compose} up", env=creds_env)

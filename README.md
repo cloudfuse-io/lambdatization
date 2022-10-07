@@ -38,9 +38,6 @@ the project. To set it up:
 the current directory:
 - `L12N_PLUGINS` is a comma seprated list of plugins to activate
 - `L12N_AWS_REGION` is the region where the stack should run
-- the credentials used by the query engine images when executed locally
-  - `L12N_S3_AWS_ACCESS_KEY_ID`
-  - `L12N_S3_AWS_SECRET_ACCESS_KEY`  
 
 You can also provide the
 [usual](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html) AWS variables:
