@@ -1,0 +1,7 @@
+log_dir            = "/tmp/logs"
+
+[raft_config]
+raft_dir      = "/tmp/raft"
+
+# Start up mode: single node cluster
+single        = true

@@ -1,0 +1,1 @@
+# Databend lambdatization tricks
