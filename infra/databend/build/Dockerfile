@@ -1,24 +1,15 @@
 
 ARG DATABEND_VERSION=v0.8.61-nightly
-# for v0.8.61-nightly, the experimental_allow_proto3_optional is used
-# which is only available for protoc >=3.12 and exited experimental mode
-# in 3.15 (the `experimental_` prefix will stop working at some point)
-ARG PROTOC_VERSION=3.15.8
 ARG FUNCTION_DIR="/function"
 
-FROM rust:1.64-bullseye as build
+
+FROM ubuntu:22.04 as download
 ARG DATABEND_VERSION
-ARG PROTOC_VERSION
-
-RUN PB_REL="https://github.com/protocolbuffers/protobuf/releases" && \
-    curl -LO $PB_REL/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip && \
-    unzip protoc-${PROTOC_VERSION}-linux-x86_64.zip -d /usr/local/
-
-RUN git clone --depth 1 --branch ${DATABEND_VERSION} https://github.com/datafuselabs/databend.git 
-WORKDIR /databend
-RUN echo protoc -v
-RUN cargo build --bin=databend-query --bin=databend-meta --bin=databend-metactl --release
-
+RUN apt update && apt install -y curl
+RUN DB_REL="https://github.com/datafuselabs/databend/releases" && \
+    curl -LO $DB_REL/download/${DATABEND_VERSION}/databend-${DATABEND_VERSION}-x86_64-unknown-linux-gnu.tar.gz
+RUN mkdir -p /databend/target/release/ && \
+    tar -xvf databend-${DATABEND_VERSION}-x86_64-unknown-linux-gnu.tar.gz -C /databend/target/release/ --strip-components=1 bin
 
 FROM ubuntu:22.04 as ric-dependency
 
@@ -54,8 +45,8 @@ RUN apt-get update -y && \
     rm -rf /var/lib/apt/lists/* && \
     rm -rf /var/cache/apt/*
 
-COPY --from=build /databend/target/release/databend-query /databend-query
-COPY --from=build /databend/target/release/databend-meta /databend-meta
+COPY --from=download /databend/target/release/databend-query /databend-query
+COPY --from=download /databend/target/release/databend-meta /databend-meta
 COPY ./bootstrap.sh /bootstrap.sh
 COPY ./databend-query.toml /databend-query.toml
 COPY ./databend-meta.toml /databend-meta.toml
