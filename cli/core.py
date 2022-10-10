@@ -1,5 +1,6 @@
 from invoke import Context, task, Exit
 import dynaconf
+from botocore.exceptions import ClientError
 import time
 import base64
 import json
@@ -288,7 +289,26 @@ def bucket_name(c):
 @task
 def dockerized(c, engine):
     """Run locally the engine docker image with configs similar to the Lambda runtime"""
+    # Lambda works with session credentials provided through env variables
+    # We exchange the credentials provided by the user with session credentials using STS
+    # Compose will pick these up and export them inside the container as Lambda would
+    try:
+        creds = aws("sts").get_session_token()["Credentials"]
+        c.config.run.env = {
+            "LAMBDA_ACCESS_KEY_ID": creds["AccessKeyId"],
+            "LAMBDA_SECRET_ACCESS_KEY": creds["SecretAccessKey"],
+            "LAMBDA_SESSION_TOKEN": creds["SessionToken"],
+        }
+    except ClientError as error:
+        if error.response['Error']["Message"]=="Cannot call GetSessionToken with session credentials":
+            creds = aws().get_credentials().get_frozen_credentials()
+            c.config.run.env = {
+                "LAMBDA_ACCESS_KEY_ID": creds.access_key,
+                "LAMBDA_SECRET_ACCESS_KEY": creds.secret_key,
+                "LAMBDA_SESSION_TOKEN": creds.token,
+            }
     compose = f"docker compose -f {TFDIR}/{engine}/build/docker-compose.yaml"
     c.run(f"{compose} down -v")
     c.run(f"{compose} build")
     c.run(f"DATA_BUCKET_NAME={bucket_name(c)} {compose} up")
+    

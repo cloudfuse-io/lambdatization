@@ -15,7 +15,6 @@ provider "aws" {
   }
 }
 
-# The Java SDK always needs credentials to operate, so it needs access to S3 even if the bucket is public
 resource "aws_iam_policy" "s3_access" {
   name = "${module.env.module_name}-spark-s3-access-${var.region_name}-${module.env.stage}"
 

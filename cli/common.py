@@ -6,7 +6,6 @@ from invoke import Context, Exit, Failure
 import dynaconf
 import json
 import os
-import boto3.session
 import boto3
 import botocore.client
 import shutil
@@ -110,13 +109,16 @@ def AWS_REGION():
     return conf(AWS_REGION_VALIDATOR)["L12N_AWS_REGION"]
 
 
-def aws(service, resource=False):
+def aws(service=None, resource=False):
     # timeout set to 1000 to be larger than lambda max duration
-    config = botocore.client.Config(retries={"max_attempts": 0}, read_timeout=1000)
-    if resource:
-        return boto3.resource(service, region_name=AWS_REGION(), config=config)
+    if service is None:
+        return boto3.Session()
     else:
-        return boto3.client(service, region_name=AWS_REGION(), config=config)
+        config = botocore.client.Config(retries={"max_attempts": 0}, read_timeout=1000)
+        if resource:
+            return boto3.resource(service, region_name=AWS_REGION(), config=config)
+        else:
+            return boto3.client(service, region_name=AWS_REGION(), config=config)
 
 
 def parse_env(env: List[str]) -> Dict[str, str]:

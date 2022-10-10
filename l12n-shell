@@ -16,10 +16,12 @@
 
 # Take the provided credentials file location into account
 AWS_SHARED_CREDENTIALS_FILE="${AWS_SHARED_CREDENTIALS_FILE:=$HOME/.aws/credentials}"
+AWS_CONFIG_FILE="${AWS_CONFIG_FILE:=$HOME/.aws/config}"
 # Allow binding from host to run l12n-shell within l12n-shell
 CURRENT_DIRNAME=$(pwd)
 export HOST_DIRNAME="${HOST_DIRNAME:=$CURRENT_DIRNAME}"
 export HOST_CREDENTIALS_FILE="${HOST_CREDENTIALS_FILE:=$AWS_SHARED_CREDENTIALS_FILE}"
+export HOST_AWS_CONFIG_FILE="${HOST_AWS_CONFIG_FILE:=$AWS_CONFIG_FILE}"
 export HOST_DOCKER_SOCKET="${HOST_DOCKER_SOCKET:=/var/run/docker.sock}"
 
 export CALLER_UID=$(id -u)
@@ -66,6 +68,7 @@ run () {
     --env-file <(cat .env 2>/dev/null && true) \
     -e AWS_PROFILE \
     $([[ -f "$AWS_SHARED_CREDENTIALS_FILE" ]] && echo "-e AWS_SHARED_CREDENTIALS_FILE=/host$HOST_CREDENTIALS_FILE") \
+    $([[ -f "$AWS_CONFIG_FILE" ]] && echo "-e AWS_CONFIG_FILE=/host$HOST_AWS_CONFIG_FILE") \
     -e AWS_ACCESS_KEY_ID \
     -e AWS_SECRET_ACCESS_KEY \
     --env-file <(env | grep L12N_) \
