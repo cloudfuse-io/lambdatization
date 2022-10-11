@@ -109,16 +109,13 @@ def AWS_REGION():
     return conf(AWS_REGION_VALIDATOR)["L12N_AWS_REGION"]
 
 
-def aws(service=None, resource=False):
+def aws(service=None):
     # timeout set to 1000 to be larger than lambda max duration
     if service is None:
         return boto3.Session()
     else:
         config = botocore.client.Config(retries={"max_attempts": 0}, read_timeout=1000)
-        if resource:
-            return boto3.resource(service, region_name=AWS_REGION(), config=config)
-        else:
-            return boto3.client(service, region_name=AWS_REGION(), config=config)
+        return boto3.client(service, region_name=AWS_REGION(), config=config)
 
 
 def parse_env(env: List[str]) -> Dict[str, str]:
