@@ -7,13 +7,22 @@ import core
 @task
 def lambda_example(c):
     """SUM(trip_distance) GROUP_BY payment_type"""
+    # NOTE: __RUNTIME_PROVIDED__ is interpolated by the handler with actual credentials
     sql = f"""
-CREATE STAGE IF NOT EXISTS staging_1 
-  url = 's3://testbucket/admin/data/' 
-  credentials=(aws_key_id='minioadmin' aws_secret_key='minioadmin');
+CREATE TRANSIENT TABLE IF NOT EXISTS taxi201901
+(
+    payment_type VARCHAR,
+    trip_distance FLOAT
+);
+
+COPY INTO taxi201901
+  FROM 's3://{core.bucket_name(c)}/nyc-taxi/2019/01/'
+  credentials=(__RUNTIME_PROVIDED__)
+  pattern ='.*[.]parquet'
+  file_format = (type = 'PARQUET');
 
 SELECT payment_type, SUM(trip_distance) 
-FROM @staging_1
+FROM taxi201901
 GROUP BY payment_type;
 """
     print(sql)
