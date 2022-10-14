@@ -11,6 +11,11 @@ __stdout__ = sys.stdout
 
 
 IS_COLD_START = True
+SESSION_CREDENTIALS = f"""
+    aws_key_id='{os.getenv("AWS_ACCESS_KEY_ID")}' 
+    aws_secret_key='{os.getenv("AWS_SECRET_ACCESS_KEY")}' 
+    aws_token='{os.getenv("AWS_SESSION_TOKEN")}'
+  """
 
 
 def init():
@@ -23,6 +28,7 @@ def query(sql, timeout):
     # Run query
     start_time = time.time()
     logging.info(f"Running {sql}")
+    sql = sql.replace("__RUNTIME_PROVIDED__", SESSION_CREDENTIALS)
     while True:
         try:
             basic = requests.auth.HTTPBasicAuth("root", "root")
@@ -30,7 +36,7 @@ def query(sql, timeout):
                 "http://localhost:8000/v1/query/",
                 headers={"Content-Type": "application/json"},
                 auth=basic,
-                json={"sql": sql},
+                json={"sql": sql, "pagination": {"wait_time_secs": 1000}},
             )
             json_resp = resp.json()
             if "error" in json_resp and json_resp["error"] is not None:
@@ -88,18 +94,14 @@ if __name__ == "__main__":
     query_str = f"""
 CREATE TRANSIENT TABLE IF NOT EXISTS taxi201901
 (
-    payment_type INT,
+    payment_type VARCHAR,
     trip_distance FLOAT
 );
 
 COPY INTO taxi201901
   FROM 's3://{os.getenv("DATA_BUCKET_NAME")}/nyc-taxi/2019/01/'
-  credentials=(
-    aws_key_id='{os.getenv("AWS_ACCESS_KEY_ID")}' 
-    aws_secret_key='{os.getenv("AWS_SECRET_ACCESS_KEY")}' 
-    aws_token='{os.getenv("AWS_SESSION_TOKEN")}'
-  )
-  pattern ='.*'
+  credentials=(__RUNTIME_PROVIDED__)
+  pattern ='.*[.]parquet'
   file_format = (type = 'PARQUET');
 
 SELECT payment_type, SUM(trip_distance) 
