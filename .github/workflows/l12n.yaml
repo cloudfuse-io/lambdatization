@@ -31,3 +31,6 @@ jobs:
       - name: Dremio
         run: |
           ./l12n-shell l12n build-images -s dremio
+      - name: Databend
+        run: |
+          ./l12n-shell l12n build-images -s databend
