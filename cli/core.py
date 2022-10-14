@@ -300,7 +300,10 @@ def dockerized(c, engine):
             "LAMBDA_SESSION_TOKEN": creds["SessionToken"],
         }
     except ClientError as error:
-        if error.response['Error']["Message"]=="Cannot call GetSessionToken with session credentials":
+        if (
+            error.response["Error"]["Message"]
+            == "Cannot call GetSessionToken with session credentials"
+        ):
             creds = aws().get_credentials().get_frozen_credentials()
             c.config.run.env = {
                 "LAMBDA_ACCESS_KEY_ID": creds.access_key,
@@ -311,4 +314,3 @@ def dockerized(c, engine):
     c.run(f"{compose} down -v")
     c.run(f"{compose} build")
     c.run(f"DATA_BUCKET_NAME={bucket_name(c)} {compose} up")
-    
