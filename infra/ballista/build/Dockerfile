@@ -30,23 +30,21 @@ RUN pip3 install \
     awslambdaric
 
 #ballista-builder.Dockerfile
-FROM rust:1.63.0-buster
+FROM rust:1.63.0-buster as builder
 
-ARG EXT_UID
 # Include global arg in this stage of the build
 ARG RELEASE_FLAG
+ARG BALLISTA_VERSION
 
 ENV RUST_LOG=info
 ENV RUST_BACKTRACE=full
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && \
-    apt-get -y install libssl-dev openssl zlib1g zlib1g-dev libpq-dev cmake protobuf-compiler netcat curl unzip
+    apt-get -y install libssl-dev openssl zlib1g zlib1g-dev libpq-dev cmake protobuf-compiler netcat curl unzip git
 
-# create build user with same UID as 
-RUN adduser -q -u $EXT_UID builder --home /home/builder && \
-    mkdir -p /home/builder/workspace
-USER builder
+# create build directories
+RUN mkdir -p /home/builder/workspace
 
 ENV HOME=/home/builder
 ENV PATH=$HOME/.cargo/bin:$PATH
@@ -57,9 +55,18 @@ RUN rustup update && \
     cargo install cargo-chef --version 0.1.34
 
 #get ballista
-RUN curl -L https://github.com/apache/arrow-ballista/archive/refs/tags/${BALLISTA_VERSION}.tar.gz  | tar -xzf - -C /home/builder/workspace
+# if [${BALLISTA_VERSION}!= ""];
+# RUN curl -L "https://github.com/apache/arrow-ballista/archive/refs/tags/${BALLISTA_VERSION}.tar.gz"  | tar -xzf - -C /home/builder/workspace
+# if latest
 
-WORKDIR /home/builder/workspace
+WORKDIR /home/builder/workspace/
+
+RUN git clone https://github.com/apache/arrow-ballista.git
+
+
+WORKDIR /home/builder/workspace/arrow-ballista
+
+RUN ls -l ./
 
 # COPY dev/docker/builder-entrypoint.sh /home/builder
 # ENTRYPOINT ["/home/builder/builder-entrypoint.sh"]
@@ -71,6 +78,7 @@ FROM ubuntu:22.04
 
 # Include global arg in this stage of the build
 ARG RELEASE_FLAG
+ARG FUNCTION_DIR
 
 ENV RELEASE_FLAG=${RELEASE_FLAG}
 ENV RUST_LOG=info
@@ -79,28 +87,31 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y netcat
 
-COPY target/$RELEASE_FLAG/ballista-scheduler /root/ballista-scheduler
+COPY --from=builder /home/builder/workspace/arrow-ballista/target/$RELEASE_FLAG/ballista-scheduler /opt/ballista/ballista-scheduler
 
 # Expose Ballista Scheduler gRPC port
 EXPOSE 50050
 
-# COPY dev/docker/scheduler-entrypoint.sh /root/scheduler-entrypoint.sh
-# ENTRYPOINT ["/root/scheduler-entrypoint.sh"]
-# RUN /root/ballista-scheduler "$@" -> moved to python
+# COPY dev/docker/scheduler-entrypoint.sh /opt/ballista/scheduler-entrypoint.sh
+# ENTRYPOINT ["/opt/ballista/scheduler-entrypoint.sh"]
+# RUN /opt/ballista/ballista-scheduler "$@" -> moved to python
 
 
 # ballista-executor.Dockerfile
-COPY target/$RELEASE_FLAG/ballista-executor /root/ballista-executor
+COPY --from=builder /home/builder/workspace/arrow-ballista/target/$RELEASE_FLAG/ballista-executor /opt/ballista/ballista-executor
+
+# copy cli into root folder
+COPY --from=builder /home/builder/workspace/arrow-ballista/target/$RELEASE_FLAG/ballista-cli /opt/ballista/ballista-cli
+
 
 # Expose Ballista Executor gRPC port
 EXPOSE 50051
 
-# COPY dev/docker/executor-entrypoint.sh /root/executor-entrypoint.sh
-# ENTRYPOINT ["/root/executor-entrypoint.sh"]
-# RUN /root/ballista-executor "$@" -> moved to python
+# COPY dev/docker/executor-entrypoint.sh /opt/ballista/executor-entrypoint.sh
+# ENTRYPOINT ["/opt/ballista/executor-entrypoint.sh"]
+# RUN /opt/ballista/ballista-executor "$@" -> moved to python
 
-
-USER root
+COPY --from=ric-dependency ${FUNCTION_DIR} ${FUNCTION_DIR}
 
 WORKDIR ${FUNCTION_DIR}
 
