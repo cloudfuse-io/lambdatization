@@ -85,7 +85,8 @@ ENV RUST_LOG=info
 ENV RUST_BACKTRACE=full
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y netcat
+RUN apt-get update && \
+    apt-get install -y netcat python3
 
 COPY --from=builder /home/builder/workspace/arrow-ballista/target/$RELEASE_FLAG/ballista-scheduler /opt/ballista/ballista-scheduler
 
