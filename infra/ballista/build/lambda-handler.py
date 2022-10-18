@@ -91,8 +91,11 @@ def handler(event, context):
 
 
 if __name__ == "__main__":
-    ballista_cmd = f"""CREATE EXTERNAL TABLE trips STORED AS PARQUET LOCATION 's3://{os.getenv("DATA_BUCKET_NAME")}/nyc-taxi/2019/01/';
-SELECT payment_type, SUM(trip_distance) FROM trips GROUP BY payment_type;"""
+    ballista_cmd = f"""
+CREATE EXTERNAL TABLE trips STORED AS PARQUET
+LOCATION 's3://{os.getenv("DATA_BUCKET_NAME")}/nyc-taxi/2019/01/';
+SELECT payment_type, SUM(trip_distance) FROM trips
+GROUP BY payment_type;"""
     res = handler(
         {"cmd": base64.b64encode(ballista_cmd.encode("utf-8"))},
         {},
