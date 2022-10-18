@@ -1,3 +1,4 @@
+import base64
 import os
 import subprocess
 import logging
@@ -59,12 +60,12 @@ def handler(event, context):
 
     # input parameters
     logging.debug("event: %s", event)
+    src_command = base64.b64decode(event["cmd"]).decode("utf-8")
     comm_file_path = '/tmp/commands.sql'
     with open(comm_file_path,'w') as file:
-        file.write(f"""CREATE EXTERNAL TABLE trips STORED AS PARQUET LOCATION 's3://{os.getenv("DATA_BUCKET_NAME")}/nyc-taxi/2019/01/';
-SELECT payment_type, SUM(trip_distance) FROM trips GROUP BY payment_type;""")
+        file.write(src_command)
     command = ['/opt/ballista/ballista-cli', '--host', 'localhost', '--port', '50050', '-f', f'{comm_file_path}', '--format', 'csv']
-    logging.info("command: %s", ' '.join(command))
+    logging.info("command: %s", src_command)
     if "env" in event:
         logging.info("env: %s", event["env"])
         for (k, v) in event["env"].items():
@@ -90,9 +91,10 @@ SELECT payment_type, SUM(trip_distance) FROM trips GROUP BY payment_type;""")
 
 
 if __name__ == "__main__":
-    
+    ballista_cmd = f"""CREATE EXTERNAL TABLE trips STORED AS PARQUET LOCATION 's3://{os.getenv("DATA_BUCKET_NAME")}/nyc-taxi/2019/01/';
+SELECT payment_type, SUM(trip_distance) FROM trips GROUP BY payment_type;"""
     res = handler(
-        {},
+        {"cmd": base64.b64encode(ballista_cmd.encode("utf-8"))},
         {},
     )
     print(res)
