@@ -88,29 +88,20 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \
     apt-get install -y netcat python3
 
+# copy built scheduler into accesible folder
 COPY --from=builder /home/builder/workspace/arrow-ballista/target/$RELEASE_FLAG/ballista-scheduler /opt/ballista/ballista-scheduler
 
 # Expose Ballista Scheduler gRPC port
 EXPOSE 50050
 
-# COPY dev/docker/scheduler-entrypoint.sh /opt/ballista/scheduler-entrypoint.sh
-# ENTRYPOINT ["/opt/ballista/scheduler-entrypoint.sh"]
-# RUN /opt/ballista/ballista-scheduler "$@" -> moved to python
-
-
-# ballista-executor.Dockerfile
+# copy built executor into accesible folder
 COPY --from=builder /home/builder/workspace/arrow-ballista/target/$RELEASE_FLAG/ballista-executor /opt/ballista/ballista-executor
-
-# copy cli into root folder
-COPY --from=builder /home/builder/workspace/arrow-ballista/target/$RELEASE_FLAG/ballista-cli /opt/ballista/ballista-cli
-
 
 # Expose Ballista Executor gRPC port
 EXPOSE 50051
 
-# COPY dev/docker/executor-entrypoint.sh /opt/ballista/executor-entrypoint.sh
-# ENTRYPOINT ["/opt/ballista/executor-entrypoint.sh"]
-# RUN /opt/ballista/ballista-executor "$@" -> moved to python
+# copy builtcli into accesible folder
+COPY --from=builder /home/builder/workspace/arrow-ballista/target/$RELEASE_FLAG/ballista-cli /opt/ballista/ballista-cli
 
 COPY --from=ric-dependency ${FUNCTION_DIR} ${FUNCTION_DIR}
 
