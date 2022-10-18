@@ -8,17 +8,12 @@ import time
 
 logging.getLogger().setLevel(logging.DEBUG)
 __stdout__ = sys.stdout
+process_s = 0
+process_e = 0
 
-IS_COLD_START = True
-
-def handler(event, context):
-    """An AWS Lambda handler that runs the provided command with bash and returns the standard output"""
-    shutil.rmtree("/tmp", ignore_errors=True)
-    start = time.time()
-    global IS_COLD_START
-    is_cold_start = IS_COLD_START
-    IS_COLD_START = False
+def init():
     # start scheduler
+    global process_s
     process_s = subprocess.Popen(["/opt/ballista/ballista-scheduler"],
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     logging.debug("scheduler starts")
@@ -28,7 +23,8 @@ def handler(event, context):
         res = subprocess.run(["nc", "-z", "localhost", "50050"], capture_output=True)
         return_code = res.returncode
         logging.debug(res)
-        
+
+    global process_e    
     process_e = subprocess.Popen(["/opt/ballista/ballista-executor", "-c" ,"4"],
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     logging.debug("executor.starts")
@@ -37,13 +33,37 @@ def handler(event, context):
         res = subprocess.run(["nc", "-z", "localhost", "50051"], capture_output=True)
         return_code = res.returncode
         logging.debug(res)
+
+
+def kill():
+    global process_e
+    global process_s
+    process_e.kill()
+    process_s.kill()
+
+
+IS_COLD_START = True
+
+
+def handler(event, context):
+    """An AWS Lambda handler that runs the provided command with bash and returns the standard output"""
+    global IS_COLD_START
+    is_cold_start = IS_COLD_START
+    IS_COLD_START = False
+
+    start = time.time()
+
+    if is_cold_start:
+        init()
+    init_duration = time.time() - start
+
     # input parameters
     logging.debug("event: %s", event)
-    çomm_file_path = '/tmp/commands.sql'
-    with open(çomm_file_path,'w') as file:
+    comm_file_path = '/tmp/commands.sql'
+    with open(comm_file_path,'w') as file:
         file.write(f"""CREATE EXTERNAL TABLE trips STORED AS PARQUET LOCATION 's3://{os.getenv("DATA_BUCKET_NAME")}/nyc-taxi/2019/01/';
 SELECT payment_type, SUM(trip_distance) FROM trips GROUP BY payment_type;""")
-    command = ['/opt/ballista/ballista-cli', '--host', 'localhost', '--port', '50050', '-f', f'{çomm_file_path}', '--format', 'csv']
+    command = ['/opt/ballista/ballista-cli', '--host', 'localhost', '--port', '50050', '-f', f'{comm_file_path}', '--format', 'csv']
     logging.info("command: %s", ' '.join(command))
     if "env" in event:
         logging.info("env: %s", event["env"])
@@ -63,10 +83,9 @@ SELECT payment_type, SUM(trip_distance) FROM trips GROUP BY payment_type;""")
         "context": {
             "cold_start": is_cold_start,
             "handler_duration_sec": time.time() - start,
+            "init_duration_sec": init_duration,
         },
     }
-    process_e.kill()
-    process_s.kill()
     return result
 
 
@@ -77,4 +96,5 @@ if __name__ == "__main__":
         {},
     )
     print(res)
+    kill()
 
