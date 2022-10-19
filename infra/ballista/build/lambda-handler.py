@@ -31,7 +31,7 @@ def init():
         return_code = res.returncode
         logging.debug(res)
 
-    global process_e    
+    global process_e
     process_e = subprocess.Popen(
         ["/opt/ballista/ballista-executor", "-c", "4"], stdout=PIPE, stderr=PIPE
     )
@@ -45,10 +45,18 @@ def init():
 
     global process_cli
     process_cli = popen_spawn.PopenSpawn(
-        ["/opt/ballista/ballista-cli", "--host", "localhost", "--port", "50050", "--format", "csv"]
+        [
+            "/opt/ballista/ballista-cli",
+            "--host",
+            "localhost",
+            "--port",
+            "50050",
+            "--format",
+            "csv",
+        ]
     )
     logging.debug("cli starts")
-    process_cli.expect(b'\n')
+    process_cli.expect(b"\n")
     logging.debug(process_cli.before)
 
 
@@ -82,23 +90,27 @@ def handler(event, context):
         logging.info("env: %s", event["env"])
         for (k, v) in event["env"].items():
             os.environ[k] = v
-    
+
     # process_cli = subprocess.run(command, capture_output=True)
     global process_cli
-    tmp_out = b''
-    tmp_error = b''
+    tmp_out = b""
+    tmp_error = b""
     try:
         for command in src_command.split(";"):
-            if command!="":
+            if command != "":
                 try:
-                    process_cli.sendline(command+';')
+                    process_cli.sendline(command + ";")
                     logging.debug(command)
-                    look_for = [b'Query took', pexpect.EOF, b'DataFusionError\(Execution\(\"Table .*already exists\"\)\)']
-                    i = process_cli.expect(look_for,timeout=60)
+                    look_for = [
+                        b"Query took",
+                        pexpect.EOF,
+                        b'DataFusionError\(Execution\("Table .*already exists"\)\)',
+                    ]
+                    i = process_cli.expect(look_for, timeout=60)
                     tmp_out = tmp_out + process_cli.before
-                    if i==0:
+                    if i == 0:
                         tmp_out += look_for[i]
-                    elif i==2:
+                    elif i == 2:
                         tmp_error += look_for[i]
                     else:
                         tmp_error += "pexpect.exceptions.EOF: End Of File (EOF)"
@@ -106,17 +118,17 @@ def handler(event, context):
                     logging.debug("this command timeout flushing std_out to output")
                     tmp_out += process_cli.before
     finally:
-        process_cli.expect(b'\n')
-        tmp_out = tmp_out + process_cli.before +b'\n'
+        process_cli.expect(b"\n")
+        tmp_out = tmp_out + process_cli.before + b"\n"
 
-    cli_stdout = tmp_out.decode('utf-8')
-    if tmp_error != b'':
+    cli_stdout = tmp_out.decode("utf-8")
+    if tmp_error != b"":
         ret_code = 1
     else:
         ret_code = 0
     result = {
         "stdout": cli_stdout,  # process_cli.stdout,
-        "stderr": tmp_error.decode('utf-8'),
+        "stderr": tmp_error.decode("utf-8"),
         "returncode": ret_code,
         "env": event.get("env", {}),
         "context": {
