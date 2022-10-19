@@ -88,22 +88,23 @@ def handler(event, context):
     tmp_out = b''
     tmp_error = b''
     try:
-        for command in src_command.split("\n"):
-            try:
-                process_cli.sendline(command)
-                logging.debug(command)
-                look_for = [b'Query took', pexpect.EOF, b'DataFusionError\(Execution\(\"Table .*already exists\"\)\)']
-                i = process_cli.expect(look_for,timeout=60)
-                tmp_out = tmp_out + process_cli.before
-                if i==0:
-                    tmp_out += look_for[i]
-                elif i==2:
-                    tmp_error += look_for[i]
-                else:
-                    tmp_error += "pexpect.exceptions.EOF: End Of File (EOF)"
-            except pexpect.exceptions.TIMEOUT:
-                logging.debug("this command timeout flushing std_out to output")
-                tmp_out += process_cli.before
+        for command in src_command.split(";"):
+            if command!="":
+                try:
+                    process_cli.sendline(command+';')
+                    logging.debug(command)
+                    look_for = [b'Query took', pexpect.EOF, b'DataFusionError\(Execution\(\"Table .*already exists\"\)\)']
+                    i = process_cli.expect(look_for,timeout=60)
+                    tmp_out = tmp_out + process_cli.before
+                    if i==0:
+                        tmp_out += look_for[i]
+                    elif i==2:
+                        tmp_error += look_for[i]
+                    else:
+                        tmp_error += "pexpect.exceptions.EOF: End Of File (EOF)"
+                except pexpect.exceptions.TIMEOUT:
+                    logging.debug("this command timeout flushing std_out to output")
+                    tmp_out += process_cli.before
     finally:
         process_cli.expect(b'\n')
         tmp_out = tmp_out + process_cli.before +b'\n'
@@ -128,8 +129,11 @@ def handler(event, context):
 
 
 if __name__ == "__main__":
-    ballista_cmd = f"""CREATE EXTERNAL TABLE trips STORED AS PARQUET LOCATION 's3://{os.getenv("DATA_BUCKET_NAME")}/nyc-taxi/2019/01/';
-SELECT payment_type, SUM(trip_distance) FROM trips GROUP BY payment_type;"""
+    ballista_cmd = f"""
+CREATE EXTERNAL TABLE trips STORED AS PARQUET
+ LOCATION 's3://{os.getenv("DATA_BUCKET_NAME")}/nyc-taxi/2019/01/';
+SELECT payment_type, SUM(trip_distance) FROM trips
+ GROUP BY payment_type;"""
     res = handler(
         {"cmd": base64.b64encode(ballista_cmd.encode("utf-8"))},
         {},
