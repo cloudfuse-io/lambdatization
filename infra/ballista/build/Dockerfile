@@ -28,8 +28,7 @@ COPY lambda-handler.py ${FUNCTION_DIR}
 RUN pip3 install \
     --target ${FUNCTION_DIR} \
     awslambdaric
-    
-# Install pexpect to interact with the ballista-cli
+# Install the runtime interface client
 RUN pip3 install \
     --target ${FUNCTION_DIR} \
     pexpect
@@ -41,7 +40,7 @@ FROM rust:1.63.0-buster as builder
 ARG RELEASE_FLAG
 ARG BALLISTA_VERSION
 
-ENV RUST_LOG=info
+ENV RUST_LOG=error
 ENV RUST_BACKTRACE=full
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -86,12 +85,12 @@ ARG RELEASE_FLAG
 ARG FUNCTION_DIR
 
 ENV RELEASE_FLAG=${RELEASE_FLAG}
-ENV RUST_LOG=info
+ENV RUST_LOG=error
 ENV RUST_BACKTRACE=full
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && \
-    apt-get install -y netcat python3
+    apt-get install -y netcat python3 
 
 # copy built scheduler into accesible folder
 COPY --from=builder /home/builder/workspace/arrow-ballista/target/$RELEASE_FLAG/ballista-scheduler /opt/ballista/ballista-scheduler
