@@ -28,6 +28,11 @@ COPY lambda-handler.py ${FUNCTION_DIR}
 RUN pip3 install \
     --target ${FUNCTION_DIR} \
     awslambdaric
+    
+# Install pexpect to interact with the ballista-cli
+RUN pip3 install \
+    --target ${FUNCTION_DIR} \
+    pexpect
 
 #ballista-builder.Dockerfile
 FROM rust:1.63.0-buster as builder
