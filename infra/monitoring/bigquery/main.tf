@@ -6,6 +6,7 @@ module "env" {
 }
 
 locals {
+  dataset_id = "${module.env.module_name}_metrics_${module.env.stage}"
   standalone_durations_table_id = "${module.env.module_name}-standalone-engine-durations-${module.env.stage}"
 }
 
@@ -29,7 +30,7 @@ resource "google_service_account_key" "bigquery_write_key" {
 }
 
 resource "google_bigquery_dataset" "dataset" {
-  dataset_id                  = "${module.env.module_name}_metrics_${module.env.stage}"
+  dataset_id                  = local.dataset_id
   friendly_name               = "Lambdatization Metrics"
   default_table_expiration_ms = 1576800000000 # 50 years ;-)
   labels                      = module.env.default_tags
@@ -82,5 +83,5 @@ output "service_account_key" {
 }
 
 output "standalone_durations_table_id" {
-  value = local.standalone_durations_table_id
+  value = "${var.project_id}.${local.dataset_id}.${local.standalone_durations_table_id}"
 }

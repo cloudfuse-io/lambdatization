@@ -1,8 +1,11 @@
 import base64
 import dynaconf
-import sys
 import json
-import os
+import time
+import common
+import plugins.databend as databend
+import plugins.spark as spark
+import plugins.dremio as dremio
 from datetime import datetime
 from google.cloud import bigquery
 from google.oauth2 import service_account
@@ -54,16 +57,14 @@ def destroy(c, auto_approve=False):
     )
 
 
-@task
-def send_standalone_durations(c):
+def send_standalone_durations(c: Context, lambda_json_output: str):
     """Read json from stdin and extracts appropriate fields to Bigquery"""
-    stdin = sys.stdin.read()
     gcp_creds = monitoring_output(c, "service_account_key")
     bigquery_table_id = monitoring_output(c, "standalone_durations_table_id")
-    context = json.loads(stdin)["context"]
+    context = json.loads(lambda_json_output)["context"]
     client = bigquery.Client(
         credentials=service_account.Credentials.from_service_account_info(
-            base64.decodebytes(gcp_creds.encode()).decode()
+            json.loads(base64.decodebytes(gcp_creds.encode()).decode())
         )
     )
 
@@ -79,3 +80,27 @@ def send_standalone_durations(c):
         print(f"Row added for {context['engine']}")
     else:
         print("Encountered errors while inserting rows: {}".format(errors))
+
+
+@task
+def bench_cold_warm(c):
+    """Run each engine twice in a row on different data to compare cold and warm start"""
+    active_plugins = common.active_plugins()
+
+    def run_and_send_twice(example):
+        try:
+            res1 = example(c, json_output=True, month="01")
+            send_standalone_durations(c, res1)
+            res2 = example(c, json_output=True, month="02")
+            send_standalone_durations(c, res2)
+        except Exception as e:
+            print(e)
+
+    while True:
+        if "databend" in active_plugins:
+            run_and_send_twice(databend.lambda_example)
+        if "spark" in active_plugins:
+            run_and_send_twice(spark.lambda_example_hive)
+        if "dremio" in active_plugins:
+            run_and_send_twice(dremio.lambda_example)
+        time.sleep(300)

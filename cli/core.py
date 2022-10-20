@@ -219,7 +219,7 @@ CMD_HELP = {
 }
 
 
-def print_lambda_output(
+def format_lambda_output(
     json_response: str, json_output: bool, external_duration_sec: float, engine: str
 ):
     response = json.loads(json_response)
@@ -228,17 +228,15 @@ def print_lambda_output(
     response["context"]["external_duration_sec"] = external_duration_sec
     response["context"]["engine"] = engine
     if json_output:
-        print(json.dumps(response))
+        return json.dumps(response)
     else:
+        output = ""
         for key in ["parsed_cmd", "env", "context", "stdout", "stderr", "returncode"]:
-            print(key.upper())
-            print(response.get(key, ""))
-            print()
+            output += f"{key.upper()}\n{response.get(key, '')}\n\n"
+        return output
 
 
-# gcp-dashboard-365510.frompubsub.test1
-# /host/home/ubuntu/.config/gcloud/bigquery-push.json
-@task(help=CMD_HELP, iterable=["env"])
+@task(help=CMD_HELP, iterable=["env"], autoprint=True)
 def run_lambda(c, engine, cmd, env=[], json_output=False):
     """Run ad-hoc SQL commands
 
@@ -255,21 +253,10 @@ def run_lambda(c, engine, cmd, env=[], json_output=False):
     external_duration_sec = time.time() - start_time
     resp_payload = lambda_res["Payload"].read().decode()
     if "FunctionError" in lambda_res:
-        # For command errors (the most likely ones), display the same object as
-        # for successful results. Otherwise display the raw error payload.
-        mess = resp_payload
-        try:
-            json_payload = json.loads(resp_payload)
-            if json_payload["errorType"] == "CommandException":
-                # CommandException is JSON encoded
-                print_lambda_output(
-                    json_payload["errorMessage"], json_output, external_duration_sec
-                )
-                mess = ""
-        except Exception:
-            pass
-        raise Exit(message=mess, code=1)
-    print_lambda_output(resp_payload, json_output, external_duration_sec, engine)
+        raise Exit(message=resp_payload, code=1)
+    return format_lambda_output(
+        resp_payload, json_output, external_duration_sec, engine
+    )
 
 
 @task(autoprint=True)

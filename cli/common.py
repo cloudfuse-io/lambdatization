@@ -48,7 +48,7 @@ def conf(validators=[]) -> dict:
         validators=validators,
     )
     return {
-        k: v
+        k: str(v)
         for (k, v) in dc.as_dict().items()
         if k.startswith(("L12N_", "TF_", "AWS_"))
     }

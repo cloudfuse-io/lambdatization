@@ -4,7 +4,7 @@ from invoke import task
 import core
 
 
-@task
+@task(autoprint=True)
 def lambda_example_hive(c, json_output=False, month="01"):
     """SUM(trip_distance) GROUP_BY payment_type with preliminary CREATE EXTERNAL TABLE"""
     sql = f"""
@@ -16,7 +16,7 @@ GROUP BY payment_type
 """
     if not json_output:
         print(sql)
-    core.run_lambda(c, "spark", sql, json_output=json_output)
+    return core.run_lambda(c, "spark", sql, json_output=json_output)
 
 
 @task
@@ -29,4 +29,4 @@ GROUP BY payment_type
 """
     if not json_output:
         print(sql)
-    core.run_lambda(c, "spark", sql, json_output=json_output)
+    return core.run_lambda(c, "spark", sql, json_output=json_output)

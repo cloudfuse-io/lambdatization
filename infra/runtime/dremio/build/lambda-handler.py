@@ -72,7 +72,7 @@ def init() -> Resp:
     process = subprocess.run(["/opt/dremio/bin/dremio", "start"], capture_output=True)
     if process.returncode != 0:
         return f"`dremio start` exited with code {process.returncode}:\n{process.stdout}{process.stderr}"
-    res = create_firstuser(120, time.time())
+    res = create_firstuser(240, time.time())
     if not res.success:
         return res
     login_resp = requests.post(
