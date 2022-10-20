@@ -6,7 +6,7 @@ module "env" {
 }
 
 locals {
-  dataset_id = "${module.env.module_name}_metrics_${module.env.stage}"
+  dataset_id                    = "${module.env.module_name}_metrics_${module.env.stage}"
   standalone_durations_table_id = "${module.env.module_name}-standalone-engine-durations-${module.env.stage}"
 }
 
