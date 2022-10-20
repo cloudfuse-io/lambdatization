@@ -37,7 +37,6 @@ AWS_REGION_VALIDATOR = dynaconf.Validator(
 REPOROOT = os.environ["REPO_DIR"]
 CURRENTDIR = os.getcwd()
 RUNTIME_TFDIR = f"{REPOROOT}/infra/runtime"
-MONITORING_TFDIR = f"{REPOROOT}/infra/monitoring"
 
 
 def conf(validators=[]) -> dict:

@@ -1,14 +1,9 @@
 from invoke import Context, task, Exit
-import dynaconf
 from botocore.exceptions import ClientError
 import time
-from datetime import datetime
 import base64
 import json
 import io
-import sys
-import os
-from google.cloud import bigquery
 from common import (
     TF_BACKEND_VALIDATORS,
     active_modules,
@@ -275,28 +270,6 @@ def run_lambda(c, engine, cmd, env=[], json_output=False):
             pass
         raise Exit(message=mess, code=1)
     print_lambda_output(resp_payload, json_output, external_duration_sec, engine)
-
-
-@task
-def send_metrics(c, gcp_creds_file, bigquery_table_id):
-    """Read json from stdin and extracts appropriate fields to Bigquery"""
-    stdin = sys.stdin.read()
-    context = json.loads(stdin)["context"]
-    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = gcp_creds_file
-    client = bigquery.Client()
-
-    row = {
-        "timestamp": str(datetime.now()),
-        "engine": context["engine"],
-        "cold_start": context["cold_start"],
-        "external_duration_ms": int(context["external_duration_sec"] * 1000),
-    }
-
-    errors = client.insert_rows_json(bigquery_table_id, [row])
-    if errors == []:
-        print(f"Row added for {context['engine']}")
-    else:
-        print("Encountered errors while inserting rows: {}".format(errors))
 
 
 @task(autoprint=True)

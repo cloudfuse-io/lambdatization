@@ -5,7 +5,7 @@ variable "databend_image" {}
 variable "bucket_arn" {}
 
 module "env" {
-  source = "../../../common/env"
+  source = "../../common/env"
 }
 
 provider "aws" {
