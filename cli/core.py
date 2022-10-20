@@ -310,6 +310,13 @@ def dockerized(c, engine):
                 "LAMBDA_SECRET_ACCESS_KEY": creds.secret_key,
                 "LAMBDA_SESSION_TOKEN": creds.token,
             }
+        else:
+            raise Exit(
+                message=error.response.get("Error", {}).get(
+                    "Message", "Unidentified error getting AWS credentials"
+                ),
+                code=1,
+            )
     compose = f"docker compose -f {TFDIR}/{engine}/build/docker-compose.yaml"
     c.run(f"{compose} down -v")
     c.run(f"{compose} build")
