@@ -10,27 +10,16 @@ import sys
 import os
 from google.cloud import bigquery
 from common import (
+    TF_BACKEND_VALIDATORS,
     active_modules,
     clean_modules,
-    TFDIR,
+    RUNTIME_TFDIR,
     auto_app_fmt,
     AWS_REGION_VALIDATOR,
     terraform_output,
     aws,
     parse_env,
 )
-
-# Validate and provide defaults for the terraform state backend configuration
-TF_BACKEND_VALIDATORS = [
-    dynaconf.Validator("TF_STATE_BACKEND", default="local", is_in=["local", "cloud"]),
-    dynaconf.Validator("TF_WORKSPACE_PREFIX", default=""),
-    # if we use tf cloud as backend, the right variables must be configured
-    dynaconf.Validator("TF_STATE_BACKEND", ne="cloud")
-    | (
-        dynaconf.Validator("TF_ORGANIZATION", must_exist=True, ne="")
-        & dynaconf.Validator("TF_API_TOKEN", must_exist=True, ne="")
-    ),
-]
 
 
 VALIDATORS = [
@@ -48,7 +37,7 @@ def active_include_dirs(c: Context) -> str:
 
 def docker_compose(step):
     """The docker compose command in the directory of the specified step"""
-    return f"docker compose --project-directory {TFDIR}/{step}/build"
+    return f"docker compose --project-directory {RUNTIME_TFDIR}/{step}/build"
 
 
 ## Tasks
@@ -85,7 +74,7 @@ def init_step(c, step):
     if step not in mods:
         raise Exit(f"Step {step} not part of the active modules {mods}")
     c.run(
-        f"terragrunt init --terragrunt-working-dir {TFDIR}/{step}",
+        f"terragrunt init --terragrunt-working-dir {RUNTIME_TFDIR}/{step}",
     )
 
 
@@ -96,7 +85,7 @@ def init(c, step="", clean=False):
         clean_modules()
     if step == "":
         c.run(
-            f"terragrunt run-all init {active_include_dirs(c)} --terragrunt-working-dir {TFDIR}",
+            f"terragrunt run-all init {active_include_dirs(c)} --terragrunt-working-dir {RUNTIME_TFDIR}",
         )
     else:
         init_step(c, step)
@@ -106,7 +95,7 @@ def deploy_step(c, step, auto_approve=False):
     """Deploy only one step of the stack"""
     init_step(c, step)
     c.run(
-        f"terragrunt apply {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/{step}",
+        f"terragrunt apply {auto_app_fmt(auto_approve)} --terragrunt-working-dir {RUNTIME_TFDIR}/{step}",
     )
 
 
@@ -115,7 +104,7 @@ def deploy(c, step="", auto_approve=False):
     """Deploy all the modules associated with active plugins or a specific step"""
     if step == "":
         c.run(
-            f"terragrunt run-all apply {auto_app_fmt(auto_approve)} {active_include_dirs(c)} --terragrunt-working-dir {TFDIR}",
+            f"terragrunt run-all apply {auto_app_fmt(auto_approve)} {active_include_dirs(c)} --terragrunt-working-dir {RUNTIME_TFDIR}",
         )
     else:
         deploy_step(c, step, auto_approve)
@@ -209,7 +198,7 @@ def destroy_step(c, step, auto_approve=False):
     """Destroy resources of the specified step. Resources depending on it should be cleaned up first."""
     init_step(c, step)
     c.run(
-        f"terragrunt destroy {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/{step}",
+        f"terragrunt destroy {auto_app_fmt(auto_approve)} --terragrunt-working-dir {RUNTIME_TFDIR}/{step}",
     )
 
 
@@ -221,7 +210,7 @@ def destroy(c, step="", auto_approve=False):
     from the config afterwards, it will not be destroyed"""
     if step == "":
         c.run(
-            f"terragrunt run-all destroy {auto_app_fmt(auto_approve)} {active_include_dirs(c)} --terragrunt-working-dir {TFDIR}",
+            f"terragrunt run-all destroy {auto_app_fmt(auto_approve)} {active_include_dirs(c)} --terragrunt-working-dir {RUNTIME_TFDIR}",
         )
     else:
         destroy_step(c, step, auto_approve)
@@ -346,7 +335,7 @@ def dockerized(c, engine):
                 ),
                 code=1,
             )
-    compose = f"docker compose -f {TFDIR}/{engine}/build/docker-compose.yaml"
+    compose = f"docker compose -f {RUNTIME_TFDIR}/{engine}/build/docker-compose.yaml"
     c.run(f"{compose} down -v")
     c.run(f"{compose} build")
     c.run(f"DATA_BUCKET_NAME={bucket_name(c)} {compose} up")

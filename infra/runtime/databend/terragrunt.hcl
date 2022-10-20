@@ -20,9 +20,9 @@ terraform {
     commands = ["apply"]
     execute = ["/bin/bash", "-c", <<EOT
 l12n docker-login \
-                 build-images --step=dremio \
-                 push-images --step=dremio && \
-l12n print-image-vars --step=dremio > images.generated.tfvars
+                 build-images --step=databend \
+                 push-images --step=databend && \
+l12n print-image-vars --step=databend > images.generated.tfvars
 EOT
     ]
   }
@@ -35,7 +35,7 @@ EOT
 }
 
 inputs = {
-  region_name  = local.region_name
-  dremio_image = "dummy_overriden_by_before_hook"
-  bucket_arn  = dependency.core.outputs.bucket_arn
+  region_name    = local.region_name
+  databend_image = "dummy_overriden_by_before_hook"
+  bucket_arn     = dependency.core.outputs.bucket_arn
 }

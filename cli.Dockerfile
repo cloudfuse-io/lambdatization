@@ -33,6 +33,14 @@ RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2
     unzip awscliv2.zip && \
     ./aws/install
 
+# Install GCP CLI
+RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt cloud-sdk main" \
+    | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && \
+    wget -O - "https://packages.cloud.google.com/apt/doc/apt-key.gpg" \
+    | apt-key --keyring /usr/share/keyrings/cloud.google.gpg add - && \
+    apt-get update && \
+    apt-get -y --no-install-recommends install python3-crcmod google-cloud-sdk
+
 ARG UNAME=hostcaller
 ARG DOCKER_GID
 ARG CALLER_UID
@@ -48,9 +56,12 @@ RUN groupadd -g $CALLER_GID -o $UNAME && \
 # Setup persistent folders for configs
 RUN owneddir() { mkdir -p $1 && chown $UNAME $1 ; } && \
     ownedfile() { touch $1 && chown $UNAME $1 ; } && \
+    owneddir /etc/persistent-configs/gcloud && \
     owneddir /etc/persistent-configs/docker && \
+    owneddir /home/$UNAME/.config && \
     ownedfile /etc/persistent-configs/bash_history && \
     ln -s /etc/persistent-configs/docker /home/$UNAME/.docker && \
+    ln -s /etc/persistent-configs/gcloud /home/$UNAME/.config/gcloud && \
     ln -s /etc/persistent-configs/bash_history /home/$UNAME/.bash_history
 
 ENV REPO_DIR=$REPO_DIR

@@ -62,6 +62,15 @@ Inside the `l12n-shell`, you can use the following commands:
   - you can also run pre-configured queries using the examples. Run `l12n -h` to
     see the list of examples.
 
+## About the stack
+
+Infrastructure is managed by Terraform.
+
+We use Terragrunt to:
+
+- DRY the Terraform config
+- Manage dependencies between modules and allow a plugin based structure.
+
 ## Contribute
 
 - We try to follow the [conventional commits

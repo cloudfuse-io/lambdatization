@@ -3,7 +3,7 @@ variable "region_name" {
 }
 
 module "env" {
-  source = "../common/env"
+  source = "../../common/env"
 }
 
 data "aws_caller_identity" "current" {}
