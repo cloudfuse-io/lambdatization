@@ -68,7 +68,7 @@ Infrastructure is managed by Terraform.
 
 We use Terragrunt to:
 
-- DRY the Terraform config
+- [DRY](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself) the Terraform config
 - Manage dependencies between modules and allow a plugin based structure.
 
 ## Contribute
