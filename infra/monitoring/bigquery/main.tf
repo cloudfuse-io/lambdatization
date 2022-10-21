@@ -37,9 +37,10 @@ resource "google_bigquery_dataset" "dataset" {
 }
 
 resource "google_bigquery_table" "standalone_engine_durations" {
-  dataset_id = google_bigquery_dataset.dataset.dataset_id
-  table_id   = local.standalone_durations_table_id
-  labels     = module.env.default_tags
+  dataset_id          = google_bigquery_dataset.dataset.dataset_id
+  table_id            = local.standalone_durations_table_id
+  labels              = module.env.default_tags
+  deletion_protection = false
 
   time_partitioning {
     type  = "DAY"

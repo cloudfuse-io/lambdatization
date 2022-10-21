@@ -53,7 +53,7 @@ def deploy(c, auto_approve=False):
 def destroy(c, auto_approve=False):
     init(c)
     c.run(
-        f"terragrunt apply {auto_app_fmt(auto_approve)} --terragrunt-working-dir {MONITORING_MODULE_DIR}",
+        f"terragrunt destroy {auto_app_fmt(auto_approve)} --terragrunt-working-dir {MONITORING_MODULE_DIR}",
     )
 
 
