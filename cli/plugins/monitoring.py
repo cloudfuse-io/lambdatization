@@ -94,7 +94,7 @@ def bench_cold_warm(c):
             res2 = example(c, json_output=True, month="02")
             send_standalone_durations(c, res2)
         except Exception as e:
-            print(e)
+            print(f"Execution failure: {e}")
 
     while True:
         if "databend" in active_plugins:
