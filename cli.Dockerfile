@@ -54,20 +54,22 @@ RUN groupadd -g $CALLER_GID -o $UNAME && \
     usermod --append --groups hostdocker $UNAME
 
 # Setup persistent folders for configs
-RUN owneddir() { mkdir -p $1 && chown $UNAME $1 ; } && \
-    ownedfile() { touch $1 && chown $UNAME $1 ; } && \
+RUN owneddir() { mkdir -p $1 && chown $UNAME:$UNAME $1 ; } && \
+    owneddir /etc/persistent-configs && \
     owneddir /etc/persistent-configs/gcloud && \
-    owneddir /etc/persistent-configs/docker && \
-    owneddir /home/$UNAME/.config && \
-    ownedfile /etc/persistent-configs/bash_history && \
-    ln -s /etc/persistent-configs/docker /home/$UNAME/.docker && \
-    ln -s /etc/persistent-configs/gcloud /home/$UNAME/.config/gcloud && \
-    ln -s /etc/persistent-configs/bash_history /home/$UNAME/.bash_history
+    owneddir /etc/persistent-configs/docker
+
 
 ENV REPO_DIR=$REPO_DIR
 ENV PATH=$PATH:$REPO_DIR
 
 USER $UNAME
+
+RUN mkdir /home/$UNAME/.config && \
+    touch /etc/persistent-configs/bash_history && \
+    ln -s /etc/persistent-configs/docker /home/$UNAME/.docker && \
+    ln -s /etc/persistent-configs/gcloud /home/$UNAME/.config/gcloud && \
+    ln -s /etc/persistent-configs/bash_history /home/$UNAME/.bash_history
 
 # Install Python dependencies
 RUN pip install \
