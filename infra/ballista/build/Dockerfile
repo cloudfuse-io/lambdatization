@@ -1,5 +1,4 @@
 
-ARG BALLISTA_VERSION=0.8.0
 ARG RELEASE_FLAG=release
 ARG FUNCTION_DIR="/function"
 
@@ -24,21 +23,16 @@ RUN mkdir -p ${FUNCTION_DIR}
 # Copy function code
 COPY lambda-handler.py ${FUNCTION_DIR}
 
-# Install the runtime interface client
+# Install the runtime interface client and lambda requirements
 RUN pip3 install \
     --target ${FUNCTION_DIR} \
-    awslambdaric
-# Install the runtime interface client
-RUN pip3 install \
-    --target ${FUNCTION_DIR} \
-    pexpect
+    awslambdaric pexpect
 
 #ballista-builder.Dockerfile
 FROM rust:1.63.0-buster as builder
 
 # Include global arg in this stage of the build
 ARG RELEASE_FLAG
-ARG BALLISTA_VERSION
 
 ENV RUST_LOG=error
 ENV RUST_BACKTRACE=full
@@ -58,26 +52,18 @@ RUN rustup update && \
     rustup component add rustfmt && \
     cargo install cargo-chef --version 0.1.34
 
-#get ballista
-# if [${BALLISTA_VERSION}!= ""];
-# RUN curl -L "https://github.com/apache/arrow-ballista/archive/refs/tags/${BALLISTA_VERSION}.tar.gz"  | tar -xzf - -C /home/builder/workspace
-# if latest
-
 WORKDIR /home/builder/workspace/
 
 RUN git clone https://github.com/apache/arrow-ballista.git
-
 
 WORKDIR /home/builder/workspace/arrow-ballista
 
 RUN ls -l ./
 
-# COPY dev/docker/builder-entrypoint.sh /home/builder
-# ENTRYPOINT ["/home/builder/builder-entrypoint.sh"]
+# Actually build the project
 RUN cargo build --features "flight-sql s3" --${RELEASE_FLAG} "$@"
 
 
-# ballista-scheduler.Dockerfile
 FROM ubuntu:22.04
 
 # Include global arg in this stage of the build
