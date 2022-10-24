@@ -60,15 +60,6 @@ def init():
     logging.debug(process_cli.before)
 
 
-def kill():
-    global process_e
-    global process_s
-    global process_cli
-    process_cli.kill(9)
-    process_e.kill()
-    process_s.kill()
-
-
 def handler(event, context):
     """An AWS Lambda handler that runs the provided command with bash and returns the standard output"""
     global IS_COLD_START
@@ -151,4 +142,3 @@ SELECT payment_type, SUM(trip_distance) FROM trips
         {},
     )
     print(res)
-    kill()
