@@ -19,18 +19,10 @@ IS_COLD_START = True
 
 def init():
     # start scheduler
-    os.environ["OUT_DIR"] = "/tmp"
+    os.environ["OUT_DIR"] = "/tmp/executor"
     global process_s
     process_s = subprocess.Popen(
-        [
-            "/opt/ballista/ballista-scheduler",
-            "sled_dir",
-            "/tmp",
-            "log_dir",
-            "/tmp",
-            "log_level_setting",
-            "debug",
-        ],
+        ["/opt/ballista/ballista-scheduler", "--sled-dir", "/tmp/scheduler/sled"],
         stdout=PIPE,
         stderr=PIPE,
         bufsize=0,
@@ -48,37 +40,46 @@ def init():
             return_code = res.returncode
             logging.debug(res)
             time.sleep(1)
-            rc = process_s.poll()
+            # rc = process_s.poll()
             timeout += 1
-            if timeout >= 60 or rc is not None:
+            if timeout >= 30:  # or rc is not None:
                 process_s.terminate()
-                logging.error(process_s.stdout.read())
-                logging.error(process_s.stderr.read())
-                raise Exception(f"executor failed to start after {timeout} seconds")
+                logging.error(process_s.stdout.read().decode("utf-8"))
+                logging.error(process_s.stderr.read().decode("utf-8"))
+                raise Exception(f"scheduler failed to start after {timeout} seconds")
     else:
-        logging.error(process_s.stdout.read())
+        logging.error(process_s.stdout.read().decode("utf-8"))
         raise Exception(
             f"scheduler failed to init stderror: {process_s.stderr.read().decode('utf-8')}"
         )
 
     global process_e
     process_e = subprocess.Popen(
-        ["/opt/ballista/ballista-executor", "-c", "4", "work_dir", "/tmp"],
+        ["/opt/ballista/ballista-executor", "--work-dir", "/tmp/executor"],
         stdout=PIPE,
         stderr=PIPE,
         bufsize=0,
     )
     logging.info("executor starts")
     # wait till the executor is up and running
-    return_code = 1
-    timeout = 0
-    while return_code:
-        res = subprocess.run(["nc", "-z", "localhost", "50051"], capture_output=True)
-        return_code = res.returncode
-        logging.debug(res)
-        time.sleep(1)
-        timeout += 1
-        if timeout >= 60:
+    if process_s.poll() is None:
+        return_code = 1
+        timeout = 0
+        while return_code:
+            res = subprocess.run(
+                ["nc", "-z", "localhost", "50051"], capture_output=True
+            )
+            return_code = res.returncode
+            logging.debug(res)
+            time.sleep(1)
+            timeout += 1
+            if timeout >= 30:
+                process_e.terminate()
+                logging.error(process_e.stdout.read().decode("utf-8"))
+                logging.error(process_e.stderr.read().decode("utf-8"))
+                process_s.terminate()
+                logging.error(process_s.stdout.read().decode("utf-8"))
+                logging.error(process_s.stderr.read().decode("utf-8"))
             raise "executor failed to start after {} seconds".format(timeout)
 
     global process_cli
@@ -166,7 +167,20 @@ def handler(event, context):
             "init_duration_sec": init_duration,
         },
     }
+    reads()
     return result
+
+
+def reads():
+    global process_s, process_e
+    # process_e.terminate()
+    # logging.debug("el executor")
+    # logging.debug(process_e.stdout.read().decode("utf-8"))
+    # logging.debug(process_e.stderr.read().decode("utf-8"))
+    process_s.terminate()
+    logging.debug("el scheduler")
+    logging.debug(process_s.stdout.read().decode("utf-8"))
+    logging.debug(process_s.stderr.read().decode("utf-8"))
 
 
 if __name__ == "__main__":

@@ -11,3 +11,8 @@
   Python to the base image. A Rust based Interface Client would spare us a few
   dozen MBs.
 - We execute the query using ballista-cli
+- the default config for the scheduler is on standalone using sled. Sled default
+  directory is set to /dev/shm wich is not available in lambda. In order to cover
+  for this we use the inline parameter --sled-dir to change the sled directory
+  towards /tmp/scheduler (/tmp being the only writable dir on lambda env)
+- For the excecutor the default woring dir is related to the env variable "OUT_DIR"

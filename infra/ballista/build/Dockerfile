@@ -9,7 +9,7 @@ FROM rust:1.63.0-buster as builder
 # Include global arg in this stage of the build
 ARG RELEASE_FLAG
 
-ENV RUST_LOG=error
+ENV RUST_LOG=info
 ENV RUST_BACKTRACE=full
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -40,14 +40,15 @@ RUN rustup update && \
 
 WORKDIR /home/builder/workspace/
 
-RUN git clone https://github.com/apache/arrow-ballista.git
+# RUN git clone https://github.com/apache/arrow-ballista.git
+COPY arrow-ballista /home/builder/workspace/arrow-ballista
 
 WORKDIR /home/builder/workspace/arrow-ballista
 
-RUN ls -l ./
+RUN ls -l ../
 
 # Actually build the project
-RUN cargo build --features "flight-sql s3" --${RELEASE_FLAG} "$@"
+RUN cargo build --features "flight-sql s3" --${RELEASE_FLAG}
 
 
 FROM debian:11.4 as ric-dependency
@@ -57,7 +58,7 @@ ARG RELEASE_FLAG
 ARG FUNCTION_DIR
 
 ENV RELEASE_FLAG=${RELEASE_FLAG}
-ENV RUST_LOG=error
+ENV RUST_LOG=info
 ENV RUST_BACKTRACE=full
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -79,7 +80,7 @@ ARG FUNCTION_DIR
 RUN mkdir -p ${FUNCTION_DIR}
 
 # Copy function code
-COPY lambda-handler.py ${FUNCTION_DIR}
+COPY lambdatization/infra/ballista/build/lambda-handler.py ${FUNCTION_DIR}
 
 # Install the runtime interface client and lambda requirements
 RUN pip3 install \
@@ -88,15 +89,20 @@ RUN pip3 install \
 
 # copy built scheduler into accesible folder
 COPY --from=builder /home/builder/workspace/arrow-ballista/target/$RELEASE_FLAG/ballista-scheduler /opt/ballista/ballista-scheduler
+COPY lambdatization/infra/ballista/build/scheduler_config.toml /tmp/scheduler/
 
 # Expose Ballista Scheduler gRPC port
 EXPOSE 50050
+
+RUN mkdir -p /tmp/scheduler/sled
 
 # copy built executor into accesible folder
 COPY --from=builder /home/builder/workspace/arrow-ballista/target/$RELEASE_FLAG/ballista-executor /opt/ballista/ballista-executor
 
 # Expose Ballista Executor gRPC port
 EXPOSE 50051
+
+RUN mkdir -p /tmp/executor
 
 # copy builtcli into accesible folder
 COPY --from=builder /home/builder/workspace/arrow-ballista/target/$RELEASE_FLAG/ballista-cli /opt/ballista/ballista-cli
