@@ -19,31 +19,70 @@ IS_COLD_START = True
 
 def init():
     # start scheduler
+    os.environ["OUT_DIR"] = "/tmp"
     global process_s
     process_s = subprocess.Popen(
-        ["/opt/ballista/ballista-scheduler"], stdout=PIPE, stderr=PIPE
+        [
+            "/opt/ballista/ballista-scheduler",
+            "sled_dir",
+            "/tmp",
+            "log_dir",
+            "/tmp",
+            "log_level_setting",
+            "debug",
+        ],
+        stdout=PIPE,
+        stderr=PIPE,
+        bufsize=0,
     )
-    logging.debug("scheduler starts")
+    logging.info("scheduler starts")
+    time.sleep(1)
     # wait till the scheduler is up and running
-    return_code = 1
-    while return_code:
-        res = subprocess.run(["nc", "-z", "localhost", "50050"], capture_output=True)
-        return_code = res.returncode
-        logging.debug(res)
+    if process_s.poll() is None:
+        return_code = 1
+        timeout = 0
+        while return_code:
+            res = subprocess.run(
+                ["nc", "-z", "localhost", "50050"], capture_output=True
+            )
+            return_code = res.returncode
+            logging.debug(res)
+            time.sleep(1)
+            rc = process_s.poll()
+            timeout += 1
+            if timeout >= 60 or rc is not None:
+                process_s.terminate()
+                logging.error(process_s.stdout.read())
+                logging.error(process_s.stderr.read())
+                raise Exception(f"executor failed to start after {timeout} seconds")
+    else:
+        logging.error(process_s.stdout.read())
+        raise Exception(
+            f"scheduler failed to init stderror: {process_s.stderr.read().decode('utf-8')}"
+        )
 
     global process_e
     process_e = subprocess.Popen(
-        ["/opt/ballista/ballista-executor", "-c", "4"], stdout=PIPE, stderr=PIPE
+        ["/opt/ballista/ballista-executor", "-c", "4", "work_dir", "/tmp"],
+        stdout=PIPE,
+        stderr=PIPE,
+        bufsize=0,
     )
-    logging.debug("executor.starts")
+    logging.info("executor starts")
     # wait till the executor is up and running
     return_code = 1
+    timeout = 0
     while return_code:
         res = subprocess.run(["nc", "-z", "localhost", "50051"], capture_output=True)
         return_code = res.returncode
         logging.debug(res)
+        time.sleep(1)
+        timeout += 1
+        if timeout >= 60:
+            raise "executor failed to start after {} seconds".format(timeout)
 
     global process_cli
+    logging.info("cli starts")
     process_cli = popen_spawn.PopenSpawn(
         [
             "/opt/ballista/ballista-cli",
@@ -55,7 +94,6 @@ def init():
             "csv",
         ]
     )
-    logging.debug("cli starts")
     process_cli.expect(b"\n")
     logging.debug(process_cli.before)
 

@@ -2,33 +2,8 @@
 ARG RELEASE_FLAG=release
 ARG FUNCTION_DIR="/function"
 
-FROM debian:11.4 as ric-dependency
 
-# Install aws-lambda-cpp build dependencies
-RUN apt-get update && \
-    apt-get install -y \
-    g++ \
-    make \
-    cmake \
-    unzip \
-    python3 \
-    python3-pip \
-    libcurl4-openssl-dev
-
-# Include global arg in this stage of the build
-ARG FUNCTION_DIR
-# Create function directory
-RUN mkdir -p ${FUNCTION_DIR}
-
-# Copy function code
-COPY lambda-handler.py ${FUNCTION_DIR}
-
-# Install the runtime interface client and lambda requirements
-RUN pip3 install \
-    --target ${FUNCTION_DIR} \
-    awslambdaric pexpect
-
-#ballista-builder.Dockerfile
+# build ballista components
 FROM rust:1.63.0-buster as builder
 
 # Include global arg in this stage of the build
@@ -39,7 +14,18 @@ ENV RUST_BACKTRACE=full
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && \
-    apt-get -y install libssl-dev openssl zlib1g zlib1g-dev libpq-dev cmake protobuf-compiler netcat curl unzip git
+    apt-get -y install \
+    libssl-dev \
+    openssl \
+    zlib1g \
+    zlib1g-dev \
+    libpq-dev \
+    cmake \
+    protobuf-compiler \
+    netcat \
+    curl \
+    unzip \
+    git
 
 # create build directories
 RUN mkdir -p /home/builder/workspace
@@ -64,7 +50,7 @@ RUN ls -l ./
 RUN cargo build --features "flight-sql s3" --${RELEASE_FLAG} "$@"
 
 
-FROM ubuntu:22.04
+FROM debian:11.4 as ric-dependency
 
 # Include global arg in this stage of the build
 ARG RELEASE_FLAG
@@ -75,8 +61,30 @@ ENV RUST_LOG=error
 ENV RUST_BACKTRACE=full
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Install aws-lambda-cpp build dependencies
 RUN apt-get update && \
-    apt-get install -y netcat python3 
+    apt-get -y install\
+    g++ \
+    make \
+    cmake \
+    unzip \
+    python3 \
+    python3-pip \
+    netcat \
+    libcurl4-openssl-dev
+
+# Include global arg in this stage of the build
+ARG FUNCTION_DIR
+# Create function directory
+RUN mkdir -p ${FUNCTION_DIR}
+
+# Copy function code
+COPY lambda-handler.py ${FUNCTION_DIR}
+
+# Install the runtime interface client and lambda requirements
+RUN pip3 install \
+    --target ${FUNCTION_DIR} \
+    awslambdaric pexpect
 
 # copy built scheduler into accesible folder
 COPY --from=builder /home/builder/workspace/arrow-ballista/target/$RELEASE_FLAG/ballista-scheduler /opt/ballista/ballista-scheduler
@@ -92,8 +100,6 @@ EXPOSE 50051
 
 # copy builtcli into accesible folder
 COPY --from=builder /home/builder/workspace/arrow-ballista/target/$RELEASE_FLAG/ballista-cli /opt/ballista/ballista-cli
-
-COPY --from=ric-dependency ${FUNCTION_DIR} ${FUNCTION_DIR}
 
 WORKDIR ${FUNCTION_DIR}
 
