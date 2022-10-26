@@ -6,6 +6,7 @@ import common
 import plugins.databend as databend
 import plugins.spark as spark
 import plugins.dremio as dremio
+import plugins.dask as dask
 from datetime import datetime
 from google.cloud import bigquery
 from google.oauth2 import service_account
@@ -103,4 +104,6 @@ def bench_cold_warm(c):
             run_and_send_twice(spark.lambda_example_hive)
         if "dremio" in active_plugins:
             run_and_send_twice(dremio.lambda_example)
+        if "dask" in active_plugins:
+            run_and_send_twice(dask.lambda_example)
         time.sleep(300)
