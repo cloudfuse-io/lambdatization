@@ -3,23 +3,32 @@ import logging
 import base64
 import sys
 import time
-import re
-import hashlib
+import subprocess
 import dask.dataframe as dd
 from dask_sql import Context
-from distributed import LocalCluster
+from distributed import Client
 
 logging.getLogger().setLevel(logging.INFO)
 
 
 IS_COLD_START = True
-CLUSTER = None
+CLIENT = None
 CONTEXT = None
 
 
 def init():
-    global CLUSTER, CONTEXT
-    CLUSTER = LocalCluster(n_workers=1, processes=True)
+    global CLIENT, CONTEXT
+    subprocess.Popen(
+        ["dask-scheduler"], stdout=sys.stdout, stderr=sys.stderr, bufsize=1
+    )
+    subprocess.Popen(
+        ["dask-worker", "tcp://localhost:8786", "--no-nanny"],
+        stdout=sys.stdout,
+        stderr=sys.stderr,
+        bufsize=1,
+    )
+    # Client is somehow implicitely used by Dask
+    CLIENT = Client("localhost:8786")
     CONTEXT = Context()
 
 
@@ -58,7 +67,9 @@ def handler(event, context):
         for (k, v) in event["env"].items():
             os.environ[k] = v
 
+    logging.debug(CLIENT.scheduler_info())
     resp = query(src_command)
+    logging.debug(CLIENT.scheduler_info())
 
     result = {
         "stdout": resp,
