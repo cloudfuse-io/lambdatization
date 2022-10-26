@@ -4,6 +4,8 @@ import base64
 import sys
 import time
 import subprocess
+import socket
+from contextlib import closing
 import dask.dataframe as dd
 from dask_sql import Context
 from distributed import Client
@@ -21,6 +23,11 @@ def init():
     subprocess.Popen(
         ["dask-scheduler"], stdout=sys.stdout, stderr=sys.stderr, bufsize=1
     )
+    while True:
+        with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
+            if sock.connect_ex(("localhost", 8786)) == 0:
+                break
+
     subprocess.Popen(
         ["dask-worker", "tcp://localhost:8786", "--no-nanny"],
         stdout=sys.stdout,
