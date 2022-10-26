@@ -79,7 +79,7 @@ def send_standalone_durations(c: Context, lambda_json_output: str):
     if errors == []:
         print(f"Row added for {context['engine']}")
     else:
-        print("Encountered errors while inserting rows: {}".format(errors))
+        print(f"Encountered errors while inserting rows: {errors}")
 
 
 @task
