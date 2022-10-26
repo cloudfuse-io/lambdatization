@@ -35,7 +35,7 @@ EOT
 }
 
 inputs = {
-  region_name    = local.region_name
-  dask_image = "dummy_overriden_by_before_hook"
-  bucket_arn     = dependency.core.outputs.bucket_arn
+  region_name = local.region_name
+  dask_image  = "dummy_overriden_by_before_hook"
+  bucket_arn  = dependency.core.outputs.bucket_arn
 }
