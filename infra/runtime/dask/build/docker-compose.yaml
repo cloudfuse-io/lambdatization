@@ -2,7 +2,7 @@ version: "3.9"
 services:
   dask:
     build: .
-    image: cloudfuse-io/l12n:databend
+    image: cloudfuse-io/l12n:dask
     cap_drop:
       - ALL
     read_only: true
