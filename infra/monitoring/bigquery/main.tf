@@ -55,11 +55,6 @@ resource "google_bigquery_table" "standalone_engine_durations" {
     "type": "STRING"
   },
   {
-    "name": "initduration",
-    "mode": "NULLABLE",
-    "type": "INTEGER"
-  },
-  {
     "name": "external_duration_ms",
     "mode": "NULLABLE",
     "type": "INTEGER"
