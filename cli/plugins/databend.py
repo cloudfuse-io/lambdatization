@@ -9,7 +9,7 @@ def lambda_example(c, json_output=False, month="01"):
     """SUM(trip_distance) GROUP_BY payment_type"""
     # NOTE: __RUNTIME_PROVIDED__ is interpolated by the handler with actual credentials
     sql = f"""
-CREATE TRANSIENT TABLE IF NOT EXISTS taxi2019{month}
+CREATE TRANSIENT TABLE taxi2019{month}
 (
     payment_type VARCHAR,
     trip_distance FLOAT
