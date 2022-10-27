@@ -5,7 +5,7 @@ variable "spark_image" {}
 variable "bucket_arn" {}
 
 module "env" {
-  source = "../common/env"
+  source = "../../common/env"
 }
 
 provider "aws" {
@@ -40,7 +40,7 @@ EOF
 }
 
 module "engine" {
-  source = "../common/lambda"
+  source = "../../common/lambda"
 
   function_base_name = "spark"
   region_name        = var.region_name

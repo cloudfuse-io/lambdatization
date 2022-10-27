@@ -1,32 +1,20 @@
 from invoke import Context, task, Exit
-import dynaconf
 from botocore.exceptions import ClientError
 import time
 import base64
 import json
 import io
 from common import (
+    TF_BACKEND_VALIDATORS,
     active_modules,
     clean_modules,
-    TFDIR,
+    RUNTIME_TFDIR,
     auto_app_fmt,
     AWS_REGION_VALIDATOR,
     terraform_output,
     aws,
     parse_env,
 )
-
-# Validate and provide defaults for the terraform state backend configuration
-TF_BACKEND_VALIDATORS = [
-    dynaconf.Validator("TF_STATE_BACKEND", default="local", is_in=["local", "cloud"]),
-    dynaconf.Validator("TF_WORKSPACE_PREFIX", default=""),
-    # if we use tf cloud as backend, the right variables must be configured
-    dynaconf.Validator("TF_STATE_BACKEND", ne="cloud")
-    | (
-        dynaconf.Validator("TF_ORGANIZATION", must_exist=True, ne="")
-        & dynaconf.Validator("TF_API_TOKEN", must_exist=True, ne="")
-    ),
-]
 
 
 VALIDATORS = [
@@ -44,7 +32,7 @@ def active_include_dirs(c: Context) -> str:
 
 def docker_compose(step):
     """The docker compose command in the directory of the specified step"""
-    return f"docker compose --project-directory {TFDIR}/{step}/build"
+    return f"docker compose --project-directory {RUNTIME_TFDIR}/{step}/build"
 
 
 ## Tasks
@@ -81,7 +69,7 @@ def init_step(c, step):
     if step not in mods:
         raise Exit(f"Step {step} not part of the active modules {mods}")
     c.run(
-        f"terragrunt init --terragrunt-working-dir {TFDIR}/{step}",
+        f"terragrunt init --terragrunt-working-dir {RUNTIME_TFDIR}/{step}",
     )
 
 
@@ -92,7 +80,7 @@ def init(c, step="", clean=False):
         clean_modules()
     if step == "":
         c.run(
-            f"terragrunt run-all init {active_include_dirs(c)} --terragrunt-working-dir {TFDIR}",
+            f"terragrunt run-all init {active_include_dirs(c)} --terragrunt-working-dir {RUNTIME_TFDIR}",
         )
     else:
         init_step(c, step)
@@ -102,7 +90,7 @@ def deploy_step(c, step, auto_approve=False):
     """Deploy only one step of the stack"""
     init_step(c, step)
     c.run(
-        f"terragrunt apply {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/{step}",
+        f"terragrunt apply {auto_app_fmt(auto_approve)} --terragrunt-working-dir {RUNTIME_TFDIR}/{step}",
     )
 
 
@@ -111,7 +99,7 @@ def deploy(c, step="", auto_approve=False):
     """Deploy all the modules associated with active plugins or a specific step"""
     if step == "":
         c.run(
-            f"terragrunt run-all apply {auto_app_fmt(auto_approve)} {active_include_dirs(c)} --terragrunt-working-dir {TFDIR}",
+            f"terragrunt run-all apply {auto_app_fmt(auto_approve)} {active_include_dirs(c)} --terragrunt-working-dir {RUNTIME_TFDIR}",
         )
     else:
         deploy_step(c, step, auto_approve)
@@ -205,7 +193,7 @@ def destroy_step(c, step, auto_approve=False):
     """Destroy resources of the specified step. Resources depending on it should be cleaned up first."""
     init_step(c, step)
     c.run(
-        f"terragrunt destroy {auto_app_fmt(auto_approve)} --terragrunt-working-dir {TFDIR}/{step}",
+        f"terragrunt destroy {auto_app_fmt(auto_approve)} --terragrunt-working-dir {RUNTIME_TFDIR}/{step}",
     )
 
 
@@ -217,7 +205,7 @@ def destroy(c, step="", auto_approve=False):
     from the config afterwards, it will not be destroyed"""
     if step == "":
         c.run(
-            f"terragrunt run-all destroy {auto_app_fmt(auto_approve)} {active_include_dirs(c)} --terragrunt-working-dir {TFDIR}",
+            f"terragrunt run-all destroy {auto_app_fmt(auto_approve)} {active_include_dirs(c)} --terragrunt-working-dir {RUNTIME_TFDIR}",
         )
     else:
         destroy_step(c, step, auto_approve)
@@ -231,23 +219,24 @@ CMD_HELP = {
 }
 
 
-def print_lambda_output(
-    json_response: str, json_output: bool, external_duration_sec: float
+def format_lambda_output(
+    json_response: str, json_output: bool, external_duration_sec: float, engine: str
 ):
     response = json.loads(json_response)
     # enrich the event with the external invoke duration
     response.setdefault("context", {})
     response["context"]["external_duration_sec"] = external_duration_sec
+    response["context"]["engine"] = engine
     if json_output:
-        print(json.dumps(response))
+        return json.dumps(response)
     else:
+        output = ""
         for key in ["parsed_cmd", "env", "context", "stdout", "stderr", "returncode"]:
-            print(key.upper())
-            print(response.get(key, ""))
-            print()
+            output += f"{key.upper()}\n{response.get(key, '')}\n\n"
+        return output
 
 
-@task(help=CMD_HELP, iterable=["env"])
+@task(help=CMD_HELP, iterable=["env"], autoprint=True)
 def run_lambda(c, engine, cmd, env=[], json_output=False):
     """Run ad-hoc SQL commands
 
@@ -264,21 +253,10 @@ def run_lambda(c, engine, cmd, env=[], json_output=False):
     external_duration_sec = time.time() - start_time
     resp_payload = lambda_res["Payload"].read().decode()
     if "FunctionError" in lambda_res:
-        # For command errors (the most likely ones), display the same object as
-        # for successful results. Otherwise display the raw error payload.
-        mess = resp_payload
-        try:
-            json_payload = json.loads(resp_payload)
-            if json_payload["errorType"] == "CommandException":
-                # CommandException is JSON encoded
-                print_lambda_output(
-                    json_payload["errorMessage"], json_output, external_duration_sec
-                )
-                mess = ""
-        except Exception:
-            pass
-        raise Exit(message=mess, code=1)
-    print_lambda_output(resp_payload, json_output, external_duration_sec)
+        raise Exit(message=resp_payload, code=1)
+    return format_lambda_output(
+        resp_payload, json_output, external_duration_sec, engine
+    )
 
 
 @task(autoprint=True)
@@ -317,7 +295,7 @@ def dockerized(c, engine):
                 ),
                 code=1,
             )
-    compose = f"docker compose -f {TFDIR}/{engine}/build/docker-compose.yaml"
+    compose = f"docker compose -f {RUNTIME_TFDIR}/{engine}/build/docker-compose.yaml"
     c.run(f"{compose} down -v")
     c.run(f"{compose} build")
     c.run(f"DATA_BUCKET_NAME={bucket_name(c)} {compose} up")

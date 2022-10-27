@@ -1,11 +1,11 @@
 variable "region_name" {}
 
-variable "dremio_image" {}
+variable "databend_image" {}
 
 variable "bucket_arn" {}
 
 module "env" {
-  source = "../common/env"
+  source = "../../common/env"
 }
 
 provider "aws" {
@@ -16,23 +16,12 @@ provider "aws" {
 }
 
 resource "aws_iam_policy" "s3_access" {
-  name = "${module.env.module_name}-dremio-s3-access-${var.region_name}-${module.env.stage}"
+  name = "${module.env.module_name}-databend-s3-access-${var.region_name}-${module.env.stage}"
 
   policy = <<EOF
 {
     "Version": "2012-10-17",
     "Statement": [
-        {
-            "Sid": "listbuckets",
-            "Effect": "Allow",
-            "Action": [
-                "s3:GetBucketLocation",
-                "s3:ListAllMyBuckets"
-            ],
-            "Resource": [
-                "arn:aws:s3:::*"
-            ]
-        },
         {
             "Sid": "objectlevel",
             "Effect": "Allow",
@@ -51,11 +40,11 @@ EOF
 }
 
 module "engine" {
-  source = "../common/lambda"
+  source = "../../common/lambda"
 
-  function_base_name = "dremio"
+  function_base_name = "databend"
   region_name        = var.region_name
-  docker_image       = var.dremio_image
+  docker_image       = var.databend_image
   memory_size        = 2048
   timeout            = 300
 

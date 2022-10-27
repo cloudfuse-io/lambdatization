@@ -10,6 +10,18 @@ import boto3
 import botocore.client
 import shutil
 
+# Validate and provide defaults for the terraform state backend configuration
+TF_BACKEND_VALIDATORS = [
+    dynaconf.Validator("TF_STATE_BACKEND", default="local", is_in=["local", "cloud"]),
+    dynaconf.Validator("TF_WORKSPACE_PREFIX", default=""),
+    # if we use tf cloud as backend, the right variables must be configured
+    dynaconf.Validator("TF_STATE_BACKEND", ne="cloud")
+    | (
+        dynaconf.Validator("TF_ORGANIZATION", must_exist=True, ne="")
+        & dynaconf.Validator("TF_API_TOKEN", must_exist=True, ne="")
+    ),
+]
+
 
 @cache
 def s3_regions():
@@ -24,7 +36,7 @@ AWS_REGION_VALIDATOR = dynaconf.Validator(
 # Path aliases
 REPOROOT = os.environ["REPO_DIR"]
 CURRENTDIR = os.getcwd()
-TFDIR = f"{REPOROOT}/infra"
+RUNTIME_TFDIR = f"{REPOROOT}/infra/runtime"
 
 
 def conf(validators=[]) -> dict:
@@ -36,7 +48,7 @@ def conf(validators=[]) -> dict:
         validators=validators,
     )
     return {
-        k: v
+        k: str(v)
         for (k, v) in dc.as_dict().items()
         if k.startswith(("L12N_", "TF_", "AWS_"))
     }
@@ -54,8 +66,8 @@ def list_modules(c: Context) -> List[str]:
     """List available Terragrunt modules"""
     return [
         mod
-        for mod in os.listdir(TFDIR)
-        if os.path.isfile(f"{TFDIR}/{mod}/terragrunt.hcl")
+        for mod in os.listdir(RUNTIME_TFDIR)
+        if os.path.isfile(f"{RUNTIME_TFDIR}/{mod}/terragrunt.hcl")
     ]
 
 
@@ -79,7 +91,7 @@ def tf_version(c: Context):
 
 
 def terraform_output(c: Context, step, key) -> str:
-    cmd = f"terraform -chdir={TFDIR}/{step} output --raw {key}"
+    cmd = f"terraform -chdir={RUNTIME_TFDIR}/{step} output --raw {key}"
     try:
         output = c.run(
             cmd,
@@ -133,16 +145,16 @@ def parse_env(env: List[str]) -> Dict[str, str]:
 
 def clean_modules():
     """Delete Terragrunt and Terragrunt cache files. This does not impact the Terraform state"""
-    for path in os.listdir(TFDIR):
-        if os.path.isdir(f"{TFDIR}/{path}"):
+    for path in os.listdir(RUNTIME_TFDIR):
+        if os.path.isdir(f"{RUNTIME_TFDIR}/{path}"):
             # clean terraform cache
-            tf_cache = f"{TFDIR}/{path}/.terraform"
+            tf_cache = f"{RUNTIME_TFDIR}/{path}/.terraform"
             if os.path.isdir(tf_cache):
                 print(f"deleting {tf_cache}")
                 shutil.rmtree(tf_cache)
             # remove generated files
-            for sub_path in os.listdir(f"{TFDIR}/{path}"):
+            for sub_path in os.listdir(f"{RUNTIME_TFDIR}/{path}"):
                 if sub_path.endswith(".generated.tf"):
-                    generated_file = f"{TFDIR}/{path}/{sub_path}"
+                    generated_file = f"{RUNTIME_TFDIR}/{path}/{sub_path}"
                     print(f"deleting {generated_file}")
                     os.remove(generated_file)
