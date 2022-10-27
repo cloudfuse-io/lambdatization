@@ -1,4 +1,3 @@
-from doctest import UnexpectedException
 import os
 import logging
 import base64
@@ -79,7 +78,7 @@ class CustomExpect:
                     before_stderr.write(data)
                     print(data.decode(), end="", file=sys.stderr)
                 else:
-                    raise UnexpectedException("file desc should be stdout or stderr")
+                    raise Exception("Unexpected: file desc should be stdout or stderr")
             if expected in stdout_data:
                 stdout = before_stdout.getvalue().decode()
                 stderr = before_stderr.getvalue().decode()
