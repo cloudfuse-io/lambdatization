@@ -19,7 +19,7 @@ GROUP BY payment_type
     return core.run_lambda(c, "spark", sql, json_output=json_output)
 
 
-@task
+@task(autoprint=True)
 def lambda_example_direct(c, json_output=False, month="01"):
     """SUM(trip_distance) GROUP_BY payment_type with direct FROM parquet.s3a://"""
     sql = f"""

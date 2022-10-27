@@ -1,0 +1,22 @@
+version: "3.9"
+services:
+  dask:
+    build: .
+    image: cloudfuse-io/l12n:dask
+    cap_drop:
+      - ALL
+    read_only: true
+    volumes:
+      - dask-tmp:/tmp
+    entrypoint:
+      - python3
+      - lambda-handler.py
+    environment:
+      - AWS_REGION=us-east-2
+      - AWS_ACCESS_KEY_ID=$LAMBDA_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY=$LAMBDA_SECRET_ACCESS_KEY
+      - AWS_SESSION_TOKEN=$LAMBDA_SESSION_TOKEN
+      - DATA_BUCKET_NAME
+
+volumes:
+  dask-tmp:
