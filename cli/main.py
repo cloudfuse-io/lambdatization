@@ -59,7 +59,7 @@ if __name__ == "__main__":
             plugin_set.remove(modname)
 
     if len(plugin_set) > 0:
-        sys.exit(f"Unkown plugins: {plugin_set}")
+        sys.exit(f"Unknown plugins: {plugin_set}")
 
     program = L12nProgram(
         binary="l12n",
