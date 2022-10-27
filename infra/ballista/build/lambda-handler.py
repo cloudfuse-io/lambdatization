@@ -148,6 +148,7 @@ def handler(event, context):
                         tmp_out += look_for[i]
                     elif i == 2:
                         tmp_error += look_for[i]
+                        break
                     else:
                         tmp_error += "pexpect.exceptions.EOF: End Of File (EOF)"
                 except pexpect.exceptions.TIMEOUT:
