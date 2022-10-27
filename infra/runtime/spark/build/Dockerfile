@@ -41,14 +41,12 @@ RUN apt-get update && \
 ARG FUNCTION_DIR
 # Create function directory
 RUN mkdir -p ${FUNCTION_DIR}
-
-# Copy function code
-COPY lambda-handler.py ${FUNCTION_DIR}
-
 # Install the runtime interface client
 RUN pip3 install \
     --target ${FUNCTION_DIR} \
     awslambdaric
+# Copy function code
+COPY lambda-handler.py ${FUNCTION_DIR}
 
 
 FROM apache/spark:$SPARK_VERSION
