@@ -24,7 +24,7 @@ def lambda_example_direct(c, json_output=False, month="01"):
     """SUM(trip_distance) GROUP_BY payment_type with direct FROM parquet.s3a://"""
     sql = f"""
 SELECT payment_type, SUM(trip_distance) 
-FROM parquet.\`s3a://{core.bucket_name(c)}/nyc-taxi/2019/{month}/\` 
+FROM parquet.`s3a://{core.bucket_name(c)}/nyc-taxi/2019/{month}/` 
 GROUP BY payment_type
 """
     if not json_output:
