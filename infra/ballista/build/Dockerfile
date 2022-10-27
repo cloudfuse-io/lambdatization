@@ -89,7 +89,6 @@ RUN pip3 install \
 
 # copy built scheduler into accesible folder
 COPY --from=builder /home/builder/workspace/arrow-ballista/target/$RELEASE_FLAG/ballista-scheduler /opt/ballista/ballista-scheduler
-COPY lambdatization/infra/ballista/build/scheduler_config.toml /tmp/scheduler/
 
 # Expose Ballista Scheduler gRPC port
 EXPOSE 50050

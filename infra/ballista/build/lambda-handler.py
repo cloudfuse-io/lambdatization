@@ -6,9 +6,10 @@ import logging
 import pexpect
 from pexpect import popen_spawn
 import time
+import sys
 
 
-logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger().setLevel(logging.INFO)
 
 # Create global variables for the forked processes
 process_s = None
@@ -19,12 +20,11 @@ IS_COLD_START = True
 
 def init():
     # start scheduler
-    os.environ["OUT_DIR"] = "/tmp/executor"
     global process_s
     process_s = subprocess.Popen(
         ["/opt/ballista/ballista-scheduler", "--sled-dir", "/tmp/scheduler/sled"],
         stdout=PIPE,
-        stderr=PIPE,
+        stderr=sys.stderr,
         bufsize=0,
     )
     logging.info("scheduler starts")
@@ -55,9 +55,9 @@ def init():
 
     global process_e
     process_e = subprocess.Popen(
-        ["/opt/ballista/ballista-executor", "--work-dir", "/tmp/executor"],
+        ["/opt/ballista/ballista-executor"],
         stdout=PIPE,
-        stderr=PIPE,
+        stderr=sys.stderr,
         bufsize=0,
     )
     logging.info("executor starts")
@@ -80,7 +80,13 @@ def init():
                 process_s.terminate()
                 logging.error(process_s.stdout.read().decode("utf-8"))
                 logging.error(process_s.stderr.read().decode("utf-8"))
-            raise "executor failed to start after {} seconds".format(timeout)
+                raise Exception(f"executor failed to start after {timeout} seconds")
+    else:
+        logging.error(process_e.stdout.read().decode("utf-8"))
+        logging.error(process_s.stdout.read().decode("utf-8"))
+        raise Exception(
+            f"executor failed to init stderror: {process_e.stderr.read().decode('utf-8')}"
+        )
 
     global process_cli
     logging.info("cli starts")
@@ -167,20 +173,7 @@ def handler(event, context):
             "init_duration_sec": init_duration,
         },
     }
-    reads()
     return result
-
-
-def reads():
-    global process_s, process_e
-    # process_e.terminate()
-    # logging.debug("el executor")
-    # logging.debug(process_e.stdout.read().decode("utf-8"))
-    # logging.debug(process_e.stderr.read().decode("utf-8"))
-    process_s.terminate()
-    logging.debug("el scheduler")
-    logging.debug(process_s.stdout.read().decode("utf-8"))
-    logging.debug(process_s.stderr.read().decode("utf-8"))
 
 
 if __name__ == "__main__":
