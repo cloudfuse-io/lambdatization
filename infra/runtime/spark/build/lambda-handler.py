@@ -1,120 +1,173 @@
 import os
-import subprocess
 import logging
 import base64
-import sys
-import io
-import json
-import shutil
 import time
-from threading import Thread
+import sys
+import textwrap
+import io
+import selectors
+import subprocess
+from typing import Tuple
 
 logging.getLogger().setLevel(logging.INFO)
-__stdout__ = sys.stdout
+
+
+class CustomExpect:
+    """A custom implementation of pexpect that treats stdout and stderr separately"""
+
+    def __init__(self, command, cwd):
+        p = subprocess.Popen(
+            command,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=cwd,
+        )
+        sel = selectors.DefaultSelector()
+        sel.register(p.stdout, selectors.EVENT_READ)
+        sel.register(p.stderr, selectors.EVENT_READ)
+        self.selector = sel
+        self.process = p
+
+    def _excp(msg, stdout, stderr):
+        """Create a formatted Exception for this class"""
+        mess = f"""{msg}:
+        
+        STDOUT:
+        {stdout}
+        
+        STDERR:
+        {stderr}"""
+        return Exception(textwrap.dedent(mess))
+
+    def expect(self, expected: str, timeout: int) -> Tuple[str, str]:
+        """Tests the string "expected" against stdout and returns the tuple (stdout,stderr)
+
+        - The "expected" string is just tested whether it is "in" the last written
+        bytes to the process stdout. This might not pick up the string if the
+        process stdout blocked right in the middle of the pattern
+        - The "timeout" is specified in seconds
+        - The (stdout,stderr) returned tuple contains every output since the
+        start of the process or the last call to this method"""
+        start = time.time()
+        before_stdout = io.BytesIO()
+        before_stderr = io.BytesIO()
+        while True:
+            stdout_data = ""
+            for key, _ in self.selector.select():
+                if time.time() - start > timeout:
+                    raise CustomExpect._excp(
+                        f"Timeout: exceeded {timeout} seconds",
+                        before_stdout.getvalue().decode(),
+                        before_stderr.getvalue().decode(),
+                    )
+                # read1 instead or read to avoid blocking
+                data = key.fileobj.read1()
+                if not data:
+                    raise CustomExpect._excp(
+                        "EOF: Reached process output end",
+                        before_stdout.getvalue().decode(),
+                        before_stderr.getvalue().decode(),
+                    )
+                if key.fileobj is self.process.stdout:
+                    data_str = data.decode()
+                    print(data_str, end="")
+                    before_stdout.write(data)
+                    stdout_data = data_str
+                elif key.fileobj is self.process.stderr:
+                    before_stderr.write(data)
+                    print(data.decode(), end="", file=sys.stderr)
+                else:
+                    raise Exception("Unexpected: file desc should be stdout or stderr")
+            if expected in stdout_data:
+                stdout = before_stdout.getvalue().decode()
+                stderr = before_stderr.getvalue().decode()
+                return (stdout, stderr)
+
 
 IS_COLD_START = True
+CLI_EXPECT: CustomExpect = None
 
 
-class ReturningThread(Thread):
-    """A wrapper around the Thread class to actually return the threaded function
-    return value when calling join()"""
-
-    def __init__(self, target=None, args=()):
-        Thread.__init__(self, target=target, args=args)
-        self._return = None
-
-    def run(self):
-        if self._target is not None:
-            self._return = self._target(*self._args, **self._kwargs)
-
-    def join(self, *args):
-        Thread.join(self, *args)
-        return self._return
+def init():
+    global CLI_EXPECT
+    CLI_EXPECT = CustomExpect(
+        ["/opt/spark/bin/spark-sql"],
+        cwd="/tmp",
+    )
+    CLI_EXPECT.expect("spark-sql>", timeout=120)
+    logging.info("Spark SQL CLI started")
 
 
-class CommandException(Exception):
-    ...
-
-
-def hide_command_exception(func):
-    """Block printing on CommandException to avoid logging stderr twice"""
-
-    def func_wrapper(*args, **kwargs):
-        # reset stdout to its original value that we saved on init
-        sys.stdout = __stdout__
-        try:
-            return func(*args, **kwargs)
-        except CommandException as e:
-            # the error will be printed to a disposable buffer
-            sys.stdout = io.StringIO()
-            raise e
-
-    return func_wrapper
-
-
-def buff_and_print(stream, stream_name):
-    """Buffer and log every line of the given stream"""
-    buff = []
-    for l in iter(lambda: stream.readline(), b""):
-        line = l.decode("utf-8")
-        logging.info("%s: %s", stream_name, line.rstrip())
-        buff.append(line)
-    return "".join(buff)
-
-
-@hide_command_exception
 def handler(event, context):
     """An AWS Lambda handler that runs the provided command with bash and returns the standard output"""
-    shutil.rmtree("/tmp", ignore_errors=True)
     start = time.time()
     global IS_COLD_START
     is_cold_start = IS_COLD_START
     IS_COLD_START = False
+
+    if is_cold_start:
+        init()
+
     # input parameters
     logging.debug("event: %s", event)
     sql_command = base64.b64decode(event["cmd"]).decode("utf-8")
-    sql_command_escaped = sql_command.replace('"', '\\"')
-    command = f'cd /tmp; /opt/spark/bin/spark-sql -e "{sql_command_escaped}" '
-    logging.info("command: %s", command)
+
     if "env" in event:
         logging.info("env: %s", event["env"])
         for (k, v) in event["env"].items():
             os.environ[k] = v
 
-    # execute the command as bash and return the std outputs
-    parsed_cmd = ["/bin/bash", "-c", command]
-    process = subprocess.Popen(
-        parsed_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    )
-    # we need to spin up a thread to avoid deadlock when reading through output pipes
-    stderr_thread = ReturningThread(
-        target=buff_and_print, args=(process.stderr, "stderr")
-    )
-    stderr_thread.start()
-    stdout = buff_and_print(process.stdout, "stdout").strip()
-    stderr = stderr_thread.join().strip()
-    returncode = process.wait()
-    logging.info("returncode: %s", returncode)
+    resp_stdout = ""
+    resp_stderr = ""
+    for command in sql_command.split(";"):
+        # CLI will hang if the request doesn't end with a semicolon and a newline
+        # newline at the beginning is for helping the stdout cleanup
+        command = f"\n{command.strip()};\n"
+        if command == "\n;\n":
+            continue
+        logging.info("command: %s", command)
+
+        # submit query to CLI
+        CLI_EXPECT.process.stdin.write(command.encode())
+        CLI_EXPECT.process.stdin.flush()
+        stdout, stderr = CLI_EXPECT.expect("spark-sql>", timeout=240)
+
+        # stdout also contains the input, so we have to clean it up
+        resp_stdout = "\n".join(
+            filter(
+                lambda l: not l.startswith("         >")
+                and not l in ["spark-sql> ", ""],
+                stdout.split("\n"),
+            )
+        )
+
+        # Only way to check if a query is successful
+        if "Time taken:" not in stderr:
+            raise Exception(f"Query failed: {stderr}")
+
+        resp_stderr += stderr
+
     result = {
-        "stdout": stdout,
-        "stderr": stderr,
-        "parsed_cmd": parsed_cmd,
-        "returncode": returncode,
+        "stdout": resp_stdout,
+        "stderr": resp_stderr,
+        "parsed_cmd": sql_command,
+        "returncode": 0,
         "env": event.get("env", {}),
         "context": {
             "cold_start": is_cold_start,
             "handler_duration_sec": time.time() - start,
         },
     }
-    if returncode != 0:
-        raise CommandException(json.dumps(result))
     return result
 
 
 if __name__ == "__main__":
     query_str = f"""
+CREATE EXTERNAL TABLE taxi201901 (trip_distance FLOAT, payment_type STRING) 
+STORED AS PARQUET LOCATION 's3a://{os.getenv("DATA_BUCKET_NAME")}/nyc-taxi/2019/01/';
 SELECT payment_type, SUM(trip_distance) 
-FROM parquet.\`s3a://{os.getenv("DATA_BUCKET_NAME")}/nyc-taxi/2019/01/\` 
+FROM taxi201901 
 GROUP BY payment_type
 """
     res = handler(
