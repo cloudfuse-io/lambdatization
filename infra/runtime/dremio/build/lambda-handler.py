@@ -15,9 +15,13 @@ DREMIO_ORIGIN = "http://localhost:9047"
 SOURCE_NAME = "s3source"
 USER_NAME = "l12n"
 USER_PASSWORD = "l12nrocks"
+NULL_AUTH = {"Authorization": "_dremionull"}
+# This global will be completed one auth is successful
+TOKEN_AUTH = {"Authorization": None}
+IS_COLD_START = True
 
 
-def setup_credentials():
+def setup_aws_credentials():
     if not os.path.exists("/tmp/aws"):
         os.makedirs("/tmp/aws")
     with open("/tmp/aws/credentials", "w") as f:
@@ -28,21 +32,12 @@ def setup_credentials():
             f.write(f'aws_session_token = {os.environ["AWS_SESSION_TOKEN"]}\n')
 
 
-@dataclass
-class Resp:
-    success: bool
-    msg: str
-
-
-def create_firstuser(timeout, start_time) -> Resp:
+def create_firstuser(timeout, start_time):
     """Repeatedly call the PUT bootstrap/firstuser API until getting a response"""
     try:
         resp = requests.put(
             f"{DREMIO_ORIGIN}/apiv2/bootstrap/firstuser",
-            headers={
-                "Authorization": "_dremionull",
-                "Content-Type": "application/json",
-            },
+            headers=NULL_AUTH,
             json={
                 "userName": USER_NAME,
                 "firstName": "lamb",
@@ -53,38 +48,32 @@ def create_firstuser(timeout, start_time) -> Resp:
             },
         )
         if resp.status_code != 200:
-            return Resp(
-                False, f"Failed to create first user ({resp.status_code}):\n{resp.text}"
+            raise Exception(
+                f"Failed to create first user ({resp.status_code}):\n{resp.text}"
             )
-        return Resp(True, "")
     except requests.exceptions.ConnectionError:
         if time.time() - start_time < timeout:
             time.sleep(0.2)
             return create_firstuser(timeout, start_time)
-        return Resp(False, "Failed to create first user: time out")
+        raise Exception("Failed to create first user: time out")
 
 
-def init() -> Resp:
+def init():
     """Try to init Dremio, if success return token as msg"""
-    setup_credentials()
+    setup_aws_credentials()
     if not os.path.exists("/tmp/log"):
         os.makedirs("/tmp/log")
     process = subprocess.run(["/opt/dremio/bin/dremio", "start"], capture_output=True)
     if process.returncode != 0:
         return f"`dremio start` exited with code {process.returncode}:\n{process.stdout}{process.stderr}"
-    res = create_firstuser(240, time.time())
-    if not res.success:
-        return res
+    create_firstuser(240, time.time())
     login_resp = requests.post(
         f"{DREMIO_ORIGIN}/apiv2/login",
-        headers={
-            "Authorization": "_dremionull",
-            "Content-Type": "application/json",
-        },
+        headers=NULL_AUTH,
         json={"userName": USER_NAME, "password": USER_PASSWORD},
     )
     if login_resp.status_code != 200:
-        return Resp(False, "Failed to login to dremio")
+        raise Exception("Failed to login to dremio")
 
     token = login_resp.json()["token"]
 
@@ -120,23 +109,20 @@ def init() -> Resp:
         "accessControlList": {"userControls": [], "roleControls": []},
     }
 
+    TOKEN_AUTH["Authorization"] = f"_dremio{token}"
+
     resp = requests.put(
         f"{DREMIO_ORIGIN}/apiv2/source/{SOURCE_NAME}/",
-        headers={
-            "Authorization": f"_dremio{token}",
-            "Content-Type": "application/json",
-        },
+        headers=TOKEN_AUTH,
         json=source_req,
     )
     if resp.status_code != 200:
-        return Resp(
-            False, f"Failed to create Dremio source ({resp.status_code}):\n{resp.text}"
+        raise Exception(
+            f"Failed to create Dremio source ({resp.status_code}):\n{resp.text}"
         )
 
-    return Resp(True, token)
 
-
-def query(query: str, token: str) -> Dict:
+def query(query: str) -> Dict:
     """Run the provided SQL query on the currently inited profile"""
     sql_req = {
         "sql": query,
@@ -146,10 +132,7 @@ def query(query: str, token: str) -> Dict:
 
     resp = requests.post(
         f"{DREMIO_ORIGIN}/apiv2/datasets/new_untitled_sql_and_run?newVersion=1",
-        headers={
-            "Authorization": f"_dremio{token}",
-            "Content-Type": "application/json",
-        },
+        headers=TOKEN_AUTH,
         json=sql_req,
     )
 
@@ -161,87 +144,43 @@ def query(query: str, token: str) -> Dict:
 
     while True:
         job_resp = requests.get(
-            f"http://localhost:9047/api/v3/job/{job_id}",
-            headers={
-                "Authorization": f"_dremio{token}",
-                "Content-Type": "application/json",
-            },
+            f"{DREMIO_ORIGIN}/api/v3/job/{job_id}",
+            headers=TOKEN_AUTH,
         )
         logging.debug(job_resp.text)
         job_resp.raise_for_status()
         job_resp_json = job_resp.json()
         if job_resp_json["jobState"] in ["COMPLETED", "CANCELED", "FAILED"]:
             job_resp = requests.get(
-                f"http://localhost:9047/api/v3/job/{job_id}/results",
-                headers={
-                    "Authorization": f"_dremio{token}",
-                    "Content-Type": "application/json",
-                },
+                f"{DREMIO_ORIGIN}/api/v3/job/{job_id}/results",
+                headers=TOKEN_AUTH,
             )
             logging.debug(job_resp.text)
             job_resp.raise_for_status()
             return job_resp.json()
 
 
-# def clean():
-#     # subprocess.run(["tail", "/tmp/log/server.log"], capture_output=True)
-#     try:
-#         a_file = open("/tmp/log/server.log")
-#         file_contents = a_file.read()
-#         print("===============================================")
-#         print(file_contents)
-#         print("===============================================")
-#     except:
-#         print("couldn't read /tmp/log/server.log")
-#     subprocess.run(["/opt/dremio/bin/dremio", "stop"], capture_output=True)
-#     shutil.rmtree("/tmp", ignore_errors=True)
-
-
-IS_COLD_START = True
-
-
 def handler(event, context):
     """An AWS Lambda handler that runs the provided command with bash and returns the standard output"""
-    global IS_COLD_START, INIT_RESP
-
     logging.warning("Dremio source init fails if user is not dremio or sbx_user1051")
 
+    start = time.time()
+    global IS_COLD_START
     is_cold_start = IS_COLD_START
     IS_COLD_START = False
-
-    start = time.time()
-    # Init must run in handler because it is otherwise limited to 10S
     if is_cold_start:
-        INIT_RESP = init()
-    init_duration = time.time() - start
+        init()
+    src_command = base64.b64decode(event["query"]).decode("utf-8")
 
-    if not INIT_RESP.success:
-        raise Exception(f"Init failed: {INIT_RESP.msg}")
-
-    # input parameters
-    logging.debug("event: %s", event)
-    src_command = base64.b64decode(event["cmd"]).decode("utf-8")
-    logging.info("command: %s", src_command)
-    if "env" in event:
-        logging.info("env: %s", event["env"])
-        for (k, v) in event["env"].items():
-            os.environ[k] = v
-
-    query_res = ""
-    query_err = ""
-    try:
-        query_res = query(src_command, INIT_RESP.msg)
-    except requests.exceptions.HTTPError as err:
-        query_err = f"Error calling {err.request.url} : {err}\n{err.response.text}"
+    query_res = query(src_command)
 
     result = {
-        "stdout": query_res,
-        "stderr": query_err,
-        "env": event.get("env", {}),
+        "resp": query_res,
+        "logs": "",
+        "parsed_queries": [src_command],
         "context": {
             "cold_start": is_cold_start,
             "handler_duration_sec": time.time() - start,
-            "init_duration_sec": init_duration,
         },
     }
     return result

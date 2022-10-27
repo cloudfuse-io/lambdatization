@@ -1,12 +1,7 @@
-
 ARG DREMIO_VERSION=22.1
-
-
 ARG FUNCTION_DIR="/function"
 
 FROM debian:11.4 as ric-dependency
-
-# Install aws-lambda-cpp build dependencies
 RUN apt-get update && \
     apt-get install -y \
     g++ \
@@ -16,18 +11,11 @@ RUN apt-get update && \
     python3 \
     python3-pip \
     libcurl4-openssl-dev
-
-# Include global arg in this stage of the build
 ARG FUNCTION_DIR
-# Create function directory
 RUN mkdir -p ${FUNCTION_DIR}
-
-# Install the runtime interface client
 RUN pip3 install \
     --target ${FUNCTION_DIR} \
     awslambdaric requests
-
-# Copy function code
 COPY lambda-handler.py ${FUNCTION_DIR}
 
 

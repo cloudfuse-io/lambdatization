@@ -12,7 +12,7 @@ services:
       - python3
       - lambda-handler.py
     environment:
-      - AWS_REGION=us-east-2
+      - AWS_REGION=$L12N_AWS_REGION
       - AWS_ACCESS_KEY_ID=$LAMBDA_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY=$LAMBDA_SECRET_ACCESS_KEY
       - AWS_SESSION_TOKEN=$LAMBDA_SESSION_TOKEN

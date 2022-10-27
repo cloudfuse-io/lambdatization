@@ -52,39 +52,30 @@ def query(sql, timeout):
 
 def handler(event, context):
     """An AWS Lambda handler that runs the provided command with bash and returns the standard output"""
+    start = time.time()
     global IS_COLD_START
-
     is_cold_start = IS_COLD_START
     IS_COLD_START = False
-
-    start = time.time()
-
     if is_cold_start:
         init()
-    init_duration = time.time() - start
+    src_command = base64.b64decode(event["query"]).decode("utf-8")
 
-    # input parameters
-    logging.debug("event: %s", event)
-    src_command = base64.b64decode(event["cmd"]).decode("utf-8")
-    logging.info("command: %s", src_command)
-    if "env" in event:
-        logging.info("env: %s", event["env"])
-        for (k, v) in event["env"].items():
-            os.environ[k] = v
-
-    resp = None
+    resp = ""
+    parsed_queries = []
     for sql in src_command.split(";"):
-        if sql.strip() != "":
-            resp = query(sql.strip(), 30)
+        sql = sql.strip()
+        if sql == "":
+            continue
+        resp = query(sql, 30)
+        parsed_queries.append(sql)
 
     result = {
-        "stdout": resp,
-        "stderr": "",
-        "env": event.get("env", {}),
+        "resp": resp,
+        "logs": "",
+        "parsed_queries": parsed_queries,
         "context": {
             "cold_start": is_cold_start,
             "handler_duration_sec": time.time() - start,
-            "init_duration_sec": init_duration,
         },
     }
     return result
@@ -92,7 +83,7 @@ def handler(event, context):
 
 if __name__ == "__main__":
     query_str = f"""
-CREATE TRANSIENT TABLE IF NOT EXISTS taxi201901
+CREATE TRANSIENT TABLE taxi201901
 (
     payment_type VARCHAR,
     trip_distance FLOAT

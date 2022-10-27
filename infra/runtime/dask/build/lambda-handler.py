@@ -39,53 +39,44 @@ def init():
     CONTEXT = Context()
 
 
-def query(sql):
+def query(sql: str) -> str:
     """Splits the sql statements and return the result of the last one"""
-    resp = "Empty response"
-    for sql in sql.split(";"):
-        stripped_sql = sql.strip()
-        if stripped_sql != "":
-            plan = CONTEXT.sql(sql.strip())
-            # CREATE TABLE statements return None as plan
-            if plan is not None:
-                resp = str(CONTEXT.sql(sql.strip()).compute())
-    return resp
+    plan = CONTEXT.sql(sql)
+    # CREATE TABLE statements return None as plan
+    if plan is not None:
+        return str(CONTEXT.sql(sql).compute())
+    else:
+        return "No plan to compute"
 
 
 def handler(event, context):
     """An AWS Lambda handler that runs the provided command with bash and returns the standard output"""
+    start = time.time()
     global IS_COLD_START
-
     is_cold_start = IS_COLD_START
     IS_COLD_START = False
-
-    start = time.time()
-
     if is_cold_start:
         init()
-    init_duration = time.time() - start
-
-    # input parameters
-    logging.debug("event: %s", event)
-    src_command = base64.b64decode(event["cmd"]).decode("utf-8")
-    logging.info("command: %s", src_command)
-    if "env" in event:
-        logging.info("env: %s", event["env"])
-        for (k, v) in event["env"].items():
-            os.environ[k] = v
+    src_command = base64.b64decode(event["query"]).decode("utf-8")
 
     logging.debug(CLIENT.scheduler_info())
-    resp = query(src_command)
+    resp = ""
+    parsed_queries = []
+    for sql in src_command.split(";"):
+        sql = sql.strip()
+        if sql == "":
+            continue
+        parsed_queries.append(sql)
+        resp = query(sql)
     logging.debug(CLIENT.scheduler_info())
 
     result = {
-        "stdout": resp,
-        "stderr": "",
-        "env": event.get("env", {}),
+        "resp": resp,
+        "logs": "",
+        "parsed_queries": parsed_queries,
         "context": {
             "cold_start": is_cold_start,
             "handler_duration_sec": time.time() - start,
-            "init_duration_sec": init_duration,
         },
     }
     return result
