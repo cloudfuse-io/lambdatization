@@ -7,6 +7,8 @@ import pexpect
 from pexpect import popen_spawn
 import time
 import sys
+import socket
+from contextlib import closing
 
 
 logging.getLogger().setLevel(logging.INFO)
@@ -22,11 +24,11 @@ process_config = {
             "--sled-dir",
             "/tmp/scheduler/sled",
         ],
-        "health_check_port": "50050",
+        "health_check_port": 50050,
     },
     "executor": {
         "cmd": ["/opt/ballista/ballista-executor"],
-        "health_check_port": "50051",
+        "health_check_port": 50051,
     },
 }
 
@@ -40,32 +42,29 @@ def popen_process(process_name):
         bufsize=0,
     )
     logging.info(f"{process_name} starts")
-    time.sleep(1)
     # wait till the {process_name} is up and running
-    if process.poll() is None:
-        return_code = 1
-        timeout = 0
-        while return_code:
-            res = subprocess.run(
-                ["nc", "-z", "localhost", "50050"], capture_output=True
+    c = 0
+    start_time = time.time()
+    while True:
+        with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
+            s = sock.connect_ex(
+                ("localhost", process_config[process_name]["health_check_port"])
             )
-            return_code = res.returncode
-            logging.debug(res)
-            time.sleep(1)
-            # rc = process_s.poll()
-            timeout += 1
-            if timeout >= 30:  # or rc is not None:
-                process.terminate()
-                logging.error(process.stdout.read().decode("utf-8"))
-                logging.error(process.stderr.read().decode("utf-8"))
-                raise Exception(
-                    f"{process_name} failed to start after {timeout} seconds"
-                )
-    else:
-        logging.error(process.stdout.read().decode("utf-8"))
-        raise Exception(
-            f"{process_name} failed to init stderror: {process.stderr.read().decode('utf-8')}"
-        )
+            if s == 0:
+                break
+            else:
+                c += 1
+        timeout = time.time() - start_time
+        if timeout >= 30:  # or rc is not None:
+            process.terminate()
+            logging.error(process.stdout.read().decode("utf-8"))
+            logging.error(process.stderr.read().decode("utf-8"))
+            raise Exception(
+                f"{process_name} failed to start after {timeout} seconds and {c} connection tries"
+            )
+    logging.debug(
+        f"{process_name} healthcheck passed after {timeout} seconds and {c} connection tries"
+    )
     globals()[process_name] = process
 
 
