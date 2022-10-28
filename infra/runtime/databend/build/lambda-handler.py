@@ -7,7 +7,6 @@ import time
 import requests
 
 logging.getLogger().setLevel(logging.INFO)
-__stdout__ = sys.stdout
 
 
 IS_COLD_START = True

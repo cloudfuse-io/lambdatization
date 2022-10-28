@@ -1,27 +1,25 @@
-from dataclasses import dataclass
 import os
 import subprocess
 import logging
 import base64
-import sys
 import time
 from typing import Dict
 import requests
 
 logging.getLogger().setLevel(logging.INFO)
-__stdout__ = sys.stdout
 
 DREMIO_ORIGIN = "http://localhost:9047"
 SOURCE_NAME = "s3source"
 USER_NAME = "l12n"
 USER_PASSWORD = "l12nrocks"
 NULL_AUTH = {"Authorization": "_dremionull"}
-# This global will be completed one auth is successful
+# This global will be completed once auth is successful
 TOKEN_AUTH = {"Authorization": None}
 IS_COLD_START = True
 
 
 def setup_aws_credentials():
+    """Write AWS credential env variables into an AWS credentials file"""
     if not os.path.exists("/tmp/aws"):
         os.makedirs("/tmp/aws")
     with open("/tmp/aws/credentials", "w") as f:
@@ -65,7 +63,9 @@ def init():
         os.makedirs("/tmp/log")
     process = subprocess.run(["/opt/dremio/bin/dremio", "start"], capture_output=True)
     if process.returncode != 0:
-        return f"`dremio start` exited with code {process.returncode}:\n{process.stdout}{process.stderr}"
+        raise Exception(
+            f"`dremio start` exited with code {process.returncode}:\n{process.stdout}{process.stderr}"
+        )
     create_firstuser(240, time.time())
     login_resp = requests.post(
         f"{DREMIO_ORIGIN}/apiv2/login",

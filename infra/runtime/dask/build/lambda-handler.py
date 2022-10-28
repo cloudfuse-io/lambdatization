@@ -6,7 +6,6 @@ import time
 import subprocess
 import socket
 from contextlib import closing
-import dask.dataframe as dd
 from dask_sql import Context
 from distributed import Client
 
