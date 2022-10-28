@@ -12,25 +12,37 @@ import sys
 logging.getLogger().setLevel(logging.INFO)
 
 # Create global variables for the forked processes
-process_s = None
-process_e = None
 process_cli = None
 IS_COLD_START = True
 
+process_config = {
+    "scheduler": {
+        "cmd": [
+            "/opt/ballista/ballista-scheduler",
+            "--sled-dir",
+            "/tmp/scheduler/sled",
+        ],
+        "health_check_port": "50050",
+    },
+    "executor": {
+        "cmd": ["/opt/ballista/ballista-executor"],
+        "health_check_port": "50051",
+    },
+}
 
-def start_scheduler():
-    # start scheduler
-    global process_s
-    process_s = subprocess.Popen(
-        ["/opt/ballista/ballista-scheduler", "--sled-dir", "/tmp/scheduler/sled"],
+
+def popen_process(process_name):
+    # start process
+    process = subprocess.Popen(
+        process_config[process_name]["cmd"],
         stdout=PIPE,
         stderr=sys.stderr,
         bufsize=0,
     )
-    logging.info("scheduler starts")
+    logging.info(f"{process_name} starts")
     time.sleep(1)
-    # wait till the scheduler is up and running
-    if process_s.poll() is None:
+    # wait till the {process_name} is up and running
+    if process.poll() is None:
         return_code = 1
         timeout = 0
         while return_code:
@@ -43,53 +55,18 @@ def start_scheduler():
             # rc = process_s.poll()
             timeout += 1
             if timeout >= 30:  # or rc is not None:
-                process_s.terminate()
-                logging.error(process_s.stdout.read().decode("utf-8"))
-                logging.error(process_s.stderr.read().decode("utf-8"))
-                raise Exception(f"scheduler failed to start after {timeout} seconds")
+                process.terminate()
+                logging.error(process.stdout.read().decode("utf-8"))
+                logging.error(process.stderr.read().decode("utf-8"))
+                raise Exception(
+                    f"{process_name} failed to start after {timeout} seconds"
+                )
     else:
-        logging.error(process_s.stdout.read().decode("utf-8"))
+        logging.error(process.stdout.read().decode("utf-8"))
         raise Exception(
-            f"scheduler failed to init stderror: {process_s.stderr.read().decode('utf-8')}"
+            f"{process_name} failed to init stderror: {process.stderr.read().decode('utf-8')}"
         )
-
-
-def start_executor():
-    # start executor
-    global process_e
-    process_e = subprocess.Popen(
-        ["/opt/ballista/ballista-executor"],
-        stdout=PIPE,
-        stderr=sys.stderr,
-        bufsize=0,
-    )
-    logging.info("executor starts")
-    # wait till the executor is up and running
-    if process_s.poll() is None:
-        return_code = 1
-        timeout = 0
-        while return_code:
-            res = subprocess.run(
-                ["nc", "-z", "localhost", "50051"], capture_output=True
-            )
-            return_code = res.returncode
-            logging.debug(res)
-            time.sleep(1)
-            timeout += 1
-            if timeout >= 30:
-                process_e.terminate()
-                logging.error(process_e.stdout.read().decode("utf-8"))
-                logging.error(process_e.stderr.read().decode("utf-8"))
-                process_s.terminate()
-                logging.error(process_s.stdout.read().decode("utf-8"))
-                logging.error(process_s.stderr.read().decode("utf-8"))
-                raise Exception(f"executor failed to start after {timeout} seconds")
-    else:
-        logging.error(process_e.stdout.read().decode("utf-8"))
-        logging.error(process_s.stdout.read().decode("utf-8"))
-        raise Exception(
-            f"executor failed to init stderror: {process_e.stderr.read().decode('utf-8')}"
-        )
+    globals()[process_name] = process
 
 
 def start_cli():
@@ -111,23 +88,19 @@ def start_cli():
 
 
 def init():
-    start_scheduler()
-    start_executor()
+    for key in process_config.keys():
+        popen_process(key)
     start_cli()
 
 
 def check_components():
     global process_cli
-    global process_s
-    global process_e
-    s = process_s.poll()
-    if s is not None:
-        logging.debug(f"scheduler failed between runs. exit_code:{s} \n Restarting...")
-        start_scheduler()
-    e = process_e.poll()
-    if e is not None:
-        logging.debug(f"executor failed between runs. exit_code:{s} \n Restarting...")
-        start_executor()
+    for key in process_config:
+        process = globals()[key]
+        status = process.poll()
+        if status is not None:
+            logging.debug(f"{key} failed between runs. exit_code:{s} \n Restarting...")
+            popen_process(key)
     cli = process_cli.poll()
     if cli is not None:
         logging.debug(f"cli failed between runs. exit_code:{s} \n Restarting...")
