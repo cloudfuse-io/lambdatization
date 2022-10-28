@@ -7,8 +7,6 @@ ARG SPARK_VERSION=v3.2.2
 ARG HADOOP_VERSION=3.3.1
 # There is no clear rule for the SDK version required by Hadoop and Spark
 ARG AWS_JAVA_SDK_VERSION=1.12.302
-# The debian version used to get the Lambdaric should ideally match the one 
-# in the Spark image (cat /etc/debian_version)
 
 ARG FUNCTION_DIR="/function"
 
@@ -24,9 +22,9 @@ RUN curl https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-common/$HADOOP_
 RUN curl https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/$HADOOP_VERSION/hadoop-aws-$HADOOP_VERSION.jar -o /tmp/hadoop-aws-$HADOOP_VERSION.jar
 
 
+# The debian version used to get the Lambdaric should ideally match the one 
+# in the Spark image (cat /etc/debian_version)
 FROM debian:11.4 as ric-dependency
-
-# Install aws-lambda-cpp build dependencies
 RUN apt-get update && \
     apt-get install -y \
     g++ \
@@ -36,16 +34,11 @@ RUN apt-get update && \
     python3 \
     python3-pip \
     libcurl4-openssl-dev
-
-# Include global arg in this stage of the build
 ARG FUNCTION_DIR
-# Create function directory
 RUN mkdir -p ${FUNCTION_DIR}
-# Install the runtime interface client
 RUN pip3 install \
     --target ${FUNCTION_DIR} \
     awslambdaric
-# Copy function code
 COPY lambda-handler.py ${FUNCTION_DIR}
 
 

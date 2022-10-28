@@ -99,61 +99,54 @@ def init():
     logging.info("Spark SQL CLI started")
 
 
+def query(sql: str) -> Tuple[str, str]:
+    """Run a single SQL query on the Spark SQL CLI"""
+    # submit query to CLI
+    CLI_EXPECT.process.stdin.write(sql.encode())
+    CLI_EXPECT.process.stdin.flush()
+    stdout, stderr = CLI_EXPECT.expect("spark-sql>", timeout=240)
+    # stdout also contains the input, so we have to clean it up
+    resp_stdout = "\n".join(
+        filter(
+            lambda l: not l.startswith("         >") and not l in ["spark-sql> ", ""],
+            stdout.split("\n"),
+        )
+    )
+    # Only way to check if a query is successful
+    if "Time taken:" not in stderr:
+        raise Exception(f"Query failed: {stderr}")
+
+    return (resp_stdout, stderr)
+
+
 def handler(event, context):
     """An AWS Lambda handler that runs the provided command with bash and returns the standard output"""
     start = time.time()
     global IS_COLD_START
     is_cold_start = IS_COLD_START
     IS_COLD_START = False
-
     if is_cold_start:
         init()
-
-    # input parameters
-    logging.debug("event: %s", event)
-    sql_command = base64.b64decode(event["cmd"]).decode("utf-8")
-
-    if "env" in event:
-        logging.info("env: %s", event["env"])
-        for (k, v) in event["env"].items():
-            os.environ[k] = v
+    src_command = base64.b64decode(event["query"]).decode("utf-8")
 
     resp_stdout = ""
     resp_stderr = ""
-    for command in sql_command.split(";"):
+    parsed_queries = []
+    for sql in src_command.split(";"):
         # CLI will hang if the request doesn't end with a semicolon and a newline
         # newline at the beginning is for helping the stdout cleanup
-        command = f"\n{command.strip()};\n"
-        if command == "\n;\n":
+        sql = f"\n{sql.strip()};\n"
+        if sql == "\n;\n":
             continue
-        logging.info("command: %s", command)
+        parsed_queries.append(sql)
 
-        # submit query to CLI
-        CLI_EXPECT.process.stdin.write(command.encode())
-        CLI_EXPECT.process.stdin.flush()
-        stdout, stderr = CLI_EXPECT.expect("spark-sql>", timeout=240)
-
-        # stdout also contains the input, so we have to clean it up
-        resp_stdout = "\n".join(
-            filter(
-                lambda l: not l.startswith("         >")
-                and not l in ["spark-sql> ", ""],
-                stdout.split("\n"),
-            )
-        )
-
-        # Only way to check if a query is successful
-        if "Time taken:" not in stderr:
-            raise Exception(f"Query failed: {stderr}")
-
+        (resp_stdout, stderr) = query(sql)
         resp_stderr += stderr
 
     result = {
-        "stdout": resp_stdout,
-        "stderr": resp_stderr,
-        "parsed_cmd": sql_command,
-        "returncode": 0,
-        "env": event.get("env", {}),
+        "resp": resp_stdout,
+        "logs": resp_stderr,
+        "parsed_queries": parsed_queries,
         "context": {
             "cold_start": is_cold_start,
             "handler_duration_sec": time.time() - start,

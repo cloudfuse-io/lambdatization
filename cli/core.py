@@ -211,11 +211,9 @@ def destroy(c, step="", auto_approve=False):
         destroy_step(c, step, auto_approve)
 
 
-CMD_HELP = {
-    "cmd": "Bash commands to be executed. We recommend wrapping it with single\
+QUERY_HELP = {
+    "query": "SQL query to be executed. We recommend wrapping it with single\
  quotes to avoid unexpected interpolations",
-    "env": "List of environment variables to be passed to the execution context,\
- name and values are separated by = (e.g --env BUCKET=mybucketname)",
 }
 
 
@@ -231,23 +229,23 @@ def format_lambda_output(
         return json.dumps(response)
     else:
         output = ""
-        for key in ["parsed_cmd", "env", "context", "stdout", "stderr", "returncode"]:
+        for key in ["parsed_queries", "context", "resp", "logs"]:
             output += f"{key.upper()}\n{response.get(key, '')}\n\n"
         return output
 
 
-@task(help=CMD_HELP, iterable=["env"], autoprint=True)
-def run_lambda(c, engine, cmd, env=[], json_output=False):
+@task(help=QUERY_HELP, autoprint=True)
+def run_lambda(c, engine, query, json_output=False):
     """Run ad-hoc SQL commands
 
     Prints the inputs (command / environment) and outputs (stdout, stderr, exit
     code) of the executed function to stdout."""
     lambda_name = terraform_output(c, engine, "lambda_name")
-    cmd_b64 = base64.b64encode(cmd.encode()).decode()
+    query_b64 = base64.b64encode(query.encode()).decode()
     start_time = time.time()
     lambda_res = aws("lambda").invoke(
         FunctionName=lambda_name,
-        Payload=json.dumps({"cmd": cmd_b64, "env": parse_env(env)}).encode(),
+        Payload=json.dumps({"query": query_b64}).encode(),
         InvocationType="RequestResponse",
     )
     external_duration_sec = time.time() - start_time

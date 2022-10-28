@@ -11,9 +11,8 @@ RUN DB_REL="https://github.com/datafuselabs/databend/releases" && \
 RUN mkdir -p /databend/target/release/ && \
     tar -xvf databend-${DATABEND_VERSION}-x86_64-unknown-linux-gnu.tar.gz -C /databend/target/release/ --strip-components=1 bin
 
-FROM ubuntu:22.04 as ric-dependency
 
-# Install aws-lambda-cpp build dependencies
+FROM ubuntu:22.04 as ric-dependency
 RUN apt-get update && \
     apt-get install -y \
     g++ \
@@ -23,16 +22,12 @@ RUN apt-get update && \
     python3 \
     python3-pip \
     libcurl4-openssl-dev
-# Include global arg in this stage of the build
 ARG FUNCTION_DIR
-# Create function directory
 RUN mkdir -p ${FUNCTION_DIR}
-# Install the runtime interface client
 RUN pip3 install \
     --target ${FUNCTION_DIR} \
     awslambdaric \
     requests
-# Copy function code
 COPY lambda-handler.py ${FUNCTION_DIR}
 
 
