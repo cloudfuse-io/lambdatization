@@ -37,7 +37,6 @@ def popen_process(process_name):
     # start process
     process = subprocess.Popen(
         process_config[process_name]["cmd"],
-        stdout=PIPE,
         stderr=sys.stderr,
         bufsize=0,
     )
@@ -57,7 +56,6 @@ def popen_process(process_name):
         timeout = time.time() - start_time
         if timeout >= 30:  # or rc is not None:
             process.terminate()
-            logging.error(process.stdout.read().decode("utf-8"))
             logging.error(process.stderr.read().decode("utf-8"))
             raise Exception(
                 f"{process_name} failed to start after {timeout} seconds and {c} connection tries"
@@ -82,7 +80,7 @@ def start_cli():
             "csv",
         ]
     )
-    process_cli.expect(b"\n")
+    process_cli.expect(b"Ballista CLI v[0-9.]*")
     logging.debug(process_cli.before)
 
 
@@ -93,17 +91,17 @@ def init():
 
 
 def check_components():
-    global process_cli
     for key in process_config:
         process = globals()[key]
         status = process.poll()
         if status is not None:
             logging.debug(f"{key} failed between runs. exit_code:{s} \n Restarting...")
             popen_process(key)
-    cli = process_cli.poll()
-    if cli is not None:
-        logging.debug(f"cli failed between runs. exit_code:{s} \n Restarting...")
-        start_cli()
+    start_cli()
+
+
+def clean(string):
+    return "\n".join([x for x in string.splitlines() if not x.startswith("[")])
 
 
 def handler(event, context):
@@ -129,47 +127,51 @@ def handler(event, context):
         for (k, v) in event["env"].items():
             os.environ[k] = v
 
-    # process_cli = subprocess.run(command, capture_output=True)
     global process_cli
     tmp_out = b""
     tmp_error = b""
+    parsed_queries = ""
     try:
         for command in src_command.split(";"):
             if command != "":
                 try:
                     process_cli.sendline(command + ";")
                     logging.debug(command)
+                    parsed_queries += command
                     look_for = [
                         b"Query took",
                         pexpect.EOF,
                         b'DataFusionError\(Execution\("Table .*already exists"\)\)',
+                        b"Invalid statement",
                     ]
                     i = process_cli.expect(look_for, timeout=60)
                     tmp_out = tmp_out + process_cli.before
                     if i == 0:
                         tmp_out += look_for[i]
+                    elif i == 1:
+                        tmp_error += "pexpect.exceptions.EOF: End Of File (EOF)"
+                        raise Exception(tmp_error.decode("utf-8"))
                     elif i == 2:
                         tmp_error += look_for[i]
-                        break
-                    else:
-                        tmp_error += "pexpect.exceptions.EOF: End Of File (EOF)"
+                        raise Exception(tmp_error.decode("utf-8"))
+                    elif i == 3:
+                        tmp_error += look_for[i]
+                        process_cli.expect([b"\n"], timeout=1)
+                        tmp_error += process_cli.before
+                        raise Exception(tmp_error.decode("utf-8"))
                 except pexpect.exceptions.TIMEOUT:
                     logging.debug("this command timeout flushing std_out to output")
                     tmp_out += process_cli.before
+                    tmp_error += f"command timeout: \n {command}".encode("utf-8")
+                    raise Exception(tmp_error.decode("utf-8"))
     finally:
         process_cli.expect(b"\n")
         tmp_out = tmp_out + process_cli.before + b"\n"
 
     cli_stdout = tmp_out.decode("utf-8")
-    if tmp_error != b"":
-        ret_code = 1
-    else:
-        ret_code = 0
     result = {
-        "stdout": cli_stdout,  # process_cli.stdout,
-        "stderr": tmp_error.decode("utf-8"),
-        "returncode": ret_code,
-        "env": event.get("env", {}),
+        "resp": clean(cli_stdout),  # process_cli.stdout,
+        "parsed_queries": parsed_queries,
         "context": {
             "cold_start": is_cold_start,
             "handler_duration_sec": time.time() - start,
