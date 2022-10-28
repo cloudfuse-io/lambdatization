@@ -1,4 +1,6 @@
 
+# fix a ballista commit or tag as reference
+ARG BALLISTA_VERSION=0.9.0
 ARG RELEASE_FLAG=release
 ARG FUNCTION_DIR="/function"
 
@@ -40,12 +42,12 @@ RUN rustup update && \
 
 WORKDIR /home/builder/workspace/
 
-# RUN git clone https://github.com/apache/arrow-ballista.git
+RUN git clone https://github.com/apache/arrow-ballista.git
 COPY arrow-ballista /home/builder/workspace/arrow-ballista
 
 WORKDIR /home/builder/workspace/arrow-ballista
 
-RUN ls -l ../
+RUN git checkout ${BALLISTA_VERSION}
 
 # Actually build the project
 RUN cargo build --features "flight-sql s3" --${RELEASE_FLAG}
