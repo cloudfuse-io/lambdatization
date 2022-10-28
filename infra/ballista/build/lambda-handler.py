@@ -18,7 +18,7 @@ process_cli = None
 IS_COLD_START = True
 
 
-def init():
+def start_scheduler():
     # start scheduler
     global process_s
     process_s = subprocess.Popen(
@@ -53,6 +53,9 @@ def init():
             f"scheduler failed to init stderror: {process_s.stderr.read().decode('utf-8')}"
         )
 
+
+def start_executor():
+    # start executor
     global process_e
     process_e = subprocess.Popen(
         ["/opt/ballista/ballista-executor"],
@@ -88,6 +91,8 @@ def init():
             f"executor failed to init stderror: {process_e.stderr.read().decode('utf-8')}"
         )
 
+
+def start_cli():
     global process_cli
     logging.info("cli starts")
     process_cli = popen_spawn.PopenSpawn(
@@ -105,16 +110,41 @@ def init():
     logging.debug(process_cli.before)
 
 
+def init():
+    start_scheduler()
+    start_executor()
+    start_cli()
+
+
+def check_components():
+    global process_cli
+    global process_s
+    global process_e
+    s = process_s.poll()
+    if s is not None:
+        logging.debug(f"scheduler failed between runs. exit_code:{s} \n Restarting...")
+        start_scheduler()
+    e = process_e.poll()
+    if e is not None:
+        logging.debug(f"executor failed between runs. exit_code:{s} \n Restarting...")
+        start_executor()
+    cli = process_cli.poll()
+    if cli is not None:
+        logging.debug(f"cli failed between runs. exit_code:{s} \n Restarting...")
+        start_cli()
+
+
 def handler(event, context):
     """An AWS Lambda handler that runs the provided command with bash and returns the standard output"""
     global IS_COLD_START
     is_cold_start = IS_COLD_START
     IS_COLD_START = False
-
     start = time.time()
 
     if is_cold_start:
         init()
+    else:
+        check_components()
     init_duration = time.time() - start
 
     # input parameters
@@ -179,9 +209,9 @@ def handler(event, context):
 
 if __name__ == "__main__":
     ballista_cmd = f"""
-CREATE EXTERNAL TABLE trips STORED AS PARQUET
+CREATE EXTERNAL TABLE trips01 STORED AS PARQUET
  LOCATION 's3://{os.getenv("DATA_BUCKET_NAME")}/nyc-taxi/2019/01/';
-SELECT payment_type, SUM(trip_distance) FROM trips
+SELECT payment_type, SUM(trip_distance) FROM trips01
  GROUP BY payment_type;"""
     res = handler(
         {"cmd": base64.b64encode(ballista_cmd.encode("utf-8"))},
