@@ -93,7 +93,7 @@ FROM nyctaxi
 GROUP BY payment_type
 """
     res = handler(
-        {"cmd": base64.b64encode(query_str.encode("utf-8"))},
+        {"query": base64.b64encode(query_str.encode("utf-8"))},
         {},
     )
     print(res)
