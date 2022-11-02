@@ -33,6 +33,24 @@ process_config = {
 }
 
 
+def socket_check(process_name):
+    c = 0
+    start_time = time.time()
+    timeout = 0
+    while True:
+        with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
+            s = sock.connect_ex(
+                ("localhost", process_config[process_name]["health_check_port"])
+            )
+            c += 1
+            if s == 0:
+                break
+        timeout = time.time() - start_time
+        if timeout >= 30:
+            return "failed", timeout, c
+    return ("ok", timeout, c)
+
+
 def popen_process(process_name):
     # start process
     process = subprocess.Popen(
@@ -42,27 +60,17 @@ def popen_process(process_name):
     )
     logging.info(f"{process_name} starts")
     # wait till the {process_name} is up and running
-    c = 0
-    start_time = time.time()
-    while True:
-        with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
-            s = sock.connect_ex(
-                ("localhost", process_config[process_name]["health_check_port"])
-            )
-            if s == 0:
-                break
-            else:
-                c += 1
-        timeout = time.time() - start_time
-        if timeout >= 30:  # or rc is not None:
-            process.terminate()
-            logging.error(process.stderr.read().decode("utf-8"))
-            raise Exception(
-                f"{process_name} failed to start after {timeout} seconds and {c} connection tries"
-            )
-    logging.debug(
-        f"{process_name} healthcheck passed after {timeout} seconds and {c} connection tries"
-    )
+    status, timeout, c_tries = socket_check(process_name)
+    if status == "failed":
+        process.terminate()
+        logging.error(process.stderr.read().decode("utf-8"))
+        raise Exception(
+            f"{process_name} failed to start after {timeout} seconds and {c_tries} connection tries"
+        )
+    else:
+        logging.debug(
+            f"{process_name} healthcheck passed after {timeout} seconds and {c_tries} connection tries"
+        )
     globals()[process_name] = process
 
 
@@ -91,13 +99,17 @@ def init():
 
 
 def check_components():
+    global process_cli
     for key in process_config:
-        process = globals()[key]
-        status = process.poll()
-        if status is not None:
-            logging.debug(f"{key} failed between runs. exit_code:{s} \n Restarting...")
+        status, _, _ = socket_check(key)
+        if status == "failed":
+            logging.warning(f"{key} failed between runs. Restarting...")
             popen_process(key)
-    start_cli()
+    s = process_cli.signalstatus
+    logging.warn(f"cli status is {s}")
+    if s is not None:
+        logging.warning(f"cli failed between runs. exit_code:{s} \n Restarting...")
+        start_cli()
 
 
 def clean(string):
@@ -141,23 +153,22 @@ def handler(event, context):
                     look_for = [
                         b"Query took",
                         pexpect.EOF,
-                        b'DataFusionError\(Execution\("Table .*already exists"\)\)',
+                        b"DataFusionError\(",
                         b"Invalid statement",
                     ]
                     i = process_cli.expect(look_for, timeout=60)
                     tmp_out = tmp_out + process_cli.before
                     if i == 0:
                         tmp_out += look_for[i]
-                    elif i == 1:
-                        tmp_error += "pexpect.exceptions.EOF: End Of File (EOF)"
-                        raise Exception(tmp_error.decode("utf-8"))
-                    elif i == 2:
-                        tmp_error += look_for[i]
-                        raise Exception(tmp_error.decode("utf-8"))
-                    elif i == 3:
-                        tmp_error += look_for[i]
-                        process_cli.expect([b"\n"], timeout=1)
-                        tmp_error += process_cli.before
+                    else:
+                        if i == 1:
+                            tmp_error += "pexpect.exceptions.EOF: End Of File (EOF)"
+                            process_cli.kill(9)
+                            process_cli.wait()
+                        else:
+                            tmp_error += look_for[i]
+                            process_cli.expect([b"\n"], timeout=1)
+                            tmp_error += process_cli.before
                         raise Exception(tmp_error.decode("utf-8"))
                 except pexpect.exceptions.TIMEOUT:
                     logging.debug("this command timeout flushing std_out to output")
@@ -165,8 +176,12 @@ def handler(event, context):
                     tmp_error += f"command timeout: \n {command}".encode("utf-8")
                     raise Exception(tmp_error.decode("utf-8"))
     finally:
-        process_cli.expect(b"\n")
-        tmp_out = tmp_out + process_cli.before + b"\n"
+        if tmp_error != b"" or tmp_out != b"":
+            if i == 0:
+                process_cli.expect(b"\n")
+                tmp_out = tmp_out + process_cli.before + b"\n"
+            if i > 0:
+                logging.error(tmp_error.decode("utf-8"))
 
     cli_stdout = tmp_out.decode("utf-8")
     result = {
