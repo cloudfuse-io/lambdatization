@@ -43,7 +43,6 @@ RUN rustup update && \
 WORKDIR /home/builder/workspace/
 
 RUN git clone https://github.com/apache/arrow-ballista.git
-COPY arrow-ballista /home/builder/workspace/arrow-ballista
 
 WORKDIR /home/builder/workspace/arrow-ballista
 
@@ -60,7 +59,7 @@ ARG RELEASE_FLAG
 ARG FUNCTION_DIR
 
 ENV RELEASE_FLAG=${RELEASE_FLAG}
-ENV RUST_LOG=info
+ENV RUST_LOG=warn
 ENV RUST_BACKTRACE=full
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -82,7 +81,7 @@ ARG FUNCTION_DIR
 RUN mkdir -p ${FUNCTION_DIR}
 
 # Copy function code
-COPY lambdatization/infra/ballista/build/lambda-handler.py ${FUNCTION_DIR}
+COPY lambda-handler.py ${FUNCTION_DIR}
 
 # Install the runtime interface client and lambda requirements
 RUN pip3 install \

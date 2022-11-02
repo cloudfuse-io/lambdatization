@@ -1,9 +1,7 @@
 version: "3.9"
 services:
   ballista:
-    build:
-      context: ../../../../
-      dockerfile: lambdatization/infra/ballista/build/Dockerfile
+    build: .
     image: cloudfuse-io/l12n:ballista
     cap_drop:
       - ALL
