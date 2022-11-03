@@ -61,8 +61,8 @@ COPY metastore-site.xml ${HIVE_HOME}/conf
 # TRINO
 
 ENV TRINO_HOME=/opt/trino-server-${TRINO_VERSION}
-RUN curl -L https://github.com/cloudfuse-io/lambdatization/releases/download/trino-server-${TRINO_VERSION}/trino-server-${TRINO_VERSION}.tar.gz | tar zxf -
-RUN curl -L https://repo1.maven.org/maven2/io/trino/trino-cli/${TRINO_VERSION}/trino-cli-${TRINO_VERSION}-executable.jar -o ${TRINO_HOME}/bin/trino && \
+RUN curl -L https://github.com/cloudfuse-io/lambdatization/releases/download/trino-server-${TRINO_VERSION}/trino-server-${TRINO_VERSION}.tar.gz | tar zxf - && \
+  curl -L https://repo1.maven.org/maven2/io/trino/trino-cli/${TRINO_VERSION}/trino-cli-${TRINO_VERSION}-executable.jar -o ${TRINO_HOME}/bin/trino && \
   chmod +x ${TRINO_HOME}/bin/trino
 ENV PATH="${TRINO_HOME}/bin:${PATH}"
 COPY trino-etc ${TRINO_HOME}/etc
