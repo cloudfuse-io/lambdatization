@@ -12,13 +12,13 @@ jobs:
     name: Trino Build
     runs-on: ubuntu-20.04
     steps:
+      - name: Clone
+        run: git clone --depth 1 --branch ${{ github.event.inputs.trino-version }} https://github.com/trinodb/trino.git
       - uses: actions/setup-java@v3
         with:
           distribution: 'zulu'
           java-version: 17
           cache: 'maven'
-      - name: Clone
-        run: git clone --depth 1 --branch ${{ github.event.inputs.trino-version }} https://github.com/trinodb/trino.git
       - name: Patch
         run: |
           sed -i '/verifyJvmRequirements()/d' trino/core/trino-main/src/main/java/io/trino/server/Server.java
