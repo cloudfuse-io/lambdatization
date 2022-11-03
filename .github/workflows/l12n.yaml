@@ -27,10 +27,16 @@ jobs:
       - name: CLI
         run: |
           L12N_BUILD=. ./l12n-shell
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Push CLI image to cache
         id: push-cli-img
         run: |
-          CLI_IMAGE="ghcr.io/cloudfuse-io/lambdatization:$(git rev-parse --short HEAD)"
+          CLI_IMAGE="ghcr.io/cloudfuse-io/lambdatization:${{ github.ref_name }}"
           docker tag cloudfuse-io/cli:latest "$CLI_IMAGE"
           docker push "$CLI_IMAGE"
           echo "cached-img=${CLI_IMAGE}" >> $GITHUB_OUTPUT
