@@ -13,9 +13,11 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  build-docker:
-    name: Docker
+  build-cli:
+    name: Build and Cache the CLI
     runs-on: ubuntu-20.04
+    outputs:
+      cached-img: ${{ steps.push-cli-img.outputs.cached-img }}
     env:
       DOCKER_BUILDKIT: 1
     steps:
@@ -25,12 +27,52 @@ jobs:
       - name: CLI
         run: |
           L12N_BUILD=. ./l12n-shell
-      - name: Spark
+      - name: Push CLI image to cache
+        id: push-cli-img
+        run: |
+          CLI_IMAGE="ghcr.io/cloudfuse-io/lambdatization:$(git rev-parse --short HEAD)"
+          docker tag cloudfuse-io/cli:latest "$CLI_IMAGE"
+          docker push "$CLI_IMAGE"
+          echo "cached-img=${CLI_IMAGE}" >> $GITHUB_OUTPUT
+
+  spark:
+    name: Spark
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Pull cached CLI image
+        run: |
+          docker pull "${{ needs.vastcloud-cli.outputs.cached-img }}"
+          docker tag "${{ needs.vastcloud-cli.outputs.cached-img }}" cloudfuse-io/cli:latest
+      - name: Build
         run: |
           ./l12n-shell l12n build-images -s spark
-      - name: Dremio
+
+  dremio:
+    name: Dremio
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Pull cached CLI image
+        run: |
+          docker pull "${{ needs.vastcloud-cli.outputs.cached-img }}"
+          docker tag "${{ needs.vastcloud-cli.outputs.cached-img }}" cloudfuse-io/cli:latest
+      - name: Build
         run: |
           ./l12n-shell l12n build-images -s dremio
-      - name: Databend
+  
+  databend:
+    name: Databend
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Pull cached CLI image
+        run: |
+          docker pull "${{ needs.vastcloud-cli.outputs.cached-img }}"
+          docker tag "${{ needs.vastcloud-cli.outputs.cached-img }}" cloudfuse-io/cli:latest
+      - name: Build
         run: |
           ./l12n-shell l12n build-images -s databend
