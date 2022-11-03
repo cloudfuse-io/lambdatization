@@ -38,13 +38,15 @@ jobs:
   spark:
     name: Spark
     runs-on: ubuntu-20.04
+    needs:
+      - build-cli
     steps:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Pull cached CLI image
         run: |
-          docker pull "${{ needs.vastcloud-cli.outputs.cached-img }}"
-          docker tag "${{ needs.vastcloud-cli.outputs.cached-img }}" cloudfuse-io/cli:latest
+          docker pull "${{ needs.build-cli.outputs.cached-img }}"
+          docker tag "${{ needs.build-cli.outputs.cached-img }}" cloudfuse-io/cli:latest
       - name: Build
         run: |
           ./l12n-shell l12n build-images -s spark
@@ -52,13 +54,15 @@ jobs:
   dremio:
     name: Dremio
     runs-on: ubuntu-20.04
+    needs:
+      - build-cli
     steps:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Pull cached CLI image
         run: |
-          docker pull "${{ needs.vastcloud-cli.outputs.cached-img }}"
-          docker tag "${{ needs.vastcloud-cli.outputs.cached-img }}" cloudfuse-io/cli:latest
+          docker pull "${{ needs.build-cli.outputs.cached-img }}"
+          docker tag "${{ needs.build-cli.outputs.cached-img }}" cloudfuse-io/cli:latest
       - name: Build
         run: |
           ./l12n-shell l12n build-images -s dremio
@@ -66,13 +70,15 @@ jobs:
   databend:
     name: Databend
     runs-on: ubuntu-20.04
+    needs:
+      - build-cli
     steps:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Pull cached CLI image
         run: |
-          docker pull "${{ needs.vastcloud-cli.outputs.cached-img }}"
-          docker tag "${{ needs.vastcloud-cli.outputs.cached-img }}" cloudfuse-io/cli:latest
+          docker pull "${{ needs.build-cli.outputs.cached-img }}"
+          docker tag "${{ needs.build-cli.outputs.cached-img }}" cloudfuse-io/cli:latest
       - name: Build
         run: |
           ./l12n-shell l12n build-images -s databend
