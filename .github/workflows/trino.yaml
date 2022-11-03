@@ -25,7 +25,7 @@ jobs:
           sed -i '/import static io.trino.server.TrinoSystemRequirements.verifyJvmRequirements;/d' trino/core/trino-main/src/main/java/io/trino/server/Server.java
       - name: Build
         working-directory: ./trino
-        run: ./mvnw -pl core/trino-server clean install -DskipTests
+        run: ./mvnw -pl core/trino-main,core/trino-server clean install -DskipTests
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
