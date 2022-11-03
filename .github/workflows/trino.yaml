@@ -1,0 +1,31 @@
+name: Trino
+on:
+  workflow_dispatch:
+    inputs:
+      trino-version:
+        required: true
+        description: The Trino version (e.g. 378), should be compatible with the patch
+
+
+jobs:
+  build:
+    name: Trino Build
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: 17
+          cache: 'maven'
+      - name: Clone
+        run: git clone --depth 1 --branch ${{ github.event.inputs.trino-version }} https://github.com/trinodb/trino.git
+      - name: Patch
+        run: |
+          sed -i '/verifyJvmRequirements()/d' core/trino-main/src/main/java/io/trino/server/Server.java
+          sed -i '/import static io.trino.server.TrinoSystemRequirements.verifyJvmRequirements;/d' core/trino-main/src/main/java/io/trino/server/Server.java
+      - name: Build
+        run: ./mvnw -pl core/trino-server clean install -DskipTests
+      - uses: actions/upload-artifact@v3
+        with:
+          name: trino-server-${{ github.event.inputs.trino-version }}
+          path: core/trino-server/target/trino-server-${{ github.event.inputs.trino-version }}.tar.gz
