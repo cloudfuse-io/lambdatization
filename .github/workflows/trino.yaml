@@ -12,20 +12,23 @@ jobs:
     name: Trino Build
     runs-on: ubuntu-20.04
     steps:
+      - name: Clone
+        run: git clone --depth 1 --branch ${{ github.event.inputs.trino-version }} https://github.com/trinodb/trino.git
       - uses: actions/setup-java@v3
         with:
           distribution: 'zulu'
           java-version: 17
           cache: 'maven'
-      - name: Clone
-        run: git clone --depth 1 --branch ${{ github.event.inputs.trino-version }} https://github.com/trinodb/trino.git
       - name: Patch
         run: |
-          sed -i '/verifyJvmRequirements()/d' core/trino-main/src/main/java/io/trino/server/Server.java
-          sed -i '/import static io.trino.server.TrinoSystemRequirements.verifyJvmRequirements;/d' core/trino-main/src/main/java/io/trino/server/Server.java
+          sed -i '/verifyJvmRequirements()/d' trino/core/trino-main/src/main/java/io/trino/server/Server.java
+          sed -i '/import static io.trino.server.TrinoSystemRequirements.verifyJvmRequirements;/d' trino/core/trino-main/src/main/java/io/trino/server/Server.java
       - name: Build
+        working-directory: ./trino
         run: ./mvnw -pl core/trino-server clean install -DskipTests
-      - uses: actions/upload-artifact@v3
+      - name: Release
+        uses: softprops/action-gh-release@v1
         with:
-          name: trino-server-${{ github.event.inputs.trino-version }}
-          path: core/trino-server/target/trino-server-${{ github.event.inputs.trino-version }}.tar.gz
+          tag_name: trino-server-${{ github.event.inputs.trino-version }}
+          body: Custom build of Trino Server version ${{ github.event.inputs.trino-version }} disabling file descriptor checks
+          files: trino/core/trino-server/target/trino-server-${{ github.event.inputs.trino-version }}.tar.gz
