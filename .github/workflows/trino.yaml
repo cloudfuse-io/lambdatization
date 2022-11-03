@@ -1,5 +1,5 @@
 name: Trino
-on: 
+on:
   workflow_dispatch:
     inputs:
       trino-version:
@@ -21,10 +21,10 @@ jobs:
         run: git clone --depth 1 --branch ${{ github.event.inputs.trino-version }} https://github.com/trinodb/trino.git
       - name: Patch
         run: |
-          sed -i 's@verifyJvmRequirements();@// verifyJvmRequirements();@' core/trino-main/src/main/java/io/trino/server/Server.java
-          sed -i 's@import static io.trino.server.TrinoSystemRequirements.verifyJvmRequirements;@@' core/trino-main/src/main/java/io/trino/server/Server.java
+          sed -i '/verifyJvmRequirements()/d' core/trino-main/src/main/java/io/trino/server/Server.java
+          sed -i '/import static io.trino.server.TrinoSystemRequirements.verifyJvmRequirements;/d' core/trino-main/src/main/java/io/trino/server/Server.java
       - name: Build
-        run: ./mvnw clean install -DskipTests
+        run: ./mvnw -pl core/trino-server clean install -DskipTests
       - uses: actions/upload-artifact@v3
         with:
           name: trino-server-${{ github.event.inputs.trino-version }}
