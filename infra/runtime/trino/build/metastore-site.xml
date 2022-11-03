@@ -1,0 +1,24 @@
+<configuration>
+    <property>
+        <name>metastore.thrift.uris</name>
+        <value>thrift://0.0.0.0:9083</value>
+        <description>Thrift URI for the remote metastore. Used by metastore client to connect to remote metastore.</description>
+    </property>
+    <property>
+        <name>metastore.task.threads.always</name>
+        <value>org.apache.hadoop.hive.metastore.events.EventCleanerTask,org.apache.hadoop.hive.metastore.MaterializationsCacheCleanerTask</value>
+    </property>
+    <property>
+        <name>metastore.expression.proxy</name>
+        <value>org.apache.hadoop.hive.metastore.DefaultPartitionExpressionProxy</value>
+    </property>
+    <property>
+        <name>metastore.storage.schema.reader.impl</name>
+        <value>org.apache.hadoop.hive.metastore.SerDeStorageSchemaReader</value>
+    </property>
+    <property>
+        <name>datanucleus.autoCreateSchema</name>
+        <value>false</value>
+        <description>Creates necessary schema on a startup, we use init script instead</description>
+    </property> 
+</configuration>

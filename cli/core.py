@@ -296,4 +296,4 @@ def dockerized(c, engine):
     compose = f"docker compose -f {RUNTIME_TFDIR}/{engine}/build/docker-compose.yaml"
     c.run(f"{compose} down -v")
     c.run(f"{compose} build")
-    c.run(f"DATA_BUCKET_NAME={bucket_name(c)} {compose} up")
+    c.run(f"DATA_BUCKET_NAME={bucket_name(c)} {compose} run {engine}")
