@@ -1,0 +1,22 @@
+name: Hadoop
+on:
+  workflow_dispatch:
+    inputs:
+      hadoop-version:
+        required: true
+        description: The Hadoop version (e.g. 3.2.0), should be in apache.archive.org
+
+
+jobs:
+  build:
+    name: Hadoop mirroring
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Download
+        run: curl -L https://archive.apache.org/dist/hadoop/common/hadoop-${{ github.event.inputs.hadoop-version }}/hadoop-${{ github.event.inputs.hadoop-version }}.tar.gz -o hadoop-${{ github.event.inputs.hadoop-version }}.tar.gz
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: hadoop-${{ github.event.inputs.hadoop-version }}
+          body: Mirroring of the Hadoop ${{ github.event.inputs.hadoop-version }} package
+          files: hadoop-${{ github.event.inputs.hadoop-version }}.tar.gz
