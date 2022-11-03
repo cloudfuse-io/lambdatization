@@ -26,7 +26,9 @@ jobs:
       - name: Build
         working-directory: ./trino
         run: ./mvnw -pl core/trino-server clean install -DskipTests
-      - uses: actions/upload-artifact@v3
+      - name: Release
+        uses: softprops/action-gh-release@v1
         with:
-          name: trino-server-${{ github.event.inputs.trino-version }}
-          path: trino/core/trino-server/target/trino-server-${{ github.event.inputs.trino-version }}.tar.gz
+          tag_name: trino-server-${{ github.event.inputs.trino-version }}
+          body: Custom build of Trino Server version ${{ github.event.inputs.trino-version }} disabling file descriptor checks
+          files: trino/core/trino-server/target/trino-server-${{ github.event.inputs.trino-version }}.tar.gz
