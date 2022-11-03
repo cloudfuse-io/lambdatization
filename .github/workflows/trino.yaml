@@ -21,11 +21,12 @@ jobs:
         run: git clone --depth 1 --branch ${{ github.event.inputs.trino-version }} https://github.com/trinodb/trino.git
       - name: Patch
         run: |
-          sed -i '/verifyJvmRequirements()/d' core/trino-main/src/main/java/io/trino/server/Server.java
-          sed -i '/import static io.trino.server.TrinoSystemRequirements.verifyJvmRequirements;/d' core/trino-main/src/main/java/io/trino/server/Server.java
+          sed -i '/verifyJvmRequirements()/d' trino/core/trino-main/src/main/java/io/trino/server/Server.java
+          sed -i '/import static io.trino.server.TrinoSystemRequirements.verifyJvmRequirements;/d' trino/core/trino-main/src/main/java/io/trino/server/Server.java
       - name: Build
+        working-directory: ./trino
         run: ./mvnw -pl core/trino-server clean install -DskipTests
       - uses: actions/upload-artifact@v3
         with:
           name: trino-server-${{ github.event.inputs.trino-version }}
-          path: core/trino-server/target/trino-server-${{ github.event.inputs.trino-version }}.tar.gz
+          path: trino/core/trino-server/target/trino-server-${{ github.event.inputs.trino-version }}.tar.gz
