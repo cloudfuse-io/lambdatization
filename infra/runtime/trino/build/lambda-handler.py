@@ -26,11 +26,12 @@ def init():
         ["start-metastore"], stdout=sys.stdout, stderr=sys.stderr, cwd="/tmp"
     )
 
-    while True:
-        log_line = trino_proc.stderr.readline().decode()
+    for line_bytes in trino_proc.stderr:
+        log_line = line_bytes.decode()
         print(log_line, flush=True, file=sys.stderr, end="")
         if "======== SERVER STARTED ========" in log_line:
             return
+    raise Exception("Trino server didn't start successfully")
 
 
 def query(sql: str) -> Tuple[str, str]:
