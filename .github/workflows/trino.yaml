@@ -25,7 +25,7 @@ jobs:
         run: |
           sed -i '/verifyJvmRequirements()/d' core/trino-main/src/main/java/io/trino/server/Server.java
           sed -i '/import static io.trino.server.TrinoSystemRequirements.verifyJvmRequirements;/d' core/trino-main/src/main/java/io/trino/server/Server.java
-          cat <<EOT > core/trino-server/src/main/provisio/trino.xml
+          cat << 'EOT' > core/trino-server/src/main/provisio/trino.xml
           <runtime>
               <!-- Target -->
               <archive name="${project.artifactId}-${project.version}.tar.gz" hardLinkIncludes="**/*.jar" />

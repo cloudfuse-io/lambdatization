@@ -4,9 +4,9 @@
 
 - Trino loads many plugins by default, which implies opening many jar files in
   parallel. To make sure this process doesn't exceed the system's maximum number
-  of file descriptors, it has a check on the ulimit for file descriptor that
-  cannot be disabled through configuration. The minimum set is 4096 but we have
-  a hard limit on AWS Lambda at 1024. We had to
+  of file descriptors, it performs a check of the ulimit when starting. The
+  minimum required is 4096, but unfortunately we have a hard limit on AWS Lambda
+  at 1024. We had to
   [rebuild](https://github.com/cloudfuse-io/lambdatization/actions/workflows/trino.yaml)
   Trino with a patch that:
     - loads less plugins
