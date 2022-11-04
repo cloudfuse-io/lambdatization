@@ -23,7 +23,7 @@ play with it and give us your feedback!
 
 ## :hammer: Lambdatize yourself
 
-### :shell: The `l12n-shell`
+### The `l12n-shell`
 The `l12n-shell` provides a way to run all commands in an isolated docker
 environement. It is not strictly necessary, but simplifies the collaboration on
 the project. To set it up:
@@ -42,7 +42,7 @@ the project. To set it up:
     example, `./l12n-shell cmd`, `./l12n-shell -c "cmd"` and `echo "cmd" |
     ./l12n-shell` all run `cmd` in the `l12n-shell`
 
-### :screwdriver: Configurations
+### Configurations
 
 `./l12n-shell` can be configured through environement variables or a `.env` in
 the current directory:
@@ -56,7 +56,7 @@ You can also provide the
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
 
-### :computer: The `l12n` CLI
+### The `l12n` CLI
 
 Inside the `l12n-shell`, you can use the following commands:
 - `l12n -h` to see all the available commands
@@ -72,7 +72,7 @@ Inside the `l12n-shell`, you can use the following commands:
   - you can also run pre-configured queries using the examples. Run `l12n -h` to
     see the list of examples.
 
-### :information_source: About the stack
+###  About the stack
 
 Infrastructure is managed by Terraform.
 
@@ -81,7 +81,7 @@ We use Terragrunt to:
 - [DRY](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself) the Terraform config
 - Manage dependencies between modules and allow a plugin based structure.
 
-### :handshake: Contribute
+### Contribute
 
 - We try to follow the [conventional commits
   standard](https://www.conventionalcommits.org/en/v1.0.0/)
