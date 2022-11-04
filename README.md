@@ -16,10 +16,10 @@ to execute a list of engines as Lambdas.
 We want to provide accurate and interactive representations of our
 experimental results. This is still work in progress, feel free to
 play with it and give us your feedback!
-- **[NYC Taxi Parquet GROUP BY duration of various engines in AWS
-  Lambda][engine-duration-datastudio]**
+- [NYC Taxi Parquet GROUP BY duration of various engines in AWS
+  Lambda][engine-duration-datastudio]
 
-[lambda-duration-datastudio]: https://datastudio.google.com/reporting/c870737c-e8b6-467f-9860-8cd60c751f81
+[engine-duration-datastudio]: https://datastudio.google.com/reporting/c870737c-e8b6-467f-9860-8cd60c751f81
 
 ## :hammer: Lambdatize yourself
 
