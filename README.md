@@ -11,7 +11,17 @@ The goal of this project is to assess what process can realistically run inside
 lambda and have a first feeling about there performances. To do this we will try
 to execute a list of engines as Lambdas.
 
-## Lambdatizating yourself
+## :chart_with_upwards_trend: Explore the results
+
+We want to provide accurate and interactive representations of our
+experimental results. This is still work in progress, feel free to
+play with it and give us your feedback!
+- **[NYC Taxi Parquet GROUP BY duration of various engines in AWS
+  Lambda][engine-duration-datastudio]**
+
+[lambda-duration-datastudio]: https://datastudio.google.com/reporting/c870737c-e8b6-467f-9860-8cd60c751f81
+
+## :hammer: Lambdatize yourself
 
 ### The `l12n-shell`
 The `l12n-shell` provides a way to run all commands in an isolated docker
@@ -32,7 +42,7 @@ the project. To set it up:
     example, `./l12n-shell cmd`, `./l12n-shell -c "cmd"` and `echo "cmd" |
     ./l12n-shell` all run `cmd` in the `l12n-shell`
 
-## Configurations
+### Configurations
 
 `./l12n-shell` can be configured through environement variables or a `.env` in
 the current directory:
@@ -46,7 +56,7 @@ You can also provide the
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
 
-## The `l12n` CLI
+### The `l12n` CLI
 
 Inside the `l12n-shell`, you can use the following commands:
 - `l12n -h` to see all the available commands
@@ -62,7 +72,7 @@ Inside the `l12n-shell`, you can use the following commands:
   - you can also run pre-configured queries using the examples. Run `l12n -h` to
     see the list of examples.
 
-## About the stack
+###  About the stack
 
 Infrastructure is managed by Terraform.
 
@@ -71,7 +81,7 @@ We use Terragrunt to:
 - [DRY](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself) the Terraform config
 - Manage dependencies between modules and allow a plugin based structure.
 
-## Contribute
+### Contribute
 
 - We try to follow the [conventional commits
   standard](https://www.conventionalcommits.org/en/v1.0.0/)
