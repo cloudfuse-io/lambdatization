@@ -1,0 +1,34 @@
+version: "3.9"
+services:
+  trino:
+    build: .
+    image: cloudfuse-io/l12n:trino
+    cap_drop:
+      - ALL
+    read_only: true
+    volumes:
+      - trino-tmp:/tmp
+    user: nobody
+    entrypoint:
+      # - bash
+      - python3
+      - lambda-handler.py
+    environment:
+      - AWS_ACCESS_KEY_ID=$LAMBDA_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY=$LAMBDA_SECRET_ACCESS_KEY
+      - AWS_SESSION_TOKEN=$LAMBDA_SESSION_TOKEN
+      - AWS_REGION=$L12N_AWS_REGION
+      - DATA_BUCKET_NAME
+    networks:
+      - tmpengine
+    ulimits:
+      nofile:
+        soft: 1024
+        hard: 1024
+
+volumes:
+  trino-tmp:
+
+
+networks:
+  tmpengine:
