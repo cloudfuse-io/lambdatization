@@ -14,59 +14,13 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          repository: 'trinodb/trino'
-          ref: ${{ github.event.inputs.trino-version }}
+          repository: 'cloudfuse-io/trino'
+          ref: ${{ github.event.inputs.trino-version }}-patch
       - uses: actions/setup-java@v3
         with:
           distribution: 'zulu'
           java-version: 17
           cache: 'maven'
-      - name: Patch
-        run: |
-          sed -i '/verifyJvmRequirements()/d' core/trino-main/src/main/java/io/trino/server/Server.java
-          sed -i '/import static io.trino.server.TrinoSystemRequirements.verifyJvmRequirements;/d' core/trino-main/src/main/java/io/trino/server/Server.java
-          cat << 'EOT' > core/trino-server/src/main/provisio/trino.xml
-          <runtime>
-              <!-- Target -->
-              <archive name="${project.artifactId}-${project.version}.tar.gz" hardLinkIncludes="**/*.jar" />
-
-              <!-- Notices -->
-              <fileSet to="/">
-                  <directory path="${basedir}">
-                      <include>NOTICE</include>
-                      <include>README.txt</include>
-                  </directory>
-              </fileSet>
-
-              <!-- Launcher -->
-              <artifactSet to="bin">
-                  <artifact id="io.airlift:launcher:tar.gz:bin:${dep.packaging.version}">
-                      <unpack />
-                  </artifact>
-                  <artifact id="io.airlift:launcher:tar.gz:properties:${dep.packaging.version}">
-                      <unpack filter="true" />
-                  </artifact>
-              </artifactSet>
-
-              <!-- Server -->
-              <artifactSet to="lib">
-                  <artifact id="${project.groupId}:trino-server-main:${project.version}" />
-              </artifactSet>
-
-              <!-- Plugins -->
-              <artifactSet to="plugin/resource-group-managers">
-                  <artifact id="${project.groupId}:trino-resource-group-managers:zip:${project.version}">
-                      <unpack />
-                  </artifact>
-              </artifactSet>
-
-              <artifactSet to="plugin/hive">
-                  <artifact id="${project.groupId}:trino-hive-hadoop2:zip:${project.version}">
-                      <unpack />
-                  </artifact>
-              </artifactSet>
-          </runtime>
-          EOT
       - name: Build
         run: ./mvnw -pl core/trino-main,core/trino-server clean install -DskipTests
       - name: Release
