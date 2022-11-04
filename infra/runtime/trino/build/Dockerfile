@@ -51,10 +51,19 @@ WORKDIR /opt
 
 ENV HADOOP_HOME=/opt/hadoop-${HADOOP_VERSION}
 ENV HIVE_HOME=/opt/apache-hive-metastore-${METASTORE_VERSION}-bin
+# jars used by Trino
 ENV HADOOP_CLASSPATH=${HADOOP_HOME}/share/hadoop/tools/lib/aws-java-sdk-bundle-${AWS_JAVA_SDK_VERSION}.jar:${HADOOP_HOME}/share/hadoop/tools/lib/hadoop-aws-${HADOOP_VERSION}.jar
 
 RUN curl -L https://archive.apache.org/dist/hive/hive-standalone-metastore-${METASTORE_VERSION}/hive-standalone-metastore-${METASTORE_VERSION}-bin.tar.gz | tar zxf - && \
-  curl -L https://archive.apache.org/dist/hadoop/common/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}.tar.gz | tar zxf -
+  # Download from mirror and trim some unused libraries
+  curl -L https://github.com/cloudfuse-io/lambdatization/releases/download/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}.tar.gz | tar zxf - && \
+  cd hadoop-${HADOOP_VERSION}/share/hadoop/ && \
+  rm -r client/* && \
+  rm -r hdfs/* && \
+  rm -r mapreduce/* && \
+  rm -r yarn/* && \
+  find ./tools/lib -type f -not \( -name "aws-java-sdk-bundle-${AWS_JAVA_SDK_VERSION}.jar" -or -name "hadoop-aws-${HADOOP_VERSION}.jar" \) -delete
+
 ENV PATH="${HIVE_HOME}/bin:${PATH}"
 COPY metastore-site.xml ${HIVE_HOME}/conf
 

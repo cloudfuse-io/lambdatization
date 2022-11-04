@@ -8,6 +8,7 @@ services:
     read_only: true
     volumes:
       - trino-tmp:/tmp
+    user: nobody
     entrypoint:
       # - bash
       - python3
