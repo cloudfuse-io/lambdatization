@@ -15,7 +15,7 @@ this highly constrained environment.
 ## :chart_with_upwards_trend: Explore the results
 
 We want to provide an accurate and interactive representation of our
-experimental results. We believe that this is best achieved through 
+experimental results. We believe that this is best achieved through
 open interactive dasboards. This work is still work in progress, feel
 free to play with it and give us your feedback!
 - [NYC Taxi Parquet GROUP BY duration of various engines in AWS
