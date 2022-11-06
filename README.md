@@ -7,15 +7,17 @@
 
 </h4>
 
-The goal of this project is to assess what process can realistically run inside
-lambda and have a first feeling about there performances. To do this we will try
-to execute a list of engines as Lambdas.
+The goal of this project is to assess which query engine can
+realistically run inside cloud functions (in particular AWS
+Lambda) and have a first feeling about their performances in
+this highly constrained environment.
 
 ## :chart_with_upwards_trend: Explore the results
 
-We want to provide accurate and interactive representations of our
-experimental results. This is still work in progress, feel free to
-play with it and give us your feedback!
+We want to provide an accurate and interactive representation of our
+experimental results. We believe that this is best achieved though 
+open interactive dasboards. This work is still work in progress, feel
+free to play with it and give us your feedback!
 - [NYC Taxi Parquet GROUP BY duration of various engines in AWS
   Lambda][engine-duration-datastudio]
 
@@ -24,18 +26,18 @@ play with it and give us your feedback!
 ## :hammer: Lambdatize yourself
 
 ### The `l12n-shell`
-The `l12n-shell` provides a way to run all commands in an isolated docker
+The `l12n-shell` provides a way to run all commands in an isolated Docker
 environement. It is not strictly necessary, but simplifies the collaboration on
 the project. To set it up:
 
-- you must have docker installed, it is the only dependency
+- you must have Docker installed, it is the only dependency
 - clone this repository
 - `cd` into it
 - run `L12N_BUILD=. ./l12n-shell`
   - the `L12N_BUILD` environment variable indicates to the `l12n-shell` script
     that it needs to build the image
   - `./l12n-shell` looks for a `.env` file in the current directory to source
-    environment variables from (see section below)
+    environment variables from (see configuration section below)
   - the `./l12n-shell` without any argument runs an interactive bash terminal in
     the CLI container
   - the same arguments can be provided to `./l12n-shell` as to `bash`. For
@@ -85,4 +87,4 @@ We use Terragrunt to:
 
 - We try to follow the [conventional commits
   standard](https://www.conventionalcommits.org/en/v1.0.0/)
-- We use [black](https://github.com/psf/black) for linting
+- We use [black](https://github.com/psf/black) as an opinionated Python linter
