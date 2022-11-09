@@ -28,7 +28,7 @@ jobs:
         with:
           tag_name: ballista-${{ github.event.inputs.ballista-ref }}
           body: Plain build of the ${{ github.event.inputs.ballista-ref }} ref of Ballista
-          files: 
+          files:
             - target/release/ballista-scheduler
             - target/release/ballista-executor
             - target/release/ballista-cli
