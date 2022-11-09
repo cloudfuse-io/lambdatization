@@ -19,11 +19,12 @@ jobs:
       - name: Black
         run: |
           pip install --upgrade black
-          # Note: black fails when it doesn't have to do anything.
-          git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/main HEAD) |
-            grep -v '\(\.json\|\.csv\|\.ipynb\|\.hpp\.in\|\.ref\|\.example\|\.txt\|\.lock\|\.js\|\.properties\)$' |
-            2>/dev/null xargs black || true
-          git diff --exit-code
+          black --check --diff --include "(\\.pyi?|\\.ipynb)$" --exclude "" .
+
+      - name: isort
+        run: |
+          pip install --upgrade isort
+          isort . -c
 
       - name: yamllint
         run: |

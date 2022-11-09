@@ -1,21 +1,21 @@
-from invoke import Context, task, Exit
-from botocore.exceptions import ClientError
-import time
 import base64
-import json
 import io
+import json
+import time
+
+from botocore.exceptions import ClientError
 from common import (
+    AWS_REGION_VALIDATOR,
+    RUNTIME_TFDIR,
     TF_BACKEND_VALIDATORS,
     active_modules,
-    clean_modules,
-    RUNTIME_TFDIR,
     auto_app_fmt,
-    AWS_REGION_VALIDATOR,
-    terraform_output,
     aws,
+    clean_modules,
     parse_env,
+    terraform_output,
 )
-
+from invoke import Context, Exit, task
 
 VALIDATORS = [
     *TF_BACKEND_VALIDATORS,
