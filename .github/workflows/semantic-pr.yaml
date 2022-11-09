@@ -1,4 +1,4 @@
-name: Semantic PR Title
+name: Semantic PR
 on:
   pull_request_target:
     types:
@@ -8,7 +8,7 @@ on:
       - synchronize
 
 jobs:
-  main:
+  validate-title:
     name: Validate PR title
     runs-on: ubuntu-latest
     steps:
