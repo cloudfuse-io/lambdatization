@@ -19,9 +19,7 @@ jobs:
       - name: Black
         run: |
           pip install --upgrade black
-          # Note: black fails when it doesn't have to do anything.
-          black --include (\\.pyi?|\\.ipynb)$ || true
-          git diff --exit-code
+          black --check --diff --include "(\\.pyi?|\\.ipynb)$" --exclude "" .
 
       - name: isort
         run: |

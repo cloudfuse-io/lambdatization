@@ -4,9 +4,17 @@ import json
 import time
 
 from botocore.exceptions import ClientError
-from common import (AWS_REGION_VALIDATOR, RUNTIME_TFDIR, TF_BACKEND_VALIDATORS,
-                    active_modules, auto_app_fmt, aws, clean_modules, parse_env,
-                    terraform_output)
+from common import (
+    AWS_REGION_VALIDATOR,
+    RUNTIME_TFDIR,
+    TF_BACKEND_VALIDATORS,
+    active_modules,
+    auto_app_fmt,
+    aws,
+    clean_modules,
+    parse_env,
+    terraform_output,
+)
 from invoke import Context, Exit, task
 
 VALIDATORS = [
