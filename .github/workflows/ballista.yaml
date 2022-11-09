@@ -16,19 +16,31 @@ jobs:
         with:
           repository: 'apache/arrow-ballista'
           ref: ${{ github.event.inputs.ballista-ref }}
+      - name: Dependencies
+        run: |
+          sudo apt-get -y install \
+            libssl-dev \
+            openssl \
+            zlib1g \
+            zlib1g-dev \
+            libpq-dev \
+            cmake \
+            protobuf-compiler \
+            curl \
+            unzip
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
       - uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --features "flight-sql s3" --release
+          args: --features "flight-sql s3" --release --bin ballista-scheduler --bin ballista-executor --bin ballista-cli
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ballista-${{ github.event.inputs.ballista-ref }}
           body: Plain build of the ${{ github.event.inputs.ballista-ref }} ref of Ballista
-          files:
-            - target/release/ballista-scheduler
-            - target/release/ballista-executor
-            - target/release/ballista-cli
+          files: |
+            target/release/ballista-scheduler
+            target/release/ballista-executor
+            target/release/ballista-cli
