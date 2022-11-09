@@ -1,0 +1,34 @@
+name: Ballista
+on:
+  workflow_dispatch:
+    inputs:
+      ballista-ref:
+        required: true
+        description: Branch, tag or SHA to checkout (e.g. 0.9.0)
+
+
+jobs:
+  build:
+    name: Ballista release
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          repository: 'apache/arrow-ballista'
+          ref: ${{ github.event.inputs.ballista-ref }}
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --features "flight-sql s3" --release
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ballista-${{ github.event.inputs.ballista-ref }}
+          body: Plain build of the ${{ github.event.inputs.ballista-ref }} ref of Ballista
+          files:
+            - target/release/ballista-scheduler
+            - target/release/ballista-executor
+            - target/release/ballista-cli
