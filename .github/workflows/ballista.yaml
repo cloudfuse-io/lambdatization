@@ -16,6 +16,18 @@ jobs:
         with:
           repository: 'apache/arrow-ballista'
           ref: ${{ github.event.inputs.ballista-ref }}
+      - name: Dependencies
+        run: |
+          sudo apt-get -y install \
+            libssl-dev \
+            openssl \
+            zlib1g \
+            zlib1g-dev \
+            libpq-dev \
+            cmake \
+            protobuf-compiler \
+            curl \
+            unzip
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
