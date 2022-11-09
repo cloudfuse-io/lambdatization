@@ -1,14 +1,15 @@
-from functools import cache
-import sys
-from typing import Dict, List, Set
-from flags import TRACE
-from invoke import Context, Exit, Failure
-import dynaconf
 import json
 import os
+import shutil
+import sys
+from functools import cache
+from typing import Dict, List, Set
+
 import boto3
 import botocore.client
-import shutil
+import dynaconf
+from flags import TRACE
+from invoke import Context, Exit, Failure
 
 # Validate and provide defaults for the terraform state backend configuration
 TF_BACKEND_VALIDATORS = [

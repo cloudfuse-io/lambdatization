@@ -1,7 +1,7 @@
 """Trino on AWS Lambda"""
 
-from invoke import task
 import core
+from invoke import task
 
 
 @task(autoprint=True)

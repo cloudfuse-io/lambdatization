@@ -1,10 +1,11 @@
-from invoke import Program, Collection
-import sys
-import core
-import common
-import plugins
 import pkgutil
+import sys
+
+import common
+import core
 import flags
+import plugins
+from invoke import Collection, Program
 
 
 def unhandled_exception(type, value, traceback):
