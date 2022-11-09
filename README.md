@@ -85,6 +85,10 @@ We use Terragrunt to:
 
 ### Contribute
 
-- We try to follow the [conventional commits
-  standard](https://www.conventionalcommits.org/en/v1.0.0/)
-- We use [black](https://github.com/psf/black) as an opinionated Python linter
+- We follow the [conventional commits
+  standard](https://www.conventionalcommits.org/en/v1.0.0/) for PR names
+- We use the following linters:
+  - [black](https://github.com/psf/black) for Python
+  - [isort](https://pycqa.github.io/isort/) for Python imports
+  - [yamllint](https://yamllint.readthedocs.io/en/stable/)
+  - [markdownlint](https://github.com/markdownlint/markdownlint)
