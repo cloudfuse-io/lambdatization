@@ -5,62 +5,17 @@ ARG RELEASE_FLAG=release
 ARG FUNCTION_DIR="/function"
 
 
-# build ballista components
-FROM rust:1.63.0-buster as builder
+FROM curlimages/curl as bin-dependencies
+ARG BALLISTA_VERSION
 
-# Include global arg in this stage of the build
-ARG RELEASE_FLAG
-
-ENV RUST_LOG=info
-ENV RUST_BACKTRACE=full
-ENV DEBIAN_FRONTEND=noninteractive
-
-RUN apt-get update && \
-    apt-get -y install \
-    libssl-dev \
-    openssl \
-    zlib1g \
-    zlib1g-dev \
-    libpq-dev \
-    cmake \
-    protobuf-compiler \
-    netcat \
-    curl \
-    unzip \
-    git
-
-# create build directories
-RUN mkdir -p /home/builder/workspace
-
-ENV HOME=/home/builder
-ENV PATH=$HOME/.cargo/bin:$PATH
-
-# prepare rust
-RUN rustup update && \
-    rustup component add rustfmt && \
-    cargo install cargo-chef --version 0.1.34
-
-WORKDIR /home/builder/workspace/
-
-RUN git clone https://github.com/apache/arrow-ballista.git
-
-WORKDIR /home/builder/workspace/arrow-ballista
-
-RUN git checkout ${BALLISTA_VERSION}
-
-# Actually build the project
-RUN cargo build --features "flight-sql s3" --${RELEASE_FLAG}
+RUN curl -L https://github.com/cloudfuse-io/lambdatization/releases/download/ballista-${BALLISTA_VERSION}/ballista-scheduler -o /tmp/ballista-scheduler
+RUN curl -L https://github.com/cloudfuse-io/lambdatization/releases/download/ballista-${BALLISTA_VERSION}/ballista-executor -o /tmp/ballista-executor
+RUN curl -L https://github.com/cloudfuse-io/lambdatization/releases/download/ballista-${BALLISTA_VERSION}/ballista-cli -o /tmp/ballista-cli
 
 
-FROM debian:11.4 as ric-dependency
+FROM python:3.10-bullseye as ric-dependency
 
-# Include global arg in this stage of the build
-ARG RELEASE_FLAG
 ARG FUNCTION_DIR
-
-ENV RELEASE_FLAG=${RELEASE_FLAG}
-ENV RUST_LOG=warn
-ENV RUST_BACKTRACE=full
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install aws-lambda-cpp build dependencies
@@ -70,8 +25,6 @@ RUN apt-get update && \
     make \
     cmake \
     unzip \
-    python3 \
-    python3-pip \
     netcat \
     libcurl4-openssl-dev
 
@@ -88,24 +41,26 @@ RUN pip3 install \
     --target ${FUNCTION_DIR} \
     awslambdaric pexpect
 
-# copy built scheduler into accesible folder
-COPY --from=builder /home/builder/workspace/arrow-ballista/target/$RELEASE_FLAG/ballista-scheduler /opt/ballista/ballista-scheduler
 
-# Expose Ballista Scheduler gRPC port
-EXPOSE 50050
+FROM python:3.10-slim-bullseye
+ARG FUNCTION_DIR
 
-RUN mkdir -p /tmp/scheduler/sled
+ENV RUST_LOG=warn
+ENV RUST_BACKTRACE=full
 
-# copy built executor into accesible folder
-COPY --from=builder /home/builder/workspace/arrow-ballista/target/$RELEASE_FLAG/ballista-executor /opt/ballista/ballista-executor
+RUN mkdir -p /tmp/scheduler/sled && \
+  mkdir -p /tmp/executor
 
-# Expose Ballista Executor gRPC port
-EXPOSE 50051
+COPY --from=ric-dependency ${FUNCTION_DIR} ${FUNCTION_DIR}
+COPY --from=bin-dependencies /tmp/ballista-scheduler /opt/ballista/ballista-scheduler
+COPY --from=bin-dependencies /tmp/ballista-executor /opt/ballista/ballista-executor
+COPY --from=bin-dependencies /tmp/ballista-cli /opt/ballista/ballista-cli
 
-RUN mkdir -p /tmp/executor
-
-# copy builtcli into accesible folder
-COPY --from=builder /home/builder/workspace/arrow-ballista/target/$RELEASE_FLAG/ballista-cli /opt/ballista/ballista-cli
+RUN mkdir -p /tmp/scheduler/sled && \
+  mkdir -p /tmp/executor && \
+  chmod +x /opt/ballista/ballista-scheduler  && \
+  chmod +x /opt/ballista/ballista-executor  && \
+  chmod +x /opt/ballista/ballista-cli
 
 WORKDIR ${FUNCTION_DIR}
 

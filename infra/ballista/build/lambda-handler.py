@@ -33,10 +33,9 @@ process_config = {
 }
 
 
-def socket_check(process_name):
+def wait_for_socket(process_name):
     c = 0
     start_time = time.time()
-    timeout = 0
     while True:
         with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
             s = sock.connect_ex(
@@ -45,10 +44,11 @@ def socket_check(process_name):
             c += 1
             if s == 0:
                 break
-        timeout = time.time() - start_time
-        if timeout >= 30:
-            return "failed", timeout, c
-    return ("ok", timeout, c)
+        duration = time.time() - start_time
+        if duration >= 30:
+            raise Exception(f"{process_name} timed out after {c} connection attempts")
+        time.sleep(0.01)
+    logging.info(f"{process_name} up after {duration} secs and {c} connection attempts")
 
 
 def popen_process(process_name):
@@ -60,17 +60,7 @@ def popen_process(process_name):
     )
     logging.info(f"{process_name} starts")
     # wait till the {process_name} is up and running
-    status, timeout, c_tries = socket_check(process_name)
-    if status == "failed":
-        process.terminate()
-        logging.error(process.stderr.read().decode("utf-8"))
-        raise Exception(
-            f"{process_name} failed to start after {timeout} seconds and {c_tries} connection tries"
-        )
-    else:
-        logging.debug(
-            f"{process_name} healthcheck passed after {timeout} seconds and {c_tries} connection tries"
-        )
+    wait_for_socket(process_name)
     globals()[process_name] = process
 
 
@@ -98,47 +88,11 @@ def init():
     start_cli()
 
 
-def check_components():
-    global process_cli
-    for key in process_config:
-        status, _, _ = socket_check(key)
-        if status == "failed":
-            logging.warning(f"{key} failed between runs. Restarting...")
-            popen_process(key)
-    s = process_cli.signalstatus
-    logging.warn(f"cli status is {s}")
-    if s is not None:
-        logging.warning(f"cli failed between runs. exit_code:{s} \n Restarting...")
-        start_cli()
-
-
 def clean(string):
     return "\n".join([x for x in string.splitlines() if not x.startswith("[")])
 
 
-def handler(event, context):
-    """An AWS Lambda handler that runs the provided command with bash and returns the standard output"""
-    global IS_COLD_START
-    is_cold_start = IS_COLD_START
-    IS_COLD_START = False
-    start = time.time()
-
-    if is_cold_start:
-        init()
-    else:
-        check_components()
-    init_duration = time.time() - start
-
-    # input parameters
-    logging.debug("event: %s", event)
-    src_command = base64.b64decode(event["cmd"]).decode("utf-8")
-
-    logging.info("command: %s", src_command)
-    if "env" in event:
-        logging.info("env: %s", event["env"])
-        for (k, v) in event["env"].items():
-            os.environ[k] = v
-
+def query(src_command):
     global process_cli
     tmp_out = b""
     tmp_error = b""
@@ -182,11 +136,32 @@ def handler(event, context):
                 tmp_out = tmp_out + process_cli.before + b"\n"
             if i > 0:
                 logging.error(tmp_error.decode("utf-8"))
+    return tmp_out.decode("utf-8")
 
-    cli_stdout = tmp_out.decode("utf-8")
+
+def handler(event, context):
+    """An AWS Lambda handler that runs the provided command with bash and returns the standard output"""
+    global IS_COLD_START
+    is_cold_start = IS_COLD_START
+    IS_COLD_START = False
+    start = time.time()
+
+    if is_cold_start:
+        init()
+
+    init_duration = time.time() - start
+
+    # input parameters
+    logging.debug("event: %s", event)
+    src_command = base64.b64decode(event["cmd"]).decode("utf-8")
+
+    logging.info("command: %s", src_command)
+
+    resp = query(src_command)
+
     result = {
-        "resp": clean(cli_stdout),  # process_cli.stdout,
-        "parsed_queries": parsed_queries,
+        "resp": resp,
+        "parsed_queries": src_command,
         "context": {
             "cold_start": is_cold_start,
             "handler_duration_sec": time.time() - start,
