@@ -141,26 +141,20 @@ def query(src_command):
 
 def handler(event, context):
     """An AWS Lambda handler that runs the provided command with bash and returns the standard output"""
+    start = time.time()
     global IS_COLD_START
     is_cold_start = IS_COLD_START
     IS_COLD_START = False
-    start = time.time()
-
     if is_cold_start:
         init()
-
+    src_command = base64.b64decode(event["query"]).decode("utf-8")
     init_duration = time.time() - start
-
-    # input parameters
-    logging.debug("event: %s", event)
-    src_command = base64.b64decode(event["cmd"]).decode("utf-8")
-
-    logging.info("command: %s", src_command)
 
     resp = query(src_command)
 
     result = {
         "resp": resp,
+        "logs": "",
         "parsed_queries": src_command,
         "context": {
             "cold_start": is_cold_start,
