@@ -5,6 +5,7 @@ from datetime import datetime
 
 import common
 import dynaconf
+import plugins.ballista as ballista
 import plugins.dask as dask
 import plugins.databend as databend
 import plugins.dremio as dremio
@@ -109,4 +110,6 @@ def bench_cold_warm(c):
             run_and_send_twice(dask.lambda_example)
         if "trino" in active_plugins:
             run_and_send_twice(trino.lambda_example)
+        if "ballista" in active_plugins:
+            run_and_send_twice(ballista.lambda_example)
         time.sleep(300)
