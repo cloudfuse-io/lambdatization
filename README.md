@@ -90,7 +90,11 @@ We use Terragrunt to:
 
 - We follow the [conventional commits standard][conventionalcommits-v1] with
   [this][commitizen-list] list of _types_.
-- We use [black](https://github.com/psf/black) as an opinionated Python linter
+- We use the following linters:
+  - [black](https://github.com/psf/black) for Python
+  - [isort](https://pycqa.github.io/isort/) for Python imports
+  - [yamllint](https://yamllint.readthedocs.io/en/stable/)
+  - [markdownlint](https://github.com/markdownlint/markdownlint)
 
 [conventionalcommits-v1]: https://www.conventionalcommits.org/en/v1.0.0/
 [commitizen-list]: https://github.com/commitizen/conventional-commit-types/blob/master/index.json
