@@ -14,7 +14,7 @@ import plugins.trino as trino
 from common import REPOROOT, TF_BACKEND_VALIDATORS, auto_app_fmt
 from google.cloud import bigquery
 from google.oauth2 import service_account
-from invoke import Context, task
+from invoke import Context, Exit, task
 
 MONITORING_TFDIR = f"{REPOROOT}/infra/monitoring"
 MONITORING_MODULE_DIR = f"{MONITORING_TFDIR}/bigquery"
@@ -96,6 +96,8 @@ def bench_cold_warm(c):
             send_standalone_durations(c, res1)
             res2 = example(c, json_output=True, month="02")
             send_standalone_durations(c, res2)
+        except Exit as e:
+            print(f"Execution failure: {e.message}")
         except Exception as e:
             print(f"Execution failure: {e}")
 
