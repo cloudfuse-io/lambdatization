@@ -19,9 +19,9 @@ experimental results. We believe that this is best achieved through
 open interactive dasboards. This work is still work in progress, feel
 free to play with it and give us your feedback!
 - [NYC Taxi Parquet GROUP BY duration of various engines in AWS
-  Lambda][engine-duration-datastudio]
+  Lambda][datastudio-engine-duration]
 
-[engine-duration-datastudio]: https://datastudio.google.com/reporting/c870737c-e8b6-467f-9860-8cd60c751f81
+[datastudio-engine-duration]: https://datastudio.google.com/reporting/c870737c-e8b6-467f-9860-8cd60c751f81
 
 ## :hammer: Lambdatize yourself
 
@@ -51,12 +51,13 @@ the current directory:
 - `L12N_PLUGINS` is a comma seprated list of plugins to activate
 - `L12N_AWS_REGION` is the region where the stack should run
 
-You can also provide the
-[usual](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html) AWS variables:
+You can also provide the [usual][aws-cli-envvars] AWS variables:
 - `AWS_PROFILE`
 - `AWS_SHARED_CREDENTIALS_FILE`
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
+
+[aws-cli-envvars]: https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html
 
 ### The `l12n` CLI
 
@@ -80,11 +81,16 @@ Infrastructure is managed by Terraform.
 
 We use Terragrunt to:
 
-- [DRY](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself) the Terraform config
+- [DRY][wiki-dry] the Terraform config
 - Manage dependencies between modules and allow a plugin based structure.
+
+[wiki-dry]: https://en.wikipedia.org/wiki/Don%27t_repeat_yourself
 
 ### Contribute
 
-- We try to follow the [conventional commits
-  standard](https://www.conventionalcommits.org/en/v1.0.0/)
+- We follow the [conventional commits standard][conventionalcommits-v1] with
+  [this][commitizen-list] list of _types_.
 - We use [black](https://github.com/psf/black) as an opinionated Python linter
+
+[conventionalcommits-v1]: https://www.conventionalcommits.org/en/v1.0.0/
+[commitizen-list]: https://github.com/commitizen/conventional-commit-types/blob/master/index.json
