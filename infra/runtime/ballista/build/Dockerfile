@@ -48,19 +48,15 @@ ARG FUNCTION_DIR
 ENV RUST_LOG=warn
 ENV RUST_BACKTRACE=full
 
-RUN mkdir -p /tmp/scheduler/sled && \
-  mkdir -p /tmp/executor
-
-COPY --from=ric-dependency ${FUNCTION_DIR} ${FUNCTION_DIR}
 COPY --from=bin-dependencies /tmp/ballista-scheduler /opt/ballista/ballista-scheduler
 COPY --from=bin-dependencies /tmp/ballista-executor /opt/ballista/ballista-executor
 COPY --from=bin-dependencies /tmp/ballista-cli /opt/ballista/ballista-cli
 
-RUN mkdir -p /tmp/scheduler/sled && \
-  mkdir -p /tmp/executor && \
-  chmod +x /opt/ballista/ballista-scheduler  && \
+RUN chmod +x /opt/ballista/ballista-scheduler  && \
   chmod +x /opt/ballista/ballista-executor  && \
   chmod +x /opt/ballista/ballista-cli
+
+COPY --from=ric-dependency ${FUNCTION_DIR} ${FUNCTION_DIR}
 
 WORKDIR ${FUNCTION_DIR}
 

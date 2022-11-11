@@ -1,7 +1,7 @@
 import base64
 import os
+from typing import List
 import subprocess
-from subprocess import PIPE
 import logging
 import pexpect
 from pexpect import popen_spawn
@@ -13,55 +13,35 @@ from contextlib import closing
 
 logging.getLogger().setLevel(logging.INFO)
 
-# Create global variables for the forked processes
 process_cli = None
 IS_COLD_START = True
 
-process_config = {
-    "scheduler": {
-        "cmd": [
-            "/opt/ballista/ballista-scheduler",
-            "--sled-dir",
-            "/tmp/scheduler/sled",
-        ],
-        "health_check_port": 50050,
-    },
-    "executor": {
-        "cmd": ["/opt/ballista/ballista-executor"],
-        "health_check_port": 50051,
-    },
-}
 
-
-def wait_for_socket(process_name):
+def wait_for_socket(process_name: str, port: int):
     c = 0
     start_time = time.time()
     while True:
         with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
-            s = sock.connect_ex(
-                ("localhost", process_config[process_name]["health_check_port"])
-            )
+            s = sock.connect_ex(("localhost", port))
+            duration = time.time() - start_time
             c += 1
             if s == 0:
+                msg = f"{process_name} up after {duration} secs and {c} connection attempts"
+                logging.info(msg)
                 break
-        duration = time.time() - start_time
-        if duration >= 30:
+        if duration >= 5:
             raise Exception(f"{process_name} timed out after {c} connection attempts")
-        time.sleep(0.01)
-    logging.info(f"{process_name} up after {duration} secs and {c} connection attempts")
+        time.sleep(0.02)
 
 
-def popen_process(process_name):
-    # start process
-    process = subprocess.Popen(
-        process_config[process_name]["cmd"],
+def start_server(name: str, cmd: List[str], port: int):
+    subprocess.Popen(
+        cmd,
         stderr=sys.stderr,
         bufsize=0,
     )
-    logging.info(f"{process_name} starts")
-    # wait till the {process_name} is up and running
-    wait_for_socket(process_name)
-    globals()[process_name] = process
+    logging.info(f"{name} starting...")
+    wait_for_socket(name, port)
 
 
 def start_cli():
@@ -83,60 +63,34 @@ def start_cli():
 
 
 def init():
-    for key in process_config.keys():
-        popen_process(key)
+    sched_cmd = [
+        "/opt/ballista/ballista-scheduler",
+        "--sled-dir",
+        "/tmp/scheduler/sled",
+    ]
+    start_server("scheduler", sched_cmd, 50050)
+    start_server("executor", ["/opt/ballista/ballista-executor"], 50051)
     start_cli()
 
 
-def clean(string):
-    return "\n".join([x for x in string.splitlines() if not x.startswith("[")])
+def query(sql: str) -> str:
+    logging.info(f"Running {sql}")
+    process_cli.sendline(sql)
+    look_for = [
+        b"Query took ([0-9]*[.])?[0-9]+ seconds.\\\n",
+        b"DataFusionError\(",
+        b"Invalid statement",
+    ]
+    i = process_cli.expect(look_for, timeout=200)
 
-
-def query(src_command):
-    global process_cli
-    tmp_out = b""
-    tmp_error = b""
-    parsed_queries = ""
-    try:
-        for command in src_command.split(";"):
-            if command != "":
-                try:
-                    process_cli.sendline(command + ";")
-                    logging.debug(command)
-                    parsed_queries += command
-                    look_for = [
-                        b"Query took",
-                        pexpect.EOF,
-                        b"DataFusionError\(",
-                        b"Invalid statement",
-                    ]
-                    i = process_cli.expect(look_for, timeout=60)
-                    tmp_out = tmp_out + process_cli.before
-                    if i == 0:
-                        tmp_out += look_for[i]
-                    else:
-                        if i == 1:
-                            tmp_error += "pexpect.exceptions.EOF: End Of File (EOF)"
-                            process_cli.kill(9)
-                            process_cli.wait()
-                        else:
-                            tmp_error += look_for[i]
-                            process_cli.expect([b"\n"], timeout=1)
-                            tmp_error += process_cli.before
-                        raise Exception(tmp_error.decode("utf-8"))
-                except pexpect.exceptions.TIMEOUT:
-                    logging.debug("this command timeout flushing std_out to output")
-                    tmp_out += process_cli.before
-                    tmp_error += f"command timeout: \n {command}".encode("utf-8")
-                    raise Exception(tmp_error.decode("utf-8"))
-    finally:
-        if tmp_error != b"" or tmp_out != b"":
-            if i == 0:
-                process_cli.expect(b"\n")
-                tmp_out = tmp_out + process_cli.before + b"\n"
-            if i > 0:
-                logging.error(tmp_error.decode("utf-8"))
-    return tmp_out.decode("utf-8")
+    cli_output = process_cli.before.decode("utf-8")
+    if i == 0:
+        logging.info(f"Result: {cli_output}")
+        return cli_output
+    else:
+        process_cli.expect([b"\n"], timeout=1)
+        cli_err = f"{cli_output}{look_for[i]}{process_cli.before.decode()}"
+        raise Exception(f"Query failed: {cli_err}")
 
 
 def handler(event, context):
@@ -150,12 +104,19 @@ def handler(event, context):
     src_command = base64.b64decode(event["query"]).decode("utf-8")
     init_duration = time.time() - start
 
-    resp = query(src_command)
+    resp = ""
+    parsed_queries = []
+    for sql in src_command.split(";"):
+        sql = sql.strip() + ";"
+        if sql == ";":
+            continue
+        parsed_queries.append(sql)
+        resp = query(sql)
 
     result = {
         "resp": resp,
         "logs": "",
-        "parsed_queries": src_command,
+        "parsed_queries": parsed_queries,
         "context": {
             "cold_start": is_cold_start,
             "handler_duration_sec": time.time() - start,
@@ -172,7 +133,7 @@ CREATE EXTERNAL TABLE trips01 STORED AS PARQUET
 SELECT payment_type, SUM(trip_distance) FROM trips01
  GROUP BY payment_type;"""
     res = handler(
-        {"cmd": base64.b64encode(ballista_cmd.encode("utf-8"))},
+        {"query": base64.b64encode(ballista_cmd.encode("utf-8"))},
         {},
     )
     print(res)
