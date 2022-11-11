@@ -1,5 +1,4 @@
 
-# fix a ballista commit or tag as reference
 ARG BALLISTA_VERSION=0.9.0
 ARG RELEASE_FLAG=release
 ARG FUNCTION_DIR="/function"

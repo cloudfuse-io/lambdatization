@@ -20,9 +20,9 @@ terraform {
     commands = ["apply"]
     execute = ["/bin/bash", "-c", <<EOT
 l12n docker-login \
-                 build-images --step=ballista \
-                 push-images --step=ballista && \
-l12n print-image-vars --step=ballista > images.generated.tfvars
+                 build-images --step=clickhouse \
+                 push-images --step=clickhouse && \
+l12n print-image-vars --step=clickhouse > images.generated.tfvars
 EOT
     ]
   }
@@ -35,7 +35,7 @@ EOT
 }
 
 inputs = {
-  region_name    = local.region_name
-  ballista_image = "dummy_overriden_by_before_hook"
-  bucket_arn     = dependency.core.outputs.bucket_arn
+  region_name      = local.region_name
+  clickhouse_image = "dummy_overriden_by_before_hook"
+  bucket_arn       = dependency.core.outputs.bucket_arn
 }
