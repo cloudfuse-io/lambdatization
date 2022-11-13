@@ -5,6 +5,8 @@ import logging
 import time
 import sys
 import socket
+import threading
+import selectors
 from contextlib import closing
 
 
@@ -12,6 +14,54 @@ logging.getLogger().setLevel(logging.INFO)
 
 process_cli = None
 IS_COLD_START = True
+
+
+class StdLogger:
+    """A class that efficiently multiplexes std streams into logs"""
+
+    def _start_logging(self):
+        while True:
+            for key, _ in self.selector.select():
+                # read1 instead or read to avoid blocking
+                data = key.fileobj.read1()
+                if key.fileobj not in self.files:
+                    raise Exception("Unexpected file desc in selector")
+                with self.lock:
+                    name = self.files[key.fileobj]
+                if not data:
+                    print(f"{name} - EOS", flush=True, file=sys.stderr)
+                    self.selector.unregister(key.fileobj)
+                    with self.lock:
+                        del self.files[key.fileobj]
+                else:
+                    lines = data.decode().splitlines()
+                    for line in lines:
+                        print(f"{name} - {line}", flush=True, file=sys.stderr)
+                    with self.lock:
+                        self.logs[name].extend(lines)
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.files = {}
+        self.logs = {}
+        self.selector = selectors.DefaultSelector()
+        self.thread = threading.Thread(target=self._start_logging, daemon=True)
+
+    def start(self):
+        """Start consuming registered streams (if any) and logging them"""
+        self.thread.start()
+
+    def add(self, name: str, file):
+        """Add a new stream with the given name"""
+        with self.lock:
+            self.files[file] = name
+            self.logs[name] = []
+        self.selector.register(file, selectors.EVENT_READ)
+
+    def get(self, name: str) -> str:
+        """Get the history of the stream for the given name"""
+        with self.lock:
+            return "\n".join(self.logs[name])
 
 
 def wait_for_socket(process_name: str, port: int):
@@ -32,13 +82,16 @@ def wait_for_socket(process_name: str, port: int):
 
 
 def init():
-    subprocess.Popen(
+    srv_proc = subprocess.Popen(
         ["clickhouse-server", "--config-file=/etc/clickhouse-server/config.xml"],
-        stdout=sys.stdout,
-        stderr=sys.stderr,
-        bufsize=0,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
     )
     logging.info("server starting...")
+    logger = StdLogger()
+    logger.add("server|stdout", srv_proc.stdout)
+    logger.add("server|stderr", srv_proc.stderr)
+    logger.start()
     wait_for_socket("server", 9000)
 
 
@@ -79,7 +132,7 @@ def handler(event, context):
 if __name__ == "__main__":
     ballista_cmd = f"""
 SELECT payment_type, SUM(trip_distance) 
-FROM s3('https://{os.getenv("DATA_BUCKET_NAME")}.s3.{os.getenv("AWS_REGION")}.amazonaws.com//nyc-taxi/2019/01/data.parquet', 'Parquet')
+FROM s3('https://{os.getenv("DATA_BUCKET_NAME")}.s3.{os.getenv("AWS_REGION")}.amazonaws.com/nyc-taxi/2019/01/*', 'Parquet')
 GROUP BY payment_type"""
     res = handler(
         {"query": base64.b64encode(ballista_cmd.encode("utf-8"))},

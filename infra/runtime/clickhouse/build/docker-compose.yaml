@@ -6,6 +6,7 @@ services:
     cap_drop:
       - ALL
     read_only: true
+    user: nobody
     volumes:
       - clickhouse-tmp:/tmp
     entrypoint:

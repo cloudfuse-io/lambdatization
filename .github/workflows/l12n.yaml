@@ -136,3 +136,19 @@ jobs:
       - name: Build
         run: |
           ./l12n-shell l12n build-images -s ballista
+
+  clickhouse:
+    name: Clickhouse
+    runs-on: ubuntu-20.04
+    needs:
+      - build-cli
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Pull cached CLI image
+        run: |
+          docker pull "${{ needs.build-cli.outputs.cached-img }}"
+          docker tag "${{ needs.build-cli.outputs.cached-img }}" cloudfuse-io/cli:latest
+      - name: Build
+        run: |
+          ./l12n-shell l12n build-images -s clickhouse
