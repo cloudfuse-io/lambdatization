@@ -10,6 +10,7 @@ on:
 env:
   AWS_ACCESS_KEY_ID: "${{ secrets.BBTOOL_KEY }}"
   AWS_SECRET_ACCESS_KEY: "${{ secrets.BBTOOL_SECRET }}"
+  S3_BUILDS_BUCKET: "cloudfuse-builds"
 
 jobs:
   build:
