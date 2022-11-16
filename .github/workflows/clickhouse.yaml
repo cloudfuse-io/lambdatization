@@ -4,7 +4,7 @@ on:
     inputs:
       clickhouse-ref:
         required: true
-        description: Branch, tag or SHA to checkout (e.g. 0.9.0)
+        description: Branch, tag or SHA to checkout (e.g. v22.8.8.3-lts)
 
 
 jobs:
@@ -14,8 +14,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          repository: 'ClickHouse/ClickHouse'
+          repository: 'cloudfuse-io/ClickHouse'
           ref: ${{ github.event.inputs.clickhouse-ref }}
+          fetch-depth: 0
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
