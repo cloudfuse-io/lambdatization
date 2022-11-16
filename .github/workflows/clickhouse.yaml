@@ -4,7 +4,7 @@ on:
     inputs:
       clickhouse-ref:
         required: true
-        description: Branch, tag or SHA to checkout from cloudfuse-io/ClickHouse (e.g. v22.8.8.3-patch)
+        description: Ref to checkout from cloudfuse-io/ClickHouse, should use clang-15 (e.g. v22.10.2.11-patch)
 
 
 env:
@@ -29,7 +29,22 @@ jobs:
           python-version: '3.10'
       - name: Pip install
         run: pip install boto3 boto3 unidiff pygithub
-      - name: Build
+      - name: Build deb
         run: |
           cd tests/ci
           python3 build_check.py "package_release"
+      - name: Build image
+        run: |
+          cd tests/ci
+          python3 docker_server.py --no-push-images --no-alpine
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push imgage to ghcr
+        run: |
+          CLI_IMAGE="ghcr.io/${{ github.repository }}:${{ github.event.inputs.clickhouse-ref }}
+          docker tag clickhouse/clickhouse-server:latest "$CLI_IMAGE"
+          docker push "$CLI_IMAGE"
