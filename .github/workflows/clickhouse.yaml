@@ -4,8 +4,12 @@ on:
     inputs:
       clickhouse-ref:
         required: true
-        description: Branch, tag or SHA to checkout (e.g. v22.8.8.3-lts)
+        description: Branch, tag or SHA to checkout from cloudfuse-io/ClickHouse (e.g. v22.8.8.3-patch)
 
+
+env:
+  AWS_ACCESS_KEY_ID: "${{ secrets.BBTOOL_KEY }}"
+  AWS_SECRET_ACCESS_KEY: "${{ secrets.BBTOOL_SECRET }}"
 
 jobs:
   build:
