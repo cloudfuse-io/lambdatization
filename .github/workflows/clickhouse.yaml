@@ -39,7 +39,7 @@ jobs:
       - name: Build image
         run: |
           cd tests/ci
-          python3 docker_server.py --no-push-images --no-alpine
+          python3 docker_server.py --no-push-images --no-alpine --no-reports
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:
