@@ -26,7 +26,8 @@ jobs:
           submodules: 'recursive'
       - uses: actions/setup-python@v4
         with:
-          python-version: '3.10.8'
+          python-version: '3.10'
+          architecture: 'x64'
         env:
           AGENT_TOOLSDIRECTORY: /home/ubuntu/hostedtoolcache
       - name: Pip install
