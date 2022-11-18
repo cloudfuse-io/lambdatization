@@ -11,6 +11,7 @@ env:
   AWS_ACCESS_KEY_ID: "${{ secrets.BBTOOL_KEY }}"
   AWS_SECRET_ACCESS_KEY: "${{ secrets.BBTOOL_SECRET }}"
   S3_BUILDS_BUCKET: "cloudfuse-builds"
+  S3_TEST_REPORTS_BUCKET: "cloudfuse-builds"
   S3_URL: "https://s3.us-east-2.amazonaws.com"
 
 jobs:
