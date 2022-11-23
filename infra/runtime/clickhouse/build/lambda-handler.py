@@ -92,7 +92,16 @@ def init():
     logger.add("server|stdout", srv_proc.stdout)
     logger.add("server|stderr", srv_proc.stderr)
     logger.start()
-    wait_for_socket("server", 9000)
+    with open("/proc/self/auxv", "rb") as f:
+        logging.info("/proc/self/auxv")
+        logging.info(f"{f.read()}")
+    try:
+        wait_for_socket("server", 9000)
+    except:
+        with open("/tmp/var/log/clickhouse-server/clickhouse-server.log", "r") as f:
+            logging.info("/tmp/var/log/clickhouse-server/clickhouse-server.log")
+            logging.info(f.read())
+        raise
 
 
 def query(sql: str) -> str:
