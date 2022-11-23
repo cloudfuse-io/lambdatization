@@ -4,24 +4,51 @@ on:
     inputs:
       clickhouse-ref:
         required: true
-        description: Branch, tag or SHA to checkout (e.g. 0.9.0)
+        description: Ref to checkout from cloudfuse-io/ClickHouse, should use clang-15 (e.g. v22.10.2.11-patch)
 
+
+env:
+  AWS_ACCESS_KEY_ID: "${{ secrets.BBTOOL_KEY }}"
+  AWS_SECRET_ACCESS_KEY: "${{ secrets.BBTOOL_SECRET }}"
+  S3_BUILDS_BUCKET: "cloudfuse-builds"
+  S3_TEST_REPORTS_BUCKET: "cloudfuse-builds"
+  S3_URL: "https://s3.us-east-2.amazonaws.com"
 
 jobs:
   build:
     name: clickhouse release
-    runs-on: ubuntu-20.04
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v3
         with:
-          repository: 'ClickHouse/ClickHouse'
+          repository: 'cloudfuse-io/ClickHouse'
           ref: ${{ github.event.inputs.clickhouse-ref }}
+          fetch-depth: 0
+          submodules: 'recursive'
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
+          architecture: 'x64'
+        env:
+          AGENT_TOOLSDIRECTORY: /home/ubuntu/hostedtoolcache
       - name: Pip install
         run: pip install boto3 boto3 unidiff pygithub
-      - name: Build
+      - name: Build deb
         run: |
           cd tests/ci
           python3 build_check.py "package_release"
+      - name: Build image
+        run: |
+          cd tests/ci
+          python3 docker_server.py --no-push-images --no-alpine --no-reports
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push imgage to ghcr
+        run: |
+          CLI_IMAGE="ghcr.io/${{ github.repository }}:${{ github.event.inputs.clickhouse-ref }}"
+          docker tag clickhouse/clickhouse-server:head-amd64 "$CLI_IMAGE"
+          docker push "$CLI_IMAGE"
