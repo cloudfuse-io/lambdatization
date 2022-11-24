@@ -36,7 +36,7 @@ jobs:
       - name: Push CLI image to cache
         id: push-cli-img
         run: |
-          CLI_IMAGE="ghcr.io/${{ github.repository }}:$(git rev-parse --short HEAD)"
+          CLI_IMAGE="ghcr.io/${{ github.repository }}:cli-$(git rev-parse --short HEAD)"
           docker tag cloudfuse-io/cli:latest "$CLI_IMAGE"
           docker push "$CLI_IMAGE"
           echo "cached-img=${CLI_IMAGE}" >> $GITHUB_OUTPUT

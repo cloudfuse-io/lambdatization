@@ -24,7 +24,7 @@ RUN pip3 install \
 COPY lambda-handler.py ${FUNCTION_DIR}
 
 
-FROM ghcr.io/cloudfuse-io/lambdatization:v$CLICKHOUSE_VERSION-patch
+FROM ghcr.io/cloudfuse-io/lambdatization:clickhouse-v$CLICKHOUSE_VERSION-patch
 ARG FUNCTION_DIR
 
 RUN apt-get update -y && \
@@ -35,6 +35,7 @@ RUN apt-get update -y && \
 
 COPY --from=ric-dependency ${FUNCTION_DIR} ${FUNCTION_DIR}
 COPY ./config.xml /etc/clickhouse-server/config.xml
+ENV CLICKHOUSE_WATCHDOG_ENABLE=0
 RUN rm /etc/clickhouse-server/config.d/docker_related_config.xml
 
 WORKDIR ${FUNCTION_DIR}
