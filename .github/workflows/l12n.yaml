@@ -30,8 +30,8 @@ jobs:
           context: cli/docker
           push: false
           tags: "cloudfuse-io/lambdatization:cli"
-          cache-from: type=gha
-          cache-to: type=gha
+          cache-from: type=gha,scope=$GITHUB_REF_NAME-cli
+          cache-to: type=gha,scope=$GITHUB_REF_NAME-cli
 
 
   spark:
@@ -48,7 +48,7 @@ jobs:
           context: cli/docker
           push: false
           tags: "cloudfuse-io/lambdatization:cli"
-          cache-from: type=gha
+          cache-from: type=gha,scope=$GITHUB_REF_NAME-cli
       - name: Build
         run: |
           ./l12n-shell l12n build-images -s spark
