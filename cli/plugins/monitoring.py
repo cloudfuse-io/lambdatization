@@ -2,6 +2,7 @@ import base64
 import json
 import time
 from datetime import datetime
+from typing import Dict, List
 
 import common
 import dynaconf
@@ -10,6 +11,7 @@ import plugins.clickhouse as clickhouse
 import plugins.dask as dask
 import plugins.databend as databend
 import plugins.dremio as dremio
+import plugins.scaling as scaling
 import plugins.spark as spark
 import plugins.trino as trino
 from common import REPOROOT, TF_BACKEND_VALIDATORS, auto_app_fmt
@@ -61,29 +63,48 @@ def destroy(c, auto_approve=False):
     )
 
 
-def send_standalone_durations(c: Context, lambda_json_output: str):
-    """Read json from stdin and extracts appropriate fields to Bigquery"""
+def send(c: Context, table_output_name: str, rows: List[Dict]):
     gcp_creds = monitoring_output(c, "service_account_key")
-    bigquery_table_id = monitoring_output(c, "standalone_durations_table_id")
-    context = json.loads(lambda_json_output)["context"]
+    bigquery_table_id = monitoring_output(c, table_output_name)
     client = bigquery.Client(
         credentials=service_account.Credentials.from_service_account_info(
             json.loads(base64.decodebytes(gcp_creds.encode()).decode())
         )
     )
+    errors = client.insert_rows_json(bigquery_table_id, rows)
+    if errors == []:
+        print(f"{len(rows)} row(s) added, first row: {json.dumps(rows[0])}")
+    else:
+        print(f"Errors while inserting row(s): {errors}")
 
+
+def send_standalone_durations(c: Context, lambda_json_output: str):
+    """Read json from stdin and extracts appropriate fields to Bigquery"""
+    context = json.loads(lambda_json_output)["context"]
     row = {
         "timestamp": str(datetime.now()),
         "engine": context["engine"],
         "cold_start": context["cold_start"],
         "external_duration_ms": int(context["external_duration_sec"] * 1000),
     }
+    send(c, "standalone_durations_table_id", [row])
 
-    errors = client.insert_rows_json(bigquery_table_id, [row])
-    if errors == []:
-        print(f"Row added for {context['engine']}")
-    else:
-        print(f"Encountered errors while inserting rows: {errors}")
+
+def send_scaling_duration(c: Context, durations: List[Dict]):
+    rows = [
+        {
+            "timestamp": str(datetime.now()),
+            "corrected_duration_ms": int(
+                (dur["external_duration_sec"] - dur["sleep_duration"]) * 1000
+            ),
+            "placeholder_size_mb": int(dur["placeholder_size"] / 10**6),
+            "nb_run": dur["nb_run"],
+            "nb_cold_start": dur["nb_cold_start"],
+            "memory_size_mb": dur["memory_size_mb"],
+        }
+        for dur in durations
+    ]
+    send(c, "scaling_durations_table_id", rows)
 
 
 @task
@@ -117,4 +138,15 @@ def bench_cold_warm(c):
             run_and_send_twice(ballista.lambda_example)
         if "clickhouse" in active_plugins:
             run_and_send_twice(clickhouse.lambda_example)
+        time.sleep(300)
+
+
+@task
+def bench_scaling(c):
+    while True:
+        for nb in [50, 100, 200]:
+            for memory_mb in [2048, 4096, 8192]:
+                result = scaling.run(c, nb=nb, memory_mb=memory_mb)
+                send_scaling_duration(c, result)
+            time.sleep(60)
         time.sleep(300)

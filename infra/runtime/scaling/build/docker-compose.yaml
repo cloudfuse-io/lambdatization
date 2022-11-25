@@ -1,0 +1,91 @@
+version: "3.9"
+services:
+  placeholder_50:
+    build:
+      context: .
+      args:
+        - IMAGE_SIZE_MB=50
+    image: cloudfuse-io/l12n:placeholder-50
+    cap_drop:
+      - ALL
+    read_only: true
+    entrypoint:
+      - python3
+      - lambda-handler.py
+    environment:
+      - AWS_REGION=$L12N_AWS_REGION
+      - AWS_ACCESS_KEY_ID=$LAMBDA_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY=$LAMBDA_SECRET_ACCESS_KEY
+      - AWS_SESSION_TOKEN=$LAMBDA_SESSION_TOKEN
+
+  placeholder_100:
+    build:
+      context: .
+      args:
+        - IMAGE_SIZE_MB=100
+    image: cloudfuse-io/l12n:placeholder-100
+    cap_drop:
+      - ALL
+    read_only: true
+    entrypoint:
+      - python3
+      - lambda-handler.py
+    environment:
+      - AWS_REGION=$L12N_AWS_REGION
+      - AWS_ACCESS_KEY_ID=$LAMBDA_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY=$LAMBDA_SECRET_ACCESS_KEY
+      - AWS_SESSION_TOKEN=$LAMBDA_SESSION_TOKEN
+
+  placeholder_200:
+    build:
+      context: .
+      args:
+        - IMAGE_SIZE_MB=200
+    image: cloudfuse-io/l12n:placeholder-200
+    cap_drop:
+      - ALL
+    read_only: true
+    entrypoint:
+      - python3
+      - lambda-handler.py
+    environment:
+      - AWS_REGION=$L12N_AWS_REGION
+      - AWS_ACCESS_KEY_ID=$LAMBDA_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY=$LAMBDA_SECRET_ACCESS_KEY
+      - AWS_SESSION_TOKEN=$LAMBDA_SESSION_TOKEN
+
+  placeholder_400:
+    build:
+      context: .
+      args:
+        - IMAGE_SIZE_MB=400
+    image: cloudfuse-io/l12n:placeholder-400
+    cap_drop:
+      - ALL
+    read_only: true
+    entrypoint:
+      - python3
+      - lambda-handler.py
+    environment:
+      - AWS_REGION=$L12N_AWS_REGION
+      - AWS_ACCESS_KEY_ID=$LAMBDA_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY=$LAMBDA_SECRET_ACCESS_KEY
+      - AWS_SESSION_TOKEN=$LAMBDA_SESSION_TOKEN
+
+  placeholder_800:
+    build:
+      context: .
+      args:
+        - IMAGE_SIZE_MB=800
+    image: cloudfuse-io/l12n:placeholder-800
+    cap_drop:
+      - ALL
+    read_only: true
+    entrypoint:
+      - python3
+      - lambda-handler.py
+    environment:
+      - AWS_REGION=$L12N_AWS_REGION
+      - AWS_ACCESS_KEY_ID=$LAMBDA_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY=$LAMBDA_SECRET_ACCESS_KEY
+      - AWS_SESSION_TOKEN=$LAMBDA_SESSION_TOKEN
