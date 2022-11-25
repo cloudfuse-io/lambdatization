@@ -105,3 +105,27 @@ jobs:
       - name: Build Engine
         run: |
           ./l12n-shell l12n build-images -s clickhouse
+
+  pass-branch-protections:
+    needs:
+      - spark
+      - dremio
+      - databend
+      - dask
+      - trino
+      - ballista
+      # disabled until functional
+      # - clickhouse
+    if: always()
+    runs-on: ubuntu-latest
+    name: Pass Branch Protections
+    steps:
+      - name: Failure
+        if: contains(join(needs.*.result, ','), 'failure') || contains(join(needs.*.result, ','), 'cancelled')
+        run: |
+          # This check runs after any other job failed.
+          exit 1
+      - name: Success
+        run: |
+          # This check runs after all other jobs are done or skipped
+          exit 0
