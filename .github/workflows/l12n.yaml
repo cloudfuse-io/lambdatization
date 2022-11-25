@@ -22,24 +22,17 @@ jobs:
       DOCKER_BUILDKIT: 1
     steps:
       - uses: actions/checkout@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Build and cache CLI
+        uses: docker/build-push-action@v3
         with:
-          fetch-depth: 0
-      - name: CLI
-        run: |
-          L12N_BUILD=1 ./l12n-shell
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Push CLI image to cache
-        id: push-cli-img
-        run: |
-          CLI_IMAGE="ghcr.io/${{ github.repository }}:cli-$(git rev-parse --short HEAD)"
-          docker tag cloudfuse-io/cli:latest "$CLI_IMAGE"
-          docker push "$CLI_IMAGE"
-          echo "cached-img=${CLI_IMAGE}" >> $GITHUB_OUTPUT
+          context: cli/docker
+          push: false
+          load: true
+          tags: "cloudfuse-io/lambdatization:cli"
+          cache-from: type=gha,scope=$GITHUB_REF_NAME-cli
+          cache-to: type=gha,scope=$GITHUB_REF_NAME-cli
 
   spark:
     name: Spark
@@ -49,10 +42,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Pull cached CLI image
+      - name: Set up Docker Buildx
         run: |
+        uses: docker/setup-buildx-action@v2
           docker pull "${{ needs.build-cli.outputs.cached-img }}"
+      - name: Build CLI from cache
           docker tag "${{ needs.build-cli.outputs.cached-img }}" cloudfuse-io/cli:latest
+        uses: docker/build-push-action@v3
+        with:
+          context: cli/docker
+          push: false
+          load: true
+          tags: "cloudfuse-io/lambdatization:cli"
+          cache-from: type=gha,scope=$GITHUB_REF_NAME-cli
       - name: Build
         run: |
           ./l12n-shell l12n build-images -s spark
