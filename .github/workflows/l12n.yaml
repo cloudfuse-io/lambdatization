@@ -13,141 +13,95 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  build-cli:
-    name: Build and Cache the CLI
-    runs-on: ubuntu-20.04
-    outputs:
-      cached-img: ${{ steps.push-cli-img.outputs.cached-img }}
-    env:
-      DOCKER_BUILDKIT: 1
-    steps:
-      - uses: actions/checkout@v3
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-      - name: Build and cache CLI
-        uses: docker/build-push-action@v3
-        with:
-          context: cli/docker
-          push: false
-          load: true
-          tags: "cloudfuse-io/lambdatization:cli"
-          cache-from: type=gha,scope=$GITHUB_REF_NAME-cli
-          cache-to: type=gha,scope=$GITHUB_REF_NAME-cli
-
   spark:
     name: Spark
     runs-on: ubuntu-20.04
-    needs:
-      - build-cli
     steps:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-      - name: Build CLI from cache
-        uses: docker/build-push-action@v3
-        with:
-          context: cli/docker
-          push: false
-          load: true
-          tags: "cloudfuse-io/lambdatization:cli"
-          cache-from: type=gha,scope=$GITHUB_REF_NAME-cli
-      - name: Build
+      - name: Build CLI
+        run: |
+          L12N_BUILD=1 ./l12n-shell
+      - name: Build Engine
         run: |
           ./l12n-shell l12n build-images -s spark
 
   dremio:
     name: Dremio
     runs-on: ubuntu-20.04
-    needs:
-      - build-cli
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Pull cached CLI image
+      - name: Build CLI
         run: |
-          docker pull "${{ needs.build-cli.outputs.cached-img }}"
-          docker tag "${{ needs.build-cli.outputs.cached-img }}" cloudfuse-io/cli:latest
-      - name: Build
+          L12N_BUILD=1 ./l12n-shell
+      - name: Build Engine
         run: |
           ./l12n-shell l12n build-images -s dremio
 
   databend:
     name: Databend
     runs-on: ubuntu-20.04
-    needs:
-      - build-cli
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Pull cached CLI image
+      - name: Build CLI
         run: |
-          docker pull "${{ needs.build-cli.outputs.cached-img }}"
-          docker tag "${{ needs.build-cli.outputs.cached-img }}" cloudfuse-io/cli:latest
-      - name: Build
+          L12N_BUILD=1 ./l12n-shell
+      - name: Build Engine
         run: |
           ./l12n-shell l12n build-images -s databend
 
   dask:
     name: Dask
     runs-on: ubuntu-20.04
-    needs:
-      - build-cli
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Pull cached CLI image
+      - name: Build CLI
         run: |
-          docker pull "${{ needs.build-cli.outputs.cached-img }}"
-          docker tag "${{ needs.build-cli.outputs.cached-img }}" cloudfuse-io/cli:latest
-      - name: Build
+          L12N_BUILD=1 ./l12n-shell
+      - name: Build Engine
         run: |
           ./l12n-shell l12n build-images -s dask
 
   trino:
     name: Trino
     runs-on: ubuntu-20.04
-    needs:
-      - build-cli
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Pull cached CLI image
+      - name: Build CLI
         run: |
-          docker pull "${{ needs.build-cli.outputs.cached-img }}"
-          docker tag "${{ needs.build-cli.outputs.cached-img }}" cloudfuse-io/cli:latest
-      - name: Build
+          L12N_BUILD=1 ./l12n-shell
+      - name: Build Engine
         run: |
           ./l12n-shell l12n build-images -s trino
 
   ballista:
     name: Ballista
     runs-on: ubuntu-20.04
-    needs:
-      - build-cli
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Pull cached CLI image
+      - name: Build CLI
         run: |
-          docker pull "${{ needs.build-cli.outputs.cached-img }}"
-          docker tag "${{ needs.build-cli.outputs.cached-img }}" cloudfuse-io/cli:latest
-      - name: Build
+          L12N_BUILD=1 ./l12n-shell
+      - name: Build Engine
         run: |
           ./l12n-shell l12n build-images -s ballista
 
   clickhouse:
     name: Clickhouse
     runs-on: ubuntu-20.04
-    needs:
-      - build-cli
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Pull cached CLI image
+      - name: Build CLI
         run: |
-          docker pull "${{ needs.build-cli.outputs.cached-img }}"
-          docker tag "${{ needs.build-cli.outputs.cached-img }}" cloudfuse-io/cli:latest
-      - name: Build
+          L12N_BUILD=1 ./l12n-shell
+      - name: Build Engine
         run: |
           ./l12n-shell l12n build-images -s clickhouse
