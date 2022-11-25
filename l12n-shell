@@ -77,7 +77,7 @@ run () {
     --hostname=lambdatization \
     --rm \
     --privileged \
-    cloudfuse-io/cli $HOST_DIRNAME "${@:2}"
+    cloudfuse-io/lambdatization:cli $HOST_DIRNAME "${@:2}"
 }
 
 # if no argument is provided and no data is piped in, add the tty flag
