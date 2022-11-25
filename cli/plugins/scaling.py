@@ -3,7 +3,6 @@
 import json
 import multiprocessing
 import time
-import botocore.exceptions
 
 from common import aws, terraform_output
 from invoke import task

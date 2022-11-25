@@ -11,9 +11,9 @@ import plugins.clickhouse as clickhouse
 import plugins.dask as dask
 import plugins.databend as databend
 import plugins.dremio as dremio
+import plugins.scaling as scaling
 import plugins.spark as spark
 import plugins.trino as trino
-import plugins.scaling as scaling
 from common import REPOROOT, TF_BACKEND_VALIDATORS, auto_app_fmt
 from google.cloud import bigquery
 from google.oauth2 import service_account
