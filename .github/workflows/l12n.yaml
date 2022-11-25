@@ -26,7 +26,7 @@ jobs:
           fetch-depth: 0
       - name: CLI
         run: |
-          L12N_BUILD=. ./l12n-shell
+          L12N_BUILD=1 ./l12n-shell
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
         with:

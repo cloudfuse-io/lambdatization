@@ -32,6 +32,7 @@ def active_include_dirs(c: Context) -> str:
 
 def docker_compose(step):
     """The docker compose command in the directory of the specified step"""
+    print(RUNTIME_TFDIR)
     return f"docker compose --project-directory {RUNTIME_TFDIR}/{step}/build"
 
 
