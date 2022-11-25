@@ -14,6 +14,7 @@
 # are propagated to the image at build time. This enables the image to be runned
 # using the host user, but a rebuild is required when changing the calling user.
 
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 # Take the provided credentials file location into account
 AWS_SHARED_CREDENTIALS_FILE="${AWS_SHARED_CREDENTIALS_FILE:=$HOME/.aws/credentials}"
 AWS_CONFIG_FILE="${AWS_CONFIG_FILE:=$HOME/.aws/config}"
@@ -26,16 +27,12 @@ export HOST_DOCKER_SOCKET="${HOST_DOCKER_SOCKET:=/var/run/docker.sock}"
 
 export CALLER_UID=$(id -u)
 export CALLER_GID=$(id -g)
-export DOCKER_GID=$(stat -c '%g' ${HOST_DOCKER_SOCKET})
+export DOCKER_SOCKET_GID=$(stat -c '%g' ${HOST_DOCKER_SOCKET})
 
 build () {
   docker build \
     -t cloudfuse-io/cli \
-    --build-arg CALLER_UID \
-    --build-arg CALLER_GID \
-    --build-arg DOCKER_GID \
-    --build-arg REPO_DIR=/host$(readlink -f $L12N_BUILD) \
-    - < $L12N_BUILD/cli.Dockerfile  \
+    $SCRIPT_DIR/cli/docker \
   1>&2 \
   || exit $? # call exit to fail CLI if build fails
 }
@@ -43,13 +40,13 @@ build () {
 docker image inspect cloudfuse-io/cli > /dev/null
 if [ $? -ne 0 ] && [[ -z $L12N_BUILD ]]
   then
-    echo "Run this script with the environment variable L12N_BUILD=/path/to/lambdatization/repository to build the CLI image"
+    echo "Run this script with the environment variable L12N_BUILD=1 to build the CLI image"
     exit 1
 fi
 
-if [[ ! -z $L12N_BUILD ]] && [[ ! -f $L12N_BUILD/cli.Dockerfile ]] 
+if [[ ! -z $L12N_BUILD ]] && [[ ! -f $SCRIPT_DIR/cli/docker/Dockerfile ]] 
   then
-    echo "The path provided by L12N_BUILD does not seem to lead to a valid repository"
+    echo "The script does not seem to be located in a valid L12N repository directory"
     exit 1
 fi
 
@@ -63,7 +60,7 @@ run () {
   docker run \
     $(echo "$1") \
     --mount type=bind,source=$HOST_DOCKER_SOCKET,target=/var/run/docker.sock \
-    --mount type=bind,source=/,target=/host \
+    --mount type=bind,source=/,target=/mnt/host \
     --mount source=l12n-cli-persistent-configs,target=/etc/persistent-configs \
     --env-file <(cat .env 2>/dev/null && true) \
     -e AWS_PROFILE \
@@ -73,9 +70,14 @@ run () {
     -e AWS_SECRET_ACCESS_KEY \
     --env-file <(env | grep L12N_) \
     --env-file <(env | grep HOST_) \
+    -e HOST_UID=$CALLER_UID \
+    -e HOST_GID=$CALLER_GID \
+    -e HOST_DOCKER_GID=$DOCKER_SOCKET_GID \
+    -e REPO_DIR=/host$SCRIPT_DIR \
+    --hostname=lambdatization \
     --rm \
-    --workdir /host$HOST_DIRNAME \
-    cloudfuse-io/cli "${@:2}"
+    --privileged \
+    cloudfuse-io/cli $HOST_DIRNAME "${@:2}"
 }
 
 # if no argument is provided and no data is piped in, add the tty flag

@@ -20,8 +20,10 @@ open interactive dasboards. This work is still work in progress, feel
 free to play with it and give us your feedback!
 - [NYC Taxi Parquet GROUP BY duration of various engines in AWS
   Lambda][datastudio-engine-duration]
+- [AWS Lambda scale up duration by payload and function size][datastudio-scaling-duration]
 
 [datastudio-engine-duration]: https://datastudio.google.com/reporting/c870737c-e8b6-467f-9860-8cd60c751f81
+[datastudio-scaling-duration]: https://datastudio.google.com/reporting/0ffe5983-2dd2-4d53-9644-5154dc980784
 
 ## :hammer: Lambdatize yourself
 
@@ -33,16 +35,17 @@ the project. To set it up:
 - you must have Docker installed, it is the only dependency
 - clone this repository
 - `cd` into it
-- run `L12N_BUILD=. ./l12n-shell`
+- run `L12N_BUILD=1 ./l12n-shell`
   - the `L12N_BUILD` environment variable indicates to the `l12n-shell` script
     that it needs to build the image
   - `./l12n-shell` looks for a `.env` file in the current directory to source
     environment variables from (see configuration section below)
   - the `./l12n-shell` without any argument runs an interactive bash terminal in
     the CLI container
-  - the same arguments can be provided to `./l12n-shell` as to `bash`. For
-    example, `./l12n-shell cmd`, `./l12n-shell -c "cmd"` and `echo "cmd" |
-    ./l12n-shell` all run `cmd` in the `l12n-shell`
+  - `./l12n-shell cmd` and `echo "cmd" | ./l12n-shell` both run `cmd` in the
+    `l12n-shell`
+
+Note: the `l12n-shell` only works on amd64 for now.
 
 ### Configurations
 
