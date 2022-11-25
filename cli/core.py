@@ -32,7 +32,6 @@ def active_include_dirs(c: Context) -> str:
 
 def docker_compose(step):
     """The docker compose command in the directory of the specified step"""
-    print(RUNTIME_TFDIR)
     return f"docker compose --project-directory {RUNTIME_TFDIR}/{step}/build"
 
 
@@ -180,7 +179,7 @@ def push_images(c, step):
 
 @task
 def print_image_vars(c, step):
-    """Display the tfvars file with the image tags.
+    """Display the tfvars file with the image tags
 
     The output variable name for each service is the service name (as defined in
     the docker compose file) suffixed by "_image" """
@@ -260,6 +259,7 @@ def run_lambda(c, engine, query, json_output=False):
 
 @task(autoprint=True)
 def bucket_name(c):
+    """Name of the core bucket with sample data"""
     return terraform_output(c, "core", "bucket_name").strip()
 
 
@@ -297,4 +297,4 @@ def dockerized(c, engine):
     compose = f"docker compose -f {RUNTIME_TFDIR}/{engine}/build/docker-compose.yaml"
     c.run(f"{compose} down -v")
     c.run(f"{compose} build")
-    c.run(f"DATA_BUCKET_NAME={bucket_name(c)} {compose} run {engine}")
+    c.run(f"DATA_BUCKET_NAME={bucket_name(c)} {compose} run --rm {engine}")

@@ -42,7 +42,7 @@ export PATH=$PATH:/host$1
 # Drop privileges and execute next container command, or 'bash' if not specified.
 EXEC_CMD="exec sudo --preserve-env=PATH --preserve-env --set-home --user=$CONTAINER_USER --"
 if [[ $# -gt 1 ]]; then
-    $EXEC_CMD bash -c "${@:2}"
+    echo "${@:2}" | $EXEC_CMD bash
 else
     $EXEC_CMD bash
 fi
