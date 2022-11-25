@@ -31,13 +31,13 @@ export DOCKER_SOCKET_GID=$(stat -c '%g' ${HOST_DOCKER_SOCKET})
 
 build () {
   docker build \
-    -t cloudfuse-io/cli \
+    -t cloudfuse-io/lambdatization:cli \
     $SCRIPT_DIR/cli/docker \
   1>&2 \
   || exit $? # call exit to fail CLI if build fails
 }
 
-docker image inspect cloudfuse-io/cli > /dev/null
+docker image inspect cloudfuse-io/lambdatization:cli > /dev/null
 if [ $? -ne 0 ] && [[ -z $L12N_BUILD ]]
   then
     echo "Run this script with the environment variable L12N_BUILD=1 to build the CLI image"
@@ -77,7 +77,7 @@ run () {
     --hostname=lambdatization \
     --rm \
     --privileged \
-    cloudfuse-io/cli $HOST_DIRNAME "${@:2}"
+    cloudfuse-io/lambdatization:cli $HOST_DIRNAME "${@:2}"
 }
 
 # if no argument is provided and no data is piped in, add the tty flag
