@@ -42,9 +42,8 @@ the project. To set it up:
     environment variables from (see configuration section below)
   - the `./l12n-shell` without any argument runs an interactive bash terminal in
     the CLI container
-  - the same arguments can be provided to `./l12n-shell` as to `bash`. For
-    example, `./l12n-shell cmd`, `./l12n-shell -c "cmd"` and `echo "cmd" |
-    ./l12n-shell` all run `cmd` in the `l12n-shell`
+  - `./l12n-shell cmd` and `echo "cmd" | ./l12n-shell` both run `cmd` in the
+    `l12n-shell`
 
 Note: the `l12n-shell` only works on amd64 for now.
 
