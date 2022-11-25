@@ -178,15 +178,23 @@ def push_images(c, step):
 
 
 @task
-def print_image_vars(c, step):
-    """Display the tfvars file with the image tags
+def print_image_vars(c, step, format="separate"):
+    """Display the tfvars file with the image tags.
 
-    The output variable name for each service is the service name (as defined in
-    the docker compose file) suffixed by "_image" """
+    - format="separate": The output variable name for each service is the
+      service name (as defined in the docker compose file) suffixed by "_image"
+    - format="list": The output variable is named "images" and images are
+      provided in a list"""
     cf_str = c.run(f"{docker_compose(step)} convert --format json", hide="out").stdout
     cf_dict = json.loads(cf_str)["services"]
-    for svc_name in cf_dict.keys():
-        print(f'{svc_name}_image = "{current_image(c, svc_name)}"')
+    if format == "separate":
+        for svc_name in cf_dict.keys():
+            print(f'{svc_name}_image = "{current_image(c, svc_name)}"')
+    elif format == "list":
+        images = {f'"{current_image(c, svc_name)}"' for svc_name in cf_dict.keys()}
+        print(f'images=[{",".join(images)}]')
+    else:
+        raise Exit("Unknown format for print-image-vars")
 
 
 def destroy_step(c, step, auto_approve=False):
