@@ -29,6 +29,7 @@ jobs:
         with:
           context: cli/docker
           push: false
+          load: true
           tags: "cloudfuse-io/lambdatization:cli"
           cache-from: type=gha,scope=$GITHUB_REF_NAME-cli
           cache-to: type=gha,scope=$GITHUB_REF_NAME-cli
