@@ -2,12 +2,13 @@
 
 <h4 align="center">
 
-[![L12N](https://github.com/cloudfuse-io/lambdatization/actions/workflows/engines.yaml/badge.svg?branch=main)](https://github.com/cloudfuse-io/lambdatization/actions/workflows/engines.yaml)
+[![Engines](https://github.com/cloudfuse-io/lambdatization/actions/workflows/engines.yaml/badge.svg?branch=main)](https://github.com/cloudfuse-io/lambdatization/actions/workflows/engines.yaml)
+[![Style](https://github.com/cloudfuse-io/lambdatization/actions/workflows/style-check.yaml/badge.svg?branch=main)](https://github.com/cloudfuse-io/lambdatization/actions/workflows/style-check.yaml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 </h4>
 
-The goal of this project is to assess which query engine can
+The goal of this project is to assess which query engines can
 realistically run inside cloud functions (in particular AWS
 Lambda) and have a first feeling about their performances in
 this highly constrained environment.
