@@ -1,4 +1,4 @@
-name: L12N
+name: Lambdatized Engines
 on:
   push:
     branches:
@@ -13,8 +13,10 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  spark:
-    name: Spark
+  engine:
+    strategy:
+      matrix:
+        engine_name: [spark, dremio, databend, dask, trino, ballista, clickhouse]
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
@@ -26,99 +28,14 @@ jobs:
           L12N_BUILD=1 ./l12n-shell
       - name: Build Engine
         run: |
-          ./l12n-shell l12n build-images -s spark
+          ./l12n-shell l12n build-images -s ${{ matrix.engine_name }}
 
-  dremio:
-    name: Dremio
-    runs-on: ubuntu-20.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Build CLI
-        run: |
-          L12N_BUILD=1 ./l12n-shell
-      - name: Build Engine
-        run: |
-          ./l12n-shell l12n build-images -s dremio
-
-  databend:
-    name: Databend
-    runs-on: ubuntu-20.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Build CLI
-        run: |
-          L12N_BUILD=1 ./l12n-shell
-      - name: Build Engine
-        run: |
-          ./l12n-shell l12n build-images -s databend
-
-  dask:
-    name: Dask
-    runs-on: ubuntu-20.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Build CLI
-        run: |
-          L12N_BUILD=1 ./l12n-shell
-      - name: Build Engine
-        run: |
-          ./l12n-shell l12n build-images -s dask
-
-  trino:
-    name: Trino
-    runs-on: ubuntu-20.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Build CLI
-        run: |
-          L12N_BUILD=1 ./l12n-shell
-      - name: Build Engine
-        run: |
-          ./l12n-shell l12n build-images -s trino
-
-  ballista:
-    name: Ballista
-    runs-on: ubuntu-20.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Build CLI
-        run: |
-          L12N_BUILD=1 ./l12n-shell
-      - name: Build Engine
-        run: |
-          ./l12n-shell l12n build-images -s ballista
-
-  clickhouse:
-    name: Clickhouse
-    runs-on: ubuntu-20.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Build CLI
-        run: |
-          L12N_BUILD=1 ./l12n-shell
-      - name: Build Engine
-        run: |
-          ./l12n-shell l12n build-images -s clickhouse
-
-  pass-branch-protections:
+  branch-protection:
     needs:
-      - spark
-      - dremio
-      - databend
-      - dask
-      - trino
-      - ballista
-      # disabled until functional
-      # - clickhouse
+      - engine
     if: always()
     runs-on: ubuntu-latest
-    name: Pass Branch Protections
+    name: Branch Protection
     steps:
       - name: Failure
         if: contains(join(needs.*.result, ','), 'failure') || contains(join(needs.*.result, ','), 'cancelled')

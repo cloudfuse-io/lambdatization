@@ -6,9 +6,7 @@
   parallel. To make sure this process doesn't exceed the system's maximum number
   of file descriptors, it performs a check of the ulimit when starting. The
   minimum required is 4096, but unfortunately we have a hard limit on AWS Lambda
-  at 1024. We had to
-  [rebuild](https://github.com/cloudfuse-io/lambdatization/actions/workflows/trino.yaml)
-  Trino with a patch that:
+  at 1024. We had to [rebuild][trino_action] Trino with a patch that:
     - loads less plugins
     - removes the check on fileno
 - Trino, like Dremio, automatically detects its private IP and tries to use it
@@ -24,6 +22,8 @@
     a local one
   - obviously, we could use a smaller base image
 
+[trino_action]: https://github.com/cloudfuse-io/lambdatization/actions/workflows/helper-trino.yaml
+
 ## Updating Trino version
 
 To change the Trino version, the patch needs to be applied to that version (xxx):
@@ -36,6 +36,7 @@ git rebase xxx
 git push
 ```
 
-Then run the build in the [Trino
-workflow](https://github.com/cloudfuse-io/lambdatization/actions/workflows/trino.yaml)
-with your new Trino version number xxx
+Then run the build in the [Trino workflow][trino_workflow] with your new Trino
+version number xxx
+
+[trino_workflow]: https://github.com/cloudfuse-io/lambdatization/actions/workflows/helper-trino.yaml
