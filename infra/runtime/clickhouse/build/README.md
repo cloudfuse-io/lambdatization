@@ -29,12 +29,12 @@ startup with the following trace:
   as we also used Debian/Ubuntu for the other images. The Alpine image is only
   30MB smaller so the gain wouldn't be huge anyway.
 - Lambda does not support `prctl` with the `PR_SET_NAME` flag. We provide a
-  [custom build](/.github/workflows/clickhouse.yaml) that lazily fails when this
-  command fails. To create a new image:
+  [custom build](/.github/workflows/helper-clickhouse.yaml) that lazily fails
+  when this command fails. To create a new image:
   - setup an [Ubuntu 20.04 runner](/.github/gh-runner-setup.sh)
   - create a branch in [cloudfuse-io/ClickHouse][cloudfuse_clickhouse_fork] with
     the patch
   - run the ClickHouse [build action][clickhouse_build_action]
 
 [cloudfuse_clickhouse_fork]: https://github.com/cloudfuse-io/ClickHouse/branches
-[clickhouse_build_action]: https://github.com/cloudfuse-io/lambdatization/actions/workflows/clickhouse.yaml
+[clickhouse_build_action]: https://github.com/cloudfuse-io/lambdatization/actions/workflows/helper-clickhouse.yaml
