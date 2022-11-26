@@ -29,3 +29,20 @@ jobs:
       - name: Build Engine
         run: |
           ./l12n-shell l12n build-images -s ${{ matrix.engine_name }}
+
+  branch-protection:
+    needs:
+      - engine
+    if: always()
+    runs-on: ubuntu-latest
+    name: Branch Protection
+    steps:
+      - name: Failure
+        if: contains(join(needs.*.result, ','), 'failure') || contains(join(needs.*.result, ','), 'cancelled')
+        run: |
+          # This check runs after any other job failed.
+          exit 1
+      - name: Success
+        run: |
+          # This check runs after all other jobs are done or skipped
+          exit 0
