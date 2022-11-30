@@ -1,9 +1,10 @@
+import base64
+import logging
 import os
 import subprocess
-import logging
-import base64
 import sys
 import time
+
 import requests
 
 logging.getLogger().setLevel(logging.INFO)

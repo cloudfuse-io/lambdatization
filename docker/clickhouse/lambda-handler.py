@@ -1,14 +1,13 @@
 import base64
-import os
-import subprocess
 import logging
-import time
-import sys
-import socket
-import threading
+import os
 import selectors
+import socket
+import subprocess
+import sys
+import threading
+import time
 from contextlib import closing
-
 
 logging.getLogger().setLevel(logging.INFO)
 

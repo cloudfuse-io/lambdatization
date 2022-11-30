@@ -1,11 +1,12 @@
-import os
-import logging
 import base64
+import logging
+import os
+import socket
+import subprocess
 import sys
 import time
-import subprocess
-import socket
 from contextlib import closing
+
 from dask_sql import Context
 from distributed import Client
 

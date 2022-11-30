@@ -1,14 +1,14 @@
 import base64
-import os
-from typing import List
-import subprocess
 import logging
-from pexpect import popen_spawn
-import time
-import sys
+import os
 import socket
+import subprocess
+import sys
+import time
 from contextlib import closing
+from typing import List
 
+from pexpect import popen_spawn
 
 logging.getLogger().setLevel(logging.INFO)
 

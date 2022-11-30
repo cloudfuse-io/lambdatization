@@ -1,12 +1,12 @@
-import logging
 import base64
+import logging
 import os
-import tempfile
-import time
-import sys
-import threading
 import selectors
 import subprocess
+import sys
+import tempfile
+import threading
+import time
 from typing import Tuple
 
 logging.getLogger().setLevel(logging.INFO)

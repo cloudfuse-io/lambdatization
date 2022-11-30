@@ -6,8 +6,8 @@ import time
 from botocore.exceptions import ClientError
 from common import (
     AWS_REGION_VALIDATOR,
-    RUNTIME_TFDIR,
     DOCKERDIR,
+    RUNTIME_TFDIR,
     TF_BACKEND_VALIDATORS,
     active_modules,
     auto_app_fmt,
