@@ -18,13 +18,7 @@ locals {
 terraform {
   before_hook "deploy_images" {
     commands = ["apply"]
-    execute = ["/bin/bash", "-c", <<EOT
-l12n docker-login \
-                 build-images --step=databend \
-                 push-images --step=databend && \
-l12n print-image-vars --step=databend > images.generated.tfvars
-EOT
-    ]
+    execute = ["../build_and_print.sh", "databend"]
   }
 
   extra_arguments "image_vars" {

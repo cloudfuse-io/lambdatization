@@ -6,7 +6,6 @@ import time
 from botocore.exceptions import ClientError
 from common import (
     AWS_REGION_VALIDATOR,
-    DOCKERDIR,
     RUNTIME_TFDIR,
     TF_BACKEND_VALIDATORS,
     active_modules,
@@ -22,7 +21,7 @@ VALIDATORS = [
     AWS_REGION_VALIDATOR,
 ]
 
-STEP_HELP = {"step": "A specific terragrunt module on which to perform this action"}
+MODULE_HELP = {"module": "A specific terragrunt module on which to perform this action"}
 
 
 def active_include_dirs(c: Context) -> str:
@@ -30,9 +29,9 @@ def active_include_dirs(c: Context) -> str:
     return " ".join([f"--terragrunt-include-dir={mod}" for mod in active_modules(c)])
 
 
-def docker_compose(step):
-    """The docker compose command in the directory of the specified step"""
-    return f"docker compose --project-directory {DOCKERDIR}/{step}"
+def docker_compose(file_path):
+    """Compose command for specified file"""
+    return f"docker compose -f {file_path}"
 
 
 ## Tasks
@@ -63,46 +62,46 @@ def docker_login(c):
     )
 
 
-def init_step(c, step):
-    """Manually run terraform init on a specific step"""
+def init_module(c, module):
+    """Manually run terraform init on a specific module"""
     mods = active_modules(c)
-    if step not in mods:
-        raise Exit(f"Step {step} not part of the active modules {mods}")
+    if module not in mods:
+        raise Exit(f"Step {module} not part of the active modules {mods}")
     c.run(
-        f"terragrunt init --terragrunt-working-dir {RUNTIME_TFDIR}/{step}",
+        f"terragrunt init --terragrunt-working-dir {RUNTIME_TFDIR}/{module}",
     )
 
 
-@task(help={**STEP_HELP, "clean": clean_modules.__doc__})
-def init(c, step="", clean=False):
-    """Manually run terraform init on one or all steps"""
+@task(help={**MODULE_HELP, "clean": clean_modules.__doc__})
+def init(c, module="", clean=False):
+    """Manually run terraform init on one or all modules"""
     if clean:
         clean_modules()
-    if step == "":
+    if module == "":
         c.run(
             f"terragrunt run-all init {active_include_dirs(c)} --terragrunt-working-dir {RUNTIME_TFDIR}",
         )
     else:
-        init_step(c, step)
+        init_module(c, module)
 
 
-def deploy_step(c, step, auto_approve=False):
-    """Deploy only one step of the stack"""
-    init_step(c, step)
+def deploy_module(c, module, auto_approve=False):
+    """Deploy only one module of the stack"""
+    init_module(c, module)
     c.run(
-        f"terragrunt apply {auto_app_fmt(auto_approve)} --terragrunt-working-dir {RUNTIME_TFDIR}/{step}",
+        f"terragrunt apply {auto_app_fmt(auto_approve)} --terragrunt-working-dir {RUNTIME_TFDIR}/{module}",
     )
 
 
-@task(help=STEP_HELP)
-def deploy(c, step="", auto_approve=False):
-    """Deploy all the modules associated with active plugins or a specific step"""
-    if step == "":
+@task(help=MODULE_HELP)
+def deploy(c, module="", auto_approve=False):
+    """Deploy all the modules associated with active plugins or a specific module"""
+    if module == "":
         c.run(
             f"terragrunt run-all apply {auto_app_fmt(auto_approve)} {active_include_dirs(c)} --terragrunt-working-dir {RUNTIME_TFDIR}",
         )
     else:
-        deploy_step(c, step, auto_approve)
+        deploy_module(c, module, auto_approve)
 
 
 @task(
@@ -126,9 +125,9 @@ def current_image(c, service):
 
 
 @task
-def build_images(c, step):
-    """Build the image for the provided step"""
-    c.run(f"{docker_compose(step)} build")
+def build_images(c, compose_file):
+    """Build the image for the provided module"""
+    c.run(f"{docker_compose(compose_file)} build")
 
 
 def deploy_image(c, service, tag):
@@ -169,23 +168,27 @@ def deploy_image(c, service, tag):
 
 
 @task
-def push_images(c, step):
-    """Push the images specified in the docker compose for that step"""
-    cf_str = c.run(f"{docker_compose(step)} convert --format json", hide="out").stdout
+def push_images(c, compose_file):
+    """Push the images specified in the docker compose"""
+    cf_str = c.run(
+        f"{docker_compose(compose_file)} convert --format json", hide="out"
+    ).stdout
     cf_dict = json.loads(cf_str)["services"]
     for svc in cf_dict.items():
         deploy_image(c, svc[0], svc[1]["image"])
 
 
 @task
-def print_image_vars(c, step, format="separate"):
+def print_image_vars(c, compose_file, format="separate"):
     """Display the tfvars file with the image tags.
 
     - format="separate": The output variable name for each service is the
       service name (as defined in the docker compose file) suffixed by "_image"
     - format="list": The output variable is named "images" and images are
       provided in a list"""
-    cf_str = c.run(f"{docker_compose(step)} convert --format json", hide="out").stdout
+    cf_str = c.run(
+        f"{docker_compose(compose_file)} convert --format json", hide="out"
+    ).stdout
     cf_dict = json.loads(cf_str)["services"]
     if format == "separate":
         for svc_name in cf_dict.keys():
@@ -197,26 +200,26 @@ def print_image_vars(c, step, format="separate"):
         raise Exit("Unknown format for print-image-vars")
 
 
-def destroy_step(c, step, auto_approve=False):
-    """Destroy resources of the specified step. Resources depending on it should be cleaned up first."""
-    init_step(c, step)
+def destroy_module(c, module, auto_approve=False):
+    """Destroy resources of the specified module. Resources depending on it should be cleaned up first."""
+    init_module(c, module)
     c.run(
-        f"terragrunt destroy {auto_app_fmt(auto_approve)} --terragrunt-working-dir {RUNTIME_TFDIR}/{step}",
+        f"terragrunt destroy {auto_app_fmt(auto_approve)} --terragrunt-working-dir {RUNTIME_TFDIR}/{module}",
     )
 
 
-@task(help=STEP_HELP)
-def destroy(c, step="", auto_approve=False):
-    """Tear down the stack of all the active plugins, or a specific step
+@task(help=MODULE_HELP)
+def destroy(c, module="", auto_approve=False):
+    """Tear down the stack of all the active plugins, or a specific module
 
     Note that if a module was deployed and the associated plugin was removed
     from the config afterwards, it will not be destroyed"""
-    if step == "":
+    if module == "":
         c.run(
             f"terragrunt run-all destroy {auto_app_fmt(auto_approve)} {active_include_dirs(c)} --terragrunt-working-dir {RUNTIME_TFDIR}",
         )
     else:
-        destroy_step(c, step, auto_approve)
+        destroy_module(c, module, auto_approve)
 
 
 QUERY_HELP = {

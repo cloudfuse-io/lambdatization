@@ -18,13 +18,7 @@ locals {
 terraform {
   before_hook "deploy_images" {
     commands = ["apply"]
-    execute = ["/bin/bash", "-c", <<EOT
-l12n docker-login \
-                 build-images --step=dremio \
-                 push-images --step=dremio && \
-l12n print-image-vars --step=dremio > images.generated.tfvars
-EOT
-    ]
+    execute = ["../build_and_print.sh", "dremio"]
   }
 
   extra_arguments "image_vars" {
