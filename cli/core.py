@@ -7,12 +7,12 @@ from botocore.exceptions import ClientError
 from common import (
     AWS_REGION_VALIDATOR,
     RUNTIME_TFDIR,
+    DOCKERDIR,
     TF_BACKEND_VALIDATORS,
     active_modules,
     auto_app_fmt,
     aws,
     clean_modules,
-    parse_env,
     terraform_output,
 )
 from invoke import Context, Exit, task
@@ -32,7 +32,7 @@ def active_include_dirs(c: Context) -> str:
 
 def docker_compose(step):
     """The docker compose command in the directory of the specified step"""
-    return f"docker compose --project-directory {RUNTIME_TFDIR}/{step}/build"
+    return f"docker compose --project-directory {DOCKERDIR}/{step}"
 
 
 ## Tasks

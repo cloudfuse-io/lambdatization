@@ -1,4 +1,4 @@
-FROM python:3.10.3-slim
+FROM python:3.10.3-slim as cli-base
 
 ARG TERRAFORM_VERSION=1.1.6
 ARG TERRAGRUNT_VERSION=0.36.0
