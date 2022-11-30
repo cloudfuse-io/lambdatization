@@ -6,6 +6,7 @@ import time
 from botocore.exceptions import ClientError
 from common import (
     AWS_REGION_VALIDATOR,
+    DOCKERDIR,
     RUNTIME_TFDIR,
     TF_BACKEND_VALIDATORS,
     active_modules,
@@ -178,26 +179,21 @@ def push_images(c, compose_file):
         deploy_image(c, svc[0], svc[1]["image"])
 
 
-@task
-def print_image_vars(c, compose_file, format="separate"):
-    """Display the tfvars file with the image tags.
-
-    - format="separate": The output variable name for each service is the
-      service name (as defined in the docker compose file) suffixed by "_image"
-    - format="list": The output variable is named "images" and images are
-      provided in a list"""
+@task(help={"list": "Create a single list output variable named 'images'"})
+def print_image_vars(c, compose_file, list=False):
+    """Display the tfvars file with the image tags. By default, the output
+    variable name for each service is the service name (as defined in the docker
+    compose file) suffixed by "_image" """
     cf_str = c.run(
         f"{docker_compose(compose_file)} convert --format json", hide="out"
     ).stdout
     cf_dict = json.loads(cf_str)["services"]
-    if format == "separate":
-        for svc_name in cf_dict.keys():
-            print(f'{svc_name}_image = "{current_image(c, svc_name)}"')
-    elif format == "list":
+    if list:
         images = {f'"{current_image(c, svc_name)}"' for svc_name in cf_dict.keys()}
         print(f'images=[{",".join(images)}]')
     else:
-        raise Exit("Unknown format for print-image-vars")
+        for svc_name in cf_dict.keys():
+            print(f'{svc_name}_image = "{current_image(c, svc_name)}"')
 
 
 def destroy_module(c, module, auto_approve=False):
@@ -305,7 +301,7 @@ def dockerized(c, engine):
                 ),
                 code=1,
             )
-    compose = f"docker compose -f {RUNTIME_TFDIR}/{engine}/build/docker-compose.yaml"
+    compose = f"docker compose -f {DOCKERDIR}/{engine}/docker-compose.yaml"
     c.run(f"{compose} down -v")
     c.run(f"{compose} build")
     c.run(f"DATA_BUCKET_NAME={bucket_name(c)} {compose} run --rm {engine}")
