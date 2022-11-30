@@ -49,7 +49,7 @@ def query(sql: str) -> str:
 
 
 def handler(event, context):
-    """An AWS Lambda handler that runs the provided command with bash and returns the standard output"""
+    """AWS Lambda handler"""
     start = time.time()
     global IS_COLD_START
     is_cold_start = IS_COLD_START

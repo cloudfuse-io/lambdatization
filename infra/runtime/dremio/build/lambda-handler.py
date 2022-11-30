@@ -161,7 +161,7 @@ def query(query: str) -> Dict:
 
 
 def handler(event, context):
-    """An AWS Lambda handler that runs the provided command with bash and returns the standard output"""
+    """AWS Lambda handler"""
     logging.warning("Dremio source init fails if user is not dremio or sbx_user1051")
 
     start = time.time()
