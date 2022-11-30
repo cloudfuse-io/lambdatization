@@ -38,6 +38,7 @@ AWS_REGION_VALIDATOR = dynaconf.Validator(
 REPOROOT = os.environ["REPO_DIR"]
 CURRENTDIR = os.getcwd()
 RUNTIME_TFDIR = f"{REPOROOT}/infra/runtime"
+DOCKERDIR = f"{REPOROOT}/docker"
 
 
 def conf(validators=[]) -> dict:
@@ -129,19 +130,6 @@ def aws(service=None):
     else:
         config = botocore.client.Config(retries={"max_attempts": 0}, read_timeout=1000)
         return boto3.client(service, region_name=AWS_REGION(), config=config)
-
-
-def parse_env(env: List[str]) -> Dict[str, str]:
-    """Convert a list of "key=value" strings to a dictionary of {key: value}"""
-
-    def split_name_val(name_val):
-        env_split = name_val.split("=")
-        if len(env_split) != 2:
-            raise Exit(f"{name_val} should have exactly one '=' char", 1)
-        return env_split[0], env_split[1]
-
-    name_val_list = [split_name_val(v) for v in env]
-    return {v[0]: v[1] for v in name_val_list}
 
 
 def clean_modules():
