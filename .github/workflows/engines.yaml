@@ -28,7 +28,8 @@ jobs:
           L12N_BUILD=1 ./l12n-shell
       - name: Build Engine
         run: |
-          ./l12n-shell l12n build-images -s ${{ matrix.engine_name }}
+          COMPOSE_FILE=docker/${{ matrix.engine_name }}/docker-compose.yaml
+          ./l12n-shell l12n build-images --compose-file=$COMPOSE_FILE
 
   branch-protection:
     needs:
