@@ -18,7 +18,7 @@ locals {
 terraform {
   before_hook "deploy_images" {
     commands = ["apply"]
-    execute = ["../build_and_print.sh", "trino"]
+    execute  = ["../build_and_print.sh", "trino"]
   }
 
   extra_arguments "image_vars" {
