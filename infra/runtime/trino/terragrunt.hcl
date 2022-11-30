@@ -18,13 +18,7 @@ locals {
 terraform {
   before_hook "deploy_images" {
     commands = ["apply"]
-    execute = ["/bin/bash", "-c", <<EOT
-l12n docker-login \
-                 build-images --step=trino \
-                 push-images --step=trino && \
-l12n print-image-vars --step=trino > images.generated.tfvars
-EOT
-    ]
+    execute  = ["../build_and_print.sh", "trino"]
   }
 
   extra_arguments "image_vars" {

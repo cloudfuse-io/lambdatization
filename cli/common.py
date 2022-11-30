@@ -3,7 +3,7 @@ import os
 import shutil
 import sys
 from functools import cache
-from typing import Dict, List, Set
+from typing import List, Set
 
 import boto3
 import botocore.client
@@ -92,8 +92,8 @@ def tf_version(c: Context):
     return json.loads(version_json)["terraform_version"]
 
 
-def terraform_output(c: Context, step, key) -> str:
-    cmd = f"terraform -chdir={RUNTIME_TFDIR}/{step} output --raw {key}"
+def terraform_output(c: Context, module, key) -> str:
+    cmd = f"terraform -chdir={RUNTIME_TFDIR}/{module} output --raw {key}"
     try:
         output = c.run(
             cmd,
@@ -112,7 +112,7 @@ def terraform_output(c: Context, step, key) -> str:
             print(cmd, file=sys.stderr)
             print(err.strip(), file=sys.stderr)
         raise Exit(
-            f"The step '{step}' was not deployed, is not up to date, "
+            f"The module '{module}' was not deployed, is not up to date, "
             + f"or is improperly initialized (Terraform output '{key}' not found)",
             code=1,
         )

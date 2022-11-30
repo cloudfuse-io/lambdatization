@@ -18,13 +18,7 @@ locals {
 terraform {
   before_hook "deploy_images" {
     commands = ["apply"]
-    execute = ["/bin/bash", "-c", <<EOT
-l12n docker-login \
-                 build-images --step=spark \
-                 push-images --step=spark && \
-l12n print-image-vars --step=spark > images.generated.tfvars
-EOT
-    ]
+    execute  = ["../build_and_print.sh", "spark"]
   }
 
   extra_arguments "image_vars" {

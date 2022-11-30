@@ -18,13 +18,7 @@ locals {
 terraform {
   before_hook "deploy_images" {
     commands = ["apply"]
-    execute = ["/bin/bash", "-c", <<EOT
-l12n docker-login \
-                 build-images --step=ballista \
-                 push-images --step=ballista && \
-l12n print-image-vars --step=ballista > images.generated.tfvars
-EOT
-    ]
+    execute  = ["../build_and_print.sh", "ballista"]
   }
 
   extra_arguments "image_vars" {
