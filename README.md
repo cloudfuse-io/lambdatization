@@ -34,17 +34,22 @@ environement. It is not strictly necessary, but simplifies the collaboration on
 the project. To set it up:
 
 - you must have Docker installed, it is the only dependency
-- clone this repository
-- `cd` into it
-- run `L12N_BUILD=1 ./l12n-shell`
+- clone this repository:
+  - `git clone https://github.com/cloudfuse-io/lambdatization`
+- add the l12n-shell to your path (optional)
+  - `sudo ln -s $(pwd)/lambdatization/l12n-shell /usr/local/bin/l12n-shell`
+- run `L12N_BUILD=1 l12n-shell`
   - the `L12N_BUILD` environment variable indicates to the `l12n-shell` script
     that it needs to build the image
-  - `./l12n-shell` looks for a `.env` file in the current directory to source
-    environment variables from (see configuration section below)
+  - `l12n-shell` operates in the current directory to:
+    - look for a `.env` file to source configurations from (see configuration section below)
+    - stores the terraform state if the [local][tf_local_backend_docs] backend is used.
   - the `./l12n-shell` without any argument runs an interactive bash terminal in
     the CLI container
   - `./l12n-shell cmd` and `echo "cmd" | ./l12n-shell` both run `cmd` in the
     `l12n-shell`
+
+[tf_local_backend_docs]: https://developer.hashicorp.com/terraform/language/settings/backends/local
 
 Note: the `l12n-shell` only works on amd64 for now.
 

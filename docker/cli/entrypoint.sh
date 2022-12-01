@@ -36,13 +36,13 @@ bindfs --force-user=$CONTAINER_USER --force-group=$CONTAINER_GROUP \
     /mnt/host /host
 
 # Using Dockerfile WORKDIR creates a sort of race with bindfs so we use `cd` instead
-cd /host$1
-export PATH=$PATH:/host$1
+cd /host$HOST_CALLING_DIR
+ln -s /host$HOST_REPO_DIR/l12n /usr/local/bin/l12n
 
 # Drop privileges and execute next container command, or 'bash' if not specified.
 EXEC_CMD="exec sudo --preserve-env=PATH --preserve-env --set-home --user=$CONTAINER_USER --"
-if [[ $# -gt 1 ]]; then
-    echo "${@:2}" | $EXEC_CMD bash
+if [[ $# -gt 0 ]]; then
+    echo "$@" | $EXEC_CMD bash
 else
     $EXEC_CMD bash
 fi

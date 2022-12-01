@@ -26,6 +26,7 @@ crash.log
 # example: *tfplan*
 
 .env
+envs
 
 __pycache__
 *.pyc 

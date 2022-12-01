@@ -35,7 +35,7 @@ AWS_REGION_VALIDATOR = dynaconf.Validator(
 )
 
 # Path aliases
-REPOROOT = os.environ["REPO_DIR"]
+REPOROOT = f"/host/{os.environ['HOST_REPO_DIR']}"
 CURRENTDIR = os.getcwd()
 RUNTIME_TFDIR = f"{REPOROOT}/infra/runtime"
 DOCKERDIR = f"{REPOROOT}/docker"
@@ -45,7 +45,8 @@ def conf(validators=[]) -> dict:
     """Load variables from both the environment and the .env file if:
     - their key is prefixed with either L12N_, TF_ or AWS_"""
     dc = dynaconf.Dynaconf(
-        load_dotenv=True,
+        # dotenv file is loaded by l12n-shell
+        load_dotenv=False,
         envvar_prefix=False,
         validators=validators,
     )
