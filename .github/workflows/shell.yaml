@@ -42,7 +42,7 @@ jobs:
         run: |
           cd envs
           result=$(echo 'echo $L12N_VAR' | ./shell-link )
-          [[ "$L12N_VAR" = "myvar" ]]
+          [[ "$result" = "myvar" ]]
       - name: Embedded l12n
         shell: ./l12n-shell < {0}
         run: |
