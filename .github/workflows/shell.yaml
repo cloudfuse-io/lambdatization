@@ -48,4 +48,5 @@ jobs:
           l12n-shell l12n
       - name: Recursive l12n-shell
         run: |
-          l12n-shell ../../l12n-shell env | grep L12N_VAR=myvar
+          cd envs
+          l12n-shell ../l12n-shell env | grep L12N_VAR=myvar
