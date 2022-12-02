@@ -57,6 +57,9 @@ the project. To set it up:
 Note:
 - `l12n-shell` only supports amd64 for now
 - it is actively tested on Linux only
+- if you are running multiples deployments with different `.env` files in
+  diffent directories, run `l12n-shell l12n init --clean` each time you switch
+  environments
 
 ### Configurations
 
