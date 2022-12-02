@@ -3,7 +3,6 @@
 <h4 align="center">
 
 [![Engines](https://github.com/cloudfuse-io/lambdatization/actions/workflows/engines.yaml/badge.svg?branch=main)](https://github.com/cloudfuse-io/lambdatization/actions/workflows/engines.yaml)
-[![Style](https://github.com/cloudfuse-io/lambdatization/actions/workflows/style-check.yaml/badge.svg?branch=main)](https://github.com/cloudfuse-io/lambdatization/actions/workflows/style-check.yaml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 </h4>
