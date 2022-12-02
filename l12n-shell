@@ -31,8 +31,9 @@ export CALLER_GID=$(id -g)
 export DOCKER_SOCKET_GID=$(stat -c '%g' ${HOST_DOCKER_SOCKET})
 
 build () {
-  docker build \
+  docker buildx build \
     -t cloudfuse-io/lambdatization:cli \
+    --target cli \
     $DOCKER_DIR \
   1>&2 \
   || exit $? # call exit to fail CLI if build fails

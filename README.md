@@ -32,7 +32,8 @@ The `l12n-shell` provides a way to run all commands in an isolated Docker
 environement. It is not strictly necessary, but simplifies the collaboration on
 the project. To set it up:
 
-- you must have Docker installed, it is the only dependency
+- you must have a recent version (v20+) of Docker installed, it is the only
+  dependency
 - clone this repository:
   - `git clone https://github.com/cloudfuse-io/lambdatization`
 - add the l12n-shell to your path (optional)
