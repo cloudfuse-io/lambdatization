@@ -83,6 +83,35 @@ RUN pip install \
         requests==2.28.1 \
         google-cloud-bigquery==3.3.5
 
+FROM cli-base as lambda
+
+# context should be repo root
+COPY . /lambdatization
+
+ARG FUNCTION_DIR=/lambdatization/cli
+
+# Install aws-lambda-cpp build dependencies
+RUN apt-get update && \
+    apt-get -y install\
+    g++ \
+    make \
+    cmake \
+    unzip \
+    libcurl4-openssl-dev
+
+RUN mkdir -p ${FUNCTION_DIR}
+
+# Install the runtime interface client and lambda requirements
+RUN pip3 install \
+    --target ${FUNCTION_DIR} \
+    awslambdaric
+
+ENTRYPOINT [ "python3", "-m", "awslambdaric" ]
+CMD [ "docker/lambda-handler.handler" ]
+
+
+FROM cli-base as cli
+
 COPY entrypoint.sh /entrypoint.sh
 
 ENTRYPOINT [ "/entrypoint.sh" ]
