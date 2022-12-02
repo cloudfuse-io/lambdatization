@@ -14,14 +14,14 @@
 # are propagated to the image at build time. This enables the image to be runned
 # using the host user, but a rebuild is required when changing the calling user.
 
-SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+SCRIPT_DIR=$( cd -- "$( dirname -- "$(realpath ${BASH_SOURCE[0]})")" &> /dev/null && pwd )
 DOCKER_DIR=$SCRIPT_DIR/docker/cli
 # Take the provided credentials file location into account
 AWS_SHARED_CREDENTIALS_FILE="${AWS_SHARED_CREDENTIALS_FILE:=$HOME/.aws/credentials}"
 AWS_CONFIG_FILE="${AWS_CONFIG_FILE:=$HOME/.aws/config}"
-# Allow binding from host to run l12n-shell within l12n-shell
-CURRENT_DIRNAME=$(pwd)
-export HOST_DIRNAME="${HOST_DIRNAME:=$CURRENT_DIRNAME}"
+# Host configurations used inside l12n-shell
+export HOST_REPO_DIR="${HOST_REPO_DIR:=$SCRIPT_DIR}"
+export HOST_CALLING_DIR="${HOST_CALLING_DIR:=$(pwd)}"
 export HOST_CREDENTIALS_FILE="${HOST_CREDENTIALS_FILE:=$AWS_SHARED_CREDENTIALS_FILE}"
 export HOST_AWS_CONFIG_FILE="${HOST_AWS_CONFIG_FILE:=$AWS_CONFIG_FILE}"
 export HOST_DOCKER_SOCKET="${HOST_DOCKER_SOCKET:=/var/run/docker.sock}"
@@ -74,11 +74,12 @@ run () {
     -e HOST_UID=$CALLER_UID \
     -e HOST_GID=$CALLER_GID \
     -e HOST_DOCKER_GID=$DOCKER_SOCKET_GID \
-    -e REPO_DIR=/host$SCRIPT_DIR \
+    -e HOST_REPO_DIR \
+    -e HOST_CALLING_DIR \
     --hostname=lambdatization \
     --rm \
     --privileged \
-    cloudfuse-io/lambdatization:cli $HOST_DIRNAME "${@:2}"
+    cloudfuse-io/lambdatization:cli "${@:2}"
 }
 
 # if no argument is provided and no data is piped in, add the tty flag

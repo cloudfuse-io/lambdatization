@@ -5,7 +5,7 @@ remote_state {
     if_exists = "overwrite"
   }
   config = {
-    path = "../.terraform/state/${path_relative_to_include()}/terraform.tfstate"
+    path = "/host/${get_env("HOST_CALLING_DIR")}/.terraform/monitoring/${path_relative_to_include()}/terraform.tfstate"
   }
 }
 

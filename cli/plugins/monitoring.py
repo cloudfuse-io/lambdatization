@@ -14,7 +14,7 @@ import plugins.dremio as dremio
 import plugins.scaling as scaling
 import plugins.spark as spark
 import plugins.trino as trino
-from common import REPOROOT, TF_BACKEND_VALIDATORS, auto_app_fmt
+from common import REPOROOT, TF_BACKEND_VALIDATORS, auto_app_fmt, clean_modules
 from google.cloud import bigquery
 from google.oauth2 import service_account
 from invoke import Context, Exit, task
@@ -40,8 +40,10 @@ def login(c):
     c.run("gcloud auth application-default login --no-launch-browser")
 
 
-@task
-def init(c):
+@task(help={"clean": clean_modules.__doc__})
+def init(c, clean=False):
+    if clean:
+        clean_modules(MONITORING_TFDIR)
     c.run(
         f"terragrunt init --terragrunt-working-dir {MONITORING_MODULE_DIR}",
     )

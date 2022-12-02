@@ -3,7 +3,6 @@
 <h4 align="center">
 
 [![Engines](https://github.com/cloudfuse-io/lambdatization/actions/workflows/engines.yaml/badge.svg?branch=main)](https://github.com/cloudfuse-io/lambdatization/actions/workflows/engines.yaml)
-[![Style](https://github.com/cloudfuse-io/lambdatization/actions/workflows/style-check.yaml/badge.svg?branch=main)](https://github.com/cloudfuse-io/lambdatization/actions/workflows/style-check.yaml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 </h4>
@@ -34,23 +33,36 @@ environement. It is not strictly necessary, but simplifies the collaboration on
 the project. To set it up:
 
 - you must have Docker installed, it is the only dependency
-- clone this repository
-- `cd` into it
-- run `L12N_BUILD=1 ./l12n-shell`
+- clone this repository:
+  - `git clone https://github.com/cloudfuse-io/lambdatization`
+- add the l12n-shell to your path (optional)
+  - `sudo ln -s $(pwd)/lambdatization/l12n-shell /usr/local/bin/l12n-shell`
+- run `L12N_BUILD=1 l12n-shell`:
   - the `L12N_BUILD` environment variable indicates to the `l12n-shell` script
-    that it needs to build the image
-  - `./l12n-shell` looks for a `.env` file in the current directory to source
-    environment variables from (see configuration section below)
-  - the `./l12n-shell` without any argument runs an interactive bash terminal in
-    the CLI container
-  - `./l12n-shell cmd` and `echo "cmd" | ./l12n-shell` both run `cmd` in the
-    `l12n-shell`
+    that it needs to build the image.
+  - `l12n-shell` operates in the current directory to:
+    - look for a `.env` file to source configurations from (see configuration
+      section below).
+    - stores the terraform state if the [local][tf_local_backend_docs] backend
+      is used.
+  - the `l12n-shell` without any argument runs an interactive bash terminal in
+    the CLI container. Note that the `.env` file is loaded only once when the
+    `l12n-shell` is started.
+  - `12n-shell cmd` and `echo "cmd" | l12n-shell` both run `cmd` in the
+    `l12n-shell`.
 
-Note: the `l12n-shell` only works on amd64 for now.
+[tf_local_backend_docs]: https://developer.hashicorp.com/terraform/language/settings/backends/local
+
+Note:
+- `l12n-shell` only supports amd64 for now
+- it is actively tested on Linux only
+- if you are running multiples deployments with different `.env` files in
+  diffent directories, run `l12n-shell l12n init --clean` each time you switch
+  environments
 
 ### Configurations
 
-`./l12n-shell` can be configured through environement variables or a `.env` in
+`l12n-shell` can be configured through environement variables or a `.env` in
 the current directory:
 - `L12N_PLUGINS` is a comma seprated list of plugins to activate
 - `L12N_AWS_REGION` is the region where the stack should run
@@ -62,6 +74,8 @@ You can also provide the [usual][aws-cli-envvars] AWS variables:
 - `AWS_SECRET_ACCESS_KEY`
 
 [aws-cli-envvars]: https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html
+
+Note that environment variables will take precedence on the `.env` file
 
 ### The `l12n` CLI
 
