@@ -65,12 +65,12 @@ def auto_app_fmt(val: bool) -> str:
         return ""
 
 
-def list_modules(c: Context) -> List[str]:
+def list_modules(module_dir) -> List[str]:
     """List available Terragrunt modules"""
     return [
         mod
-        for mod in os.listdir(RUNTIME_TFDIR)
-        if os.path.isfile(f"{RUNTIME_TFDIR}/{mod}/terragrunt.hcl")
+        for mod in os.listdir(module_dir)
+        if os.path.isfile(f"{module_dir}/{mod}/terragrunt.hcl")
     ]
 
 
@@ -82,9 +82,9 @@ def active_plugins() -> Set[str]:
     return plugin_set
 
 
-def active_modules(c: Context) -> Set[str]:
+def active_modules(module_dir) -> Set[str]:
     """Terragrunt modules activated and core modules"""
-    return {*active_plugins().intersection(list_modules(c)), "core"}
+    return {*active_plugins().intersection(list_modules(module_dir)), "core"}
 
 
 def tf_version(c: Context):

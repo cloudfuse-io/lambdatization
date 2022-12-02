@@ -1,17 +1,6 @@
 variable "region_name" {}
 
-variable "images" {
-  type = list(string)
-}
-
-variable "placeholder_sizes" {
-  type = list(number)
-}
-
-locals {
-  # tflint-ignore: terraform_unused_declarations
-  validate_sizes = (length(var.placeholder_sizes) != length(var.images)) ? tobool("Placeholder size list and image name list must have the same size.") : true
-}
+variable "lambdacli_image" {}
 
 variable "bucket_arn" {}
 
@@ -26,13 +15,12 @@ provider "aws" {
   }
 }
 
-module "placeholder" {
+module "scheduler" {
   source = "../../common/lambda"
-  count  = length(var.placeholder_sizes)
 
-  function_base_name = "placeholder-${element(var.placeholder_sizes, count.index)}"
+  function_base_name = "scheduler"
   region_name        = var.region_name
-  docker_image       = element(var.images, count.index)
+  docker_image       = var.lambdacli_image
   memory_size        = 2048
   timeout            = 300
 
@@ -40,6 +28,6 @@ module "placeholder" {
   environment         = {}
 }
 
-output "lambda_names" {
-  value = join(",", module.placeholder.*.lambda_name)
+output "lambda_name" {
+  value = module.scheduler.lambda_name
 }

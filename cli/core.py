@@ -28,7 +28,9 @@ MODULE_HELP = {"module": "A specific terragrunt module on which to perform this 
 
 def active_include_dirs(c: Context) -> str:
     """The --include-dir arguments for modules activated and core modules"""
-    return " ".join([f"--terragrunt-include-dir={mod}" for mod in active_modules(c)])
+    return " ".join(
+        [f"--terragrunt-include-dir={mod}" for mod in active_modules(RUNTIME_TFDIR)]
+    )
 
 
 def docker_compose(file_path):
@@ -66,7 +68,7 @@ def docker_login(c):
 
 def init_module(c, module):
     """Manually run terraform init on a specific module"""
-    mods = active_modules(c)
+    mods = active_modules(RUNTIME_TFDIR)
     if module not in mods:
         raise Exit(f"Step {module} not part of the active modules {mods}")
     c.run(

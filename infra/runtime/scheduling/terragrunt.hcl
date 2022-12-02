@@ -18,13 +18,7 @@ locals {
 terraform {
   before_hook "deploy_images" {
     commands = ["apply"]
-    execute = ["/bin/bash", "-c", <<EOT
-l12n docker-login \
-                 build-images --step=scaling \
-                 push-images --step=scaling && \
-l12n print-image-vars --step=scaling --format=list > images.generated.tfvars
-EOT
-    ]
+    execute  = ["../build_and_print.sh", "cli"]
   }
 
   extra_arguments "image_vars" {
@@ -35,8 +29,7 @@ EOT
 }
 
 inputs = {
-  region_name       = local.region_name
-  images            = ["dummy-50", "dummy-100", "dummy-200", "dummy-400", "dummy-800"]
-  placeholder_sizes = [50, 100, 200, 400, 800]
-  bucket_arn        = dependency.core.outputs.bucket_arn
+  region_name     = local.region_name
+  lambdacli_image = ["dummy_overriden_by_before_hook"]
+  bucket_arn      = dependency.core.outputs.bucket_arn
 }

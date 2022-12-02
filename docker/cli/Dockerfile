@@ -103,7 +103,7 @@ RUN pip3 install \
     awslambdaric==2.0.4
 
 ENTRYPOINT [ "python3", "-m", "awslambdaric" ]
-CMD [ "docker/lambda-handler.handler" ]
+CMD [ "docker.lambda-handler.handler" ]
 
 
 FROM cli-base as cli
