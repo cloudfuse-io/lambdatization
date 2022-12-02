@@ -94,14 +94,11 @@ def init():
     try:
         wait_for_socket("server", 9000)
     except:
+        logging.error(f"clickhouse-server returncode: {srv_proc.wait(60)}")
         with open("/tmp/var/log/clickhouse-server/clickhouse-server.log", "r") as f:
             logging.info("/tmp/var/log/clickhouse-server/clickhouse-server.log")
             logging.info(f.read())
         raise
-
-
-def query(sql: str) -> str:
-    subprocess.run(["clickhouse-client", "-q", sql])
 
 
 def handler(event, context):
