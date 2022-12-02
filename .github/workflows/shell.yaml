@@ -23,7 +23,7 @@ jobs:
           mkdir envs
           cd envs
           echo "L12N_VAR=myvar" > .env
-          ln -s shell-link $(pwd)/../l12n-shell
+          ln -s $(pwd)/../l12n-shell shell-link
       - name: Build CLI
         run: |
           cd envs
