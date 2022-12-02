@@ -43,8 +43,9 @@ jobs:
           cd envs
           result=$(echo 'echo $L12N_VAR' | l12n-shell )
           [[ "$result" = "myvar" ]]
-      - name: Recursive l12n-shell
-        shell: l12n-shell < {0}
+      - name: Check l12n
         run: |
-          result=$(echo "echo embedded" | ./l12n-shell )
-          [[ "$result" = "embedded" ]]
+          l12n-shell l12n
+      - name: Recursive l12n-shell
+        run: |
+          l12n-shell ../../l12n-shell env | grep L12N_VAR=myvar
