@@ -88,7 +88,7 @@ FROM cli-base as lambda
 # context should be repo root
 COPY . /lambdatization
 
-ARG FUNCTION_DIR=/lambdatization/cli
+ARG FUNCTION_DIR=/lambdatization/
 
 # Install aws-lambda-cpp build dependencies
 RUN apt-get update && \
@@ -99,12 +99,8 @@ RUN apt-get update && \
     unzip \
     libcurl4-openssl-dev
 
-RUN mkdir -p ${FUNCTION_DIR}
-
-# Install the runtime interface client and lambda requirements
 RUN pip3 install \
-    --target ${FUNCTION_DIR} \
-    awslambdaric
+    awslambdaric==2.0.4
 
 ENTRYPOINT [ "python3", "-m", "awslambdaric" ]
 CMD [ "docker/lambda-handler.handler" ]
