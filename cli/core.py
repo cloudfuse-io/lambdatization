@@ -77,7 +77,7 @@ def init_module(c, module):
 def init(c, module="", clean=False):
     """Manually run terraform init on one or all modules"""
     if clean:
-        clean_modules()
+        clean_modules(RUNTIME_TFDIR)
     if module == "":
         c.run(
             f"terragrunt run-all init {active_include_dirs(c)} --terragrunt-working-dir {RUNTIME_TFDIR}",

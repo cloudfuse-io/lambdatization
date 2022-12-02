@@ -133,18 +133,18 @@ def aws(service=None):
         return boto3.client(service, region_name=AWS_REGION(), config=config)
 
 
-def clean_modules():
+def clean_modules(mod_dir):
     """Delete Terragrunt and Terragrunt cache files. This does not impact the Terraform state"""
-    for path in os.listdir(RUNTIME_TFDIR):
-        if os.path.isdir(f"{RUNTIME_TFDIR}/{path}"):
+    for path in os.listdir(mod_dir):
+        if os.path.isdir(f"{mod_dir}/{path}"):
             # clean terraform cache
-            tf_cache = f"{RUNTIME_TFDIR}/{path}/.terraform"
+            tf_cache = f"{mod_dir}/{path}/.terraform"
             if os.path.isdir(tf_cache):
                 print(f"deleting {tf_cache}")
                 shutil.rmtree(tf_cache)
             # remove generated files
-            for sub_path in os.listdir(f"{RUNTIME_TFDIR}/{path}"):
+            for sub_path in os.listdir(f"{mod_dir}/{path}"):
                 if sub_path.endswith(".generated.tf"):
-                    generated_file = f"{RUNTIME_TFDIR}/{path}/{sub_path}"
+                    generated_file = f"{mod_dir}/{path}/{sub_path}"
                     print(f"deleting {generated_file}")
                     os.remove(generated_file)
