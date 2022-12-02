@@ -1,0 +1,50 @@
+name: l12n-shell tests
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types:
+      - opened
+      - synchronize
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  tests:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Create env dir
+        run: |
+          mkdir envs
+          cd envs
+          echo "L12N_VAR=myvar" > .env
+          ln -s shell-link $(pwd)/../l12n-shell
+      - name: Build CLI
+        run: |
+          cd envs
+          L12N_BUILD=1 ./shell-link
+      - name: Command as argument
+        run: |
+          cd envs
+          result=$(./shell-link echo hello)
+          [[ "$result" = "hello" ]]
+      - name: Command piped
+        run: |
+          cd envs
+          result=$(echo "echo world" | ./shell-link )
+          [[ "$result" = "world" ]]
+      - name: Check env
+        run: |
+          cd envs
+          result=$(echo 'echo $L12N_VAR' | ./shell-link )
+          [[ "$L12N_VAR" = "myvar" ]]
+      - name: Embedded l12n
+        shell: ./l12n-shell < {0}
+        run: |
+          result=$(echo "echo embedded" | ./l12n-shell )
+          [[ "$result" = "embedded" ]]
