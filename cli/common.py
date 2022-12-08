@@ -42,7 +42,7 @@ DOCKERDIR = f"{REPOROOT}/docker"
 
 
 def conf(validators=[]) -> dict:
-    """Load variables from both the environment and the .env file if:
+    """Load variables from the environment if:
     - their key is prefixed with either L12N_, TF_ or AWS_"""
     dc = dynaconf.Dynaconf(
         # dotenv file is loaded by l12n-shell
@@ -94,7 +94,7 @@ def tf_version(c: Context):
 
 
 def terraform_output(c: Context, module, key) -> str:
-    cmd = f"terraform -chdir={RUNTIME_TFDIR}/{module} output --raw {key}"
+    cmd = f"terragrunt output --terragrunt-working-dir {RUNTIME_TFDIR}/{module} --raw {key}"
     try:
         output = c.run(
             cmd,
