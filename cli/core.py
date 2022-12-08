@@ -8,7 +8,6 @@ from common import (
     AWS_REGION_VALIDATOR,
     DOCKERDIR,
     RUNTIME_TFDIR,
-    DOCKERDIR,
     TF_BACKEND_VALIDATORS,
     active_modules,
     auto_app_fmt,
