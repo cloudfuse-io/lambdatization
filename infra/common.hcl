@@ -7,7 +7,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 3.0"
+      version = "~> 4.45"
     }
     google = {
       source = "hashicorp/google"
@@ -28,6 +28,6 @@ locals {
             "fmt",
         ]
 
-        data_dir = "/host${get_env("HOST_CALLING_DIR")}/.terraform/data/"
+        data_dir = "${get_env("CALLING_DIR")}/.terraform/data/"
     }
 }

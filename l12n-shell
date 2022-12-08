@@ -20,8 +20,8 @@ DOCKER_DIR=$SCRIPT_DIR/docker/cli
 AWS_SHARED_CREDENTIALS_FILE="${AWS_SHARED_CREDENTIALS_FILE:=$HOME/.aws/credentials}"
 AWS_CONFIG_FILE="${AWS_CONFIG_FILE:=$HOME/.aws/config}"
 # Host configurations used inside l12n-shell
-export HOST_REPO_DIR="${HOST_REPO_DIR:=$SCRIPT_DIR}"
-export HOST_CALLING_DIR="${HOST_CALLING_DIR:=$(pwd)}"
+export REPO_DIR="${REPO_DIR:=$SCRIPT_DIR}"
+export CALLING_DIR="${CALLING_DIR:=$(pwd)}"
 export HOST_CREDENTIALS_FILE="${HOST_CREDENTIALS_FILE:=$AWS_SHARED_CREDENTIALS_FILE}"
 export HOST_AWS_CONFIG_FILE="${HOST_AWS_CONFIG_FILE:=$AWS_CONFIG_FILE}"
 export HOST_DOCKER_SOCKET="${HOST_DOCKER_SOCKET:=/var/run/docker.sock}"
@@ -34,7 +34,8 @@ build () {
   docker buildx build \
     -t cloudfuse-io/lambdatization:cli \
     --target cli \
-    $DOCKER_DIR \
+    -f $DOCKER_DIR/Dockerfile \
+    $SCRIPT_DIR \
   1>&2 \
   || exit $? # call exit to fail CLI if build fails
 }
@@ -75,8 +76,8 @@ run () {
     -e HOST_UID=$CALLER_UID \
     -e HOST_GID=$CALLER_GID \
     -e HOST_DOCKER_GID=$DOCKER_SOCKET_GID \
-    -e HOST_REPO_DIR \
-    -e HOST_CALLING_DIR \
+    -e REPO_DIR=/host$REPO_DIR \
+    -e CALLING_DIR=/host$CALLING_DIR \
     --hostname=lambdatization \
     --rm \
     --privileged \

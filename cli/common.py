@@ -35,7 +35,7 @@ AWS_REGION_VALIDATOR = dynaconf.Validator(
 )
 
 # Path aliases
-REPOROOT = f"/host/{os.environ['HOST_REPO_DIR']}"
+REPOROOT = os.environ["REPO_DIR"]
 CURRENTDIR = os.getcwd()
 RUNTIME_TFDIR = f"{REPOROOT}/infra/runtime"
 DOCKERDIR = f"{REPOROOT}/docker"

@@ -76,13 +76,13 @@ def init_module(c, module):
 
 
 @task(help={**MODULE_HELP, "clean": clean_modules.__doc__})
-def init(c, module="", clean=False):
+def init(c, module="", clean=False, flags=""):
     """Manually run terraform init on one or all modules"""
     if clean:
         clean_modules(RUNTIME_TFDIR)
     if module == "":
         c.run(
-            f"terragrunt run-all init {active_include_dirs(c)} --terragrunt-working-dir {RUNTIME_TFDIR}",
+            f"terragrunt run-all init {active_include_dirs(c)} --terragrunt-working-dir {RUNTIME_TFDIR} {flags}",
         )
     else:
         init_module(c, module)

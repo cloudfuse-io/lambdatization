@@ -10,16 +10,12 @@ services:
       - ALL
     read_only: true
     user: nobody
-    entrypoint:
-      # - bash
-      - python3
-      - lambda-handler.py
     environment:
       - AWS_ACCESS_KEY_ID=$LAMBDA_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY=$LAMBDA_SECRET_ACCESS_KEY
       - AWS_SESSION_TOKEN=$LAMBDA_SESSION_TOKEN
-      - AWS_REGION=$L12N_AWS_REGION
-      - DATA_BUCKET_NAME
+      - L12N_AWS_REGION
+      - L12N_PLUGINS=lambdaric
     ulimits:
       nofile:
         soft: 1024

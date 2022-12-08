@@ -19,6 +19,7 @@ provider "aws" {
 resource "aws_ecr_repository" "main" {
   name                 = "${module.env.module_name}-${module.env.stage}"
   image_tag_mutability = "MUTABLE"
+  force_delete         = true
 
   image_scanning_configuration {
     scan_on_push = false
@@ -38,6 +39,10 @@ resource "aws_s3_object_copy" "nyc_taxi" {
   bucket = aws_s3_bucket.data.id
   key    = "nyc-taxi/2019/0${count.index + 1}/data.parquet"
   source = "ursa-labs-taxi-data/2019/0${count.index + 1}/data.parquet"
+
+  lifecycle { 
+      ignore_changes = [tags_all]
+  }
 }
 
 output "repository_url" {

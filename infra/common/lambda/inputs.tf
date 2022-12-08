@@ -14,6 +14,10 @@ variable "docker_image" {}
 
 variable "memory_size" {}
 
+variable "ephemeral_storage" {
+  default = 512
+}
+
 variable "timeout" {}
 
 variable "additional_policies" {

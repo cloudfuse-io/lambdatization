@@ -41,11 +41,11 @@ def login(c):
 
 
 @task(help={"clean": clean_modules.__doc__})
-def init(c, clean=False):
+def init(c, clean=False, flags=""):
     if clean:
         clean_modules(MONITORING_TFDIR)
     c.run(
-        f"terragrunt init --terragrunt-working-dir {MONITORING_MODULE_DIR}",
+        f"terragrunt init --terragrunt-working-dir {MONITORING_MODULE_DIR} {flags}",
     )
 
 

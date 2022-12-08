@@ -22,10 +22,12 @@ module "scheduler" {
   region_name        = var.region_name
   docker_image       = var.lambdacli_image
   memory_size        = 2048
+  ephemeral_storage  = 2048
   timeout            = 300
 
   additional_policies = []
-  environment         = {}
+
+  environment = {}
 }
 
 output "lambda_name" {

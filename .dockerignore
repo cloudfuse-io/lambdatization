@@ -1,0 +1,5 @@
+**/.terraform
+*.generated.tf
+*.generated.tfvars
+__pycache__
+*.pyc 

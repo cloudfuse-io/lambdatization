@@ -1,7 +1,7 @@
 FROM python:3.10.3-slim as cli-base
 
-ARG TERRAFORM_VERSION=1.1.6
-ARG TERRAGRUNT_VERSION=0.36.0
+ARG TERRAFORM_VERSION=1.3.6
+ARG TERRAGRUNT_VERSION=0.42.3
 
 # Install base tools
 RUN apt-get update \
@@ -76,38 +76,20 @@ RUN mkdir /home/$UNAME/.config \
     && ln -s /etc/persistent-configs/bash_history /home/$UNAME/.bash_history
 
 # Install Python dependencies
-RUN pip install \
-        boto3==1.24.27 \
-        dynaconf==3.1.9 \
-        invoke==1.7.1 \
-        requests==2.28.1 \
-        google-cloud-bigquery==3.3.5
+COPY cli/requirements.txt /requirements.txt
+RUN pip install -r /requirements.txt
 
 FROM cli-base as lambda
 
-# context should be repo root
-COPY . /lambdatization
+COPY . /repo
+ENV REPO_DIR=/repo
+ENV CALLING_DIR=/tmp/
 
-ARG FUNCTION_DIR=/lambdatization/
-
-# Install aws-lambda-cpp build dependencies
-RUN apt-get update && \
-    apt-get -y install\
-    g++ \
-    make \
-    cmake \
-    unzip \
-    libcurl4-openssl-dev
-
-RUN pip3 install \
-    awslambdaric==2.0.4
-
-ENTRYPOINT [ "python3", "-m", "awslambdaric" ]
-CMD [ "docker.lambda-handler.handler" ]
+ENTRYPOINT [ "/repo/l12n", "lambdaric.run-bootstrap" ]
 
 
 FROM cli-base as cli
 
-COPY entrypoint.sh /entrypoint.sh
+COPY docker/cli/entrypoint.sh /entrypoint.sh
 
 ENTRYPOINT [ "/entrypoint.sh" ]
