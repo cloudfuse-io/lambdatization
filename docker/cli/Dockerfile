@@ -53,32 +53,35 @@ RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.c
         python3-crcmod \
         google-cloud-sdk
 
-ARG UNAME=cli
-
-# Configure the host caller user/group and host docker group in the image
-RUN groupadd cli \  
-    && useradd --create-home -g cli $UNAME
 
 ENV CONTAINER_USER=cli
 ENV CONTAINER_GROUP=cli
 
-# Setup persistent folders for configs
-RUN owneddir() { mkdir -p $1 && chown $UNAME:$UNAME $1 ; } \
-    && owneddir /etc/persistent-configs \
-    && owneddir /etc/persistent-configs/gcloud \
-    && owneddir /etc/persistent-configs/docker
+# Configure the host caller user/group and host docker group in the image
+RUN groupadd $CONTAINER_GROUP \  
+    && useradd --create-home -g $CONTAINER_GROUP $CONTAINER_USER \
+    && mkdir -p /mnt/persistent-configs \
+    && chown cli:cli /mnt/persistent-configs
 
+USER cli
 
-RUN mkdir /home/$UNAME/.config \
-    && touch /etc/persistent-configs/bash_history \
-    && ln -s /etc/persistent-configs/docker /home/$UNAME/.docker \
-    && ln -s /etc/persistent-configs/gcloud /home/$UNAME/.config/gcloud \
-    && ln -s /etc/persistent-configs/bash_history /home/$UNAME/.bash_history
+# Link the pieces we want to persist on the volume
+# Note: Create target dirs to ensure the symlink type is "directory"
+RUN mkdir /home/$CONTAINER_USER/.config \
+    && mkdir /mnt/persistent-configs/docker \
+    && ln -s /mnt/persistent-configs/docker /home/$CONTAINER_USER/.docker \
+    && mkdir /mnt/persistent-configs/config-gcloud \
+    && ln -s /mnt/persistent-configs/config-gcloud /home/$CONTAINER_USER/.config/gcloud \
+    && ln -s /mnt/persistent-configs/bash_history /home/$CONTAINER_USER/.bash_history
 
-# Install Python dependencies
+# Install Python dependencies as root, otherwise they might not be available for
+# other users (e.g the user used by AWS Lambda)
+USER root
 COPY cli/requirements.txt /requirements.txt
 RUN pip install -r /requirements.txt
 
+
+## The CLI image deployed by the lambdacli module
 FROM cli-base as lambda
 
 COPY . /repo
@@ -89,6 +92,7 @@ ENV L12N_PLUGINS=lambdacli
 ENTRYPOINT [ "/repo/l12n", "lambdacli.run-bootstrap" ]
 
 
+## The CLI image used by the l12n-shell
 FROM cli-base as cli
 
 COPY docker/cli/entrypoint.sh /entrypoint.sh

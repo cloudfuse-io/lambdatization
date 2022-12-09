@@ -1,8 +1,4 @@
-"""Deployment of the L12N cli image in Lambda"""
-
-# Local Terraform states are not added to the image, so you should use a remote
-# backend from which the function can fetch the outputs for any command that
-# requires them.
+"""Deployment of the L12N CLI image in Lambda"""
 
 import base64
 import io
@@ -33,7 +29,11 @@ def run_bootstrap(c):
 
 @task(autoprint=True)
 def invoke(c, command, json_output=False):
-    """Invoke the AWS Lambda function with the CLI image"""
+    """Invoke the AWS Lambda function with the CLI image
+
+    Commands that need to connect to a Docker server will fail. Local Terraform
+    states are not added to the image, so use a remote backend to enable
+    commands that use Terraform outputs."""
     lambda_name = terraform_output(c, "lambdacli", "lambda_name")
     cmd_b64 = base64.b64encode(command.encode()).decode()
     lambda_res = aws("lambda").invoke(
@@ -50,7 +50,7 @@ def invoke(c, command, json_output=False):
 def handler(event, context):
     """Handler for the AWS Lambda function running the CLI image"""
 
-    # Some gymnastic is required to have everything in the writable location /tmp
+    # Some gymnastic is required to have the repo in the writable location /tmp
     os.system("rm -rf /tmp/*")
     os.system(f"cp -r {READ_ONLY_REPO_DIR} /tmp")
     os.environ["REPO_DIR"] = f"/tmp{READ_ONLY_REPO_DIR}"
