@@ -35,14 +35,14 @@ AWS_REGION_VALIDATOR = dynaconf.Validator(
 )
 
 # Path aliases
-REPOROOT = f"/host/{os.environ['HOST_REPO_DIR']}"
+REPOROOT = os.environ["REPO_DIR"]
 CURRENTDIR = os.getcwd()
 RUNTIME_TFDIR = f"{REPOROOT}/infra/runtime"
 DOCKERDIR = f"{REPOROOT}/docker"
 
 
 def conf(validators=[]) -> dict:
-    """Load variables from both the environment and the .env file if:
+    """Load variables from the environment if:
     - their key is prefixed with either L12N_, TF_ or AWS_"""
     dc = dynaconf.Dynaconf(
         # dotenv file is loaded by l12n-shell
@@ -65,12 +65,12 @@ def auto_app_fmt(val: bool) -> str:
         return ""
 
 
-def list_modules(c: Context) -> List[str]:
+def list_modules(module_dir) -> List[str]:
     """List available Terragrunt modules"""
     return [
         mod
-        for mod in os.listdir(RUNTIME_TFDIR)
-        if os.path.isfile(f"{RUNTIME_TFDIR}/{mod}/terragrunt.hcl")
+        for mod in os.listdir(module_dir)
+        if os.path.isfile(f"{module_dir}/{mod}/terragrunt.hcl")
     ]
 
 
@@ -82,9 +82,9 @@ def active_plugins() -> Set[str]:
     return plugin_set
 
 
-def active_modules(c: Context) -> Set[str]:
+def active_modules(module_dir) -> Set[str]:
     """Terragrunt modules activated and core modules"""
-    return {*active_plugins().intersection(list_modules(c)), "core"}
+    return {*active_plugins().intersection(list_modules(module_dir)), "core"}
 
 
 def tf_version(c: Context):
@@ -94,7 +94,7 @@ def tf_version(c: Context):
 
 
 def terraform_output(c: Context, module, key) -> str:
-    cmd = f"terraform -chdir={RUNTIME_TFDIR}/{module} output --raw {key}"
+    cmd = f"terragrunt output --terragrunt-working-dir {RUNTIME_TFDIR}/{module} --raw {key}"
     try:
         output = c.run(
             cmd,
@@ -148,3 +148,19 @@ def clean_modules(mod_dir):
                     generated_file = f"{mod_dir}/{path}/{sub_path}"
                     print(f"deleting {generated_file}")
                     os.remove(generated_file)
+
+
+def format_lambda_output(json_response: str, json_output: bool, **context):
+    response = json.loads(json_response)
+    # enrich the event with the external invoke duration
+    for key, value in context.items():
+        response.setdefault("context", {})
+        response["context"][key] = value
+
+    if json_output:
+        return json.dumps(response)
+    else:
+        output = ""
+        for key, value in sorted(response.items()):
+            output += f"{key.upper()}\n{value}\n\n"
+        return output

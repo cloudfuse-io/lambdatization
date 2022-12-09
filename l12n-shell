@@ -9,31 +9,37 @@
 # - L12N_BUILD: set the path of the lambdatization repo to build the image
 # - L12N_TRACE: more verbose error messages when something unexpected happens
 
-# The CLI runs Docker commands from Docker, so it needs to have access to the
-# Docker socket. The calling user id and group id as well as the docker group id
-# are propagated to the image at build time. This enables the image to be runned
-# using the host user, but a rebuild is required when changing the calling user.
-
 SCRIPT_DIR=$( cd -- "$( dirname -- "$(realpath ${BASH_SOURCE[0]})")" &> /dev/null && pwd )
 DOCKER_DIR=$SCRIPT_DIR/docker/cli
-# Take the provided credentials file location into account
+
+# Forward the AWS config files from the host to the container
 AWS_SHARED_CREDENTIALS_FILE="${AWS_SHARED_CREDENTIALS_FILE:=$HOME/.aws/credentials}"
 AWS_CONFIG_FILE="${AWS_CONFIG_FILE:=$HOME/.aws/config}"
-# Host configurations used inside l12n-shell
-export HOST_REPO_DIR="${HOST_REPO_DIR:=$SCRIPT_DIR}"
-export HOST_CALLING_DIR="${HOST_CALLING_DIR:=$(pwd)}"
 export HOST_CREDENTIALS_FILE="${HOST_CREDENTIALS_FILE:=$AWS_SHARED_CREDENTIALS_FILE}"
 export HOST_AWS_CONFIG_FILE="${HOST_AWS_CONFIG_FILE:=$AWS_CONFIG_FILE}"
+
+# REPO_DIR is the root directory of the repository
+export REPO_DIR="${REPO_DIR:=/host$SCRIPT_DIR}"
+# CALLING_DIR is the current working directory when calling this script
+export CALLING_DIR="${CALLING_DIR:=/host$(pwd)}"
+
+# The CLI runs `docker` commands from the container, so it needs to have access
+# to the host Docker socket.
 export HOST_DOCKER_SOCKET="${HOST_DOCKER_SOCKET:=/var/run/docker.sock}"
 
-export CALLER_UID=$(id -u)
-export CALLER_GID=$(id -g)
-export DOCKER_SOCKET_GID=$(stat -c '%g' ${HOST_DOCKER_SOCKET})
+# The calling user id and group id (as well as the Docker group id) are
+# propagated into the container so that bindfs can properly map read/write
+# permissions on bind mounted files.
+export HOST_UID="${HOST_UID:=$(id -u)}"
+export HOST_GID="${HOST_GID:=$(id -g)}"
+export HOST_DOCKER_GID="${HOST_DOCKER_GID:=$(stat -c '%g' ${HOST_DOCKER_SOCKET})}"
 
 build () {
-  docker build \
+  docker buildx build \
     -t cloudfuse-io/lambdatization:cli \
-    $DOCKER_DIR \
+    --target cli \
+    -f $DOCKER_DIR/Dockerfile \
+    $SCRIPT_DIR \
   1>&2 \
   || exit $? # call exit to fail CLI if build fails
 }
@@ -62,7 +68,7 @@ run () {
     $(echo "$1") \
     --mount type=bind,source=$HOST_DOCKER_SOCKET,target=/var/run/docker.sock \
     --mount type=bind,source=/,target=/mnt/host \
-    --mount source=l12n-cli-persistent-configs,target=/etc/persistent-configs \
+    --mount source=l12n-cli-persistent-configs,target=/mnt/persistent-configs \
     --env-file <(cat .env 2>/dev/null && true) \
     -e AWS_PROFILE \
     $([[ -f "$AWS_SHARED_CREDENTIALS_FILE" ]] && echo "-e AWS_SHARED_CREDENTIALS_FILE=/host$HOST_CREDENTIALS_FILE") \
@@ -71,11 +77,9 @@ run () {
     -e AWS_SECRET_ACCESS_KEY \
     --env-file <(env | grep L12N_) \
     --env-file <(env | grep HOST_) \
-    -e HOST_UID=$CALLER_UID \
-    -e HOST_GID=$CALLER_GID \
-    -e HOST_DOCKER_GID=$DOCKER_SOCKET_GID \
-    -e HOST_REPO_DIR \
-    -e HOST_CALLING_DIR \
+    --env-file <(env | grep TF_) \
+    -e REPO_DIR \
+    -e CALLING_DIR \
     --hostname=lambdatization \
     --rm \
     --privileged \

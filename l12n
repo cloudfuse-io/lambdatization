@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
 
-python -u /host$HOST_REPO_DIR/cli/main.py "$@"
+python -u $REPO_DIR/cli/main.py "$@"

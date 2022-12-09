@@ -1,7 +1,7 @@
 # global configuration
 
 module "env" {
-  source = "../../common/env"
+  source = "../env"
 }
 
 variable "region_name" {}
@@ -13,6 +13,10 @@ variable "function_base_name" {}
 variable "docker_image" {}
 
 variable "memory_size" {}
+
+variable "ephemeral_storage" {
+  default = 512
+}
 
 variable "timeout" {}
 

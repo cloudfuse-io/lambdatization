@@ -13,6 +13,7 @@ from common import (
     auto_app_fmt,
     aws,
     clean_modules,
+    format_lambda_output,
     terraform_output,
 )
 from invoke import Context, Exit, task
@@ -27,7 +28,9 @@ MODULE_HELP = {"module": "A specific terragrunt module on which to perform this 
 
 def active_include_dirs(c: Context) -> str:
     """The --include-dir arguments for modules activated and core modules"""
-    return " ".join([f"--terragrunt-include-dir={mod}" for mod in active_modules(c)])
+    return " ".join(
+        [f"--terragrunt-include-dir={mod}" for mod in active_modules(RUNTIME_TFDIR)]
+    )
 
 
 def docker_compose(file_path):
@@ -65,7 +68,7 @@ def docker_login(c):
 
 def init_module(c, module):
     """Manually run terraform init on a specific module"""
-    mods = active_modules(c)
+    mods = active_modules(RUNTIME_TFDIR)
     if module not in mods:
         raise Exit(f"Step {module} not part of the active modules {mods}")
     c.run(
@@ -74,13 +77,13 @@ def init_module(c, module):
 
 
 @task(help={**MODULE_HELP, "clean": clean_modules.__doc__})
-def init(c, module="", clean=False):
+def init(c, module="", clean=False, flags=""):
     """Manually run terraform init on one or all modules"""
     if clean:
         clean_modules(RUNTIME_TFDIR)
     if module == "":
         c.run(
-            f"terragrunt run-all init {active_include_dirs(c)} --terragrunt-working-dir {RUNTIME_TFDIR}",
+            f"terragrunt run-all init {active_include_dirs(c)} --terragrunt-working-dir {RUNTIME_TFDIR} {flags}",
         )
     else:
         init_module(c, module)
@@ -224,23 +227,6 @@ QUERY_HELP = {
 }
 
 
-def format_lambda_output(
-    json_response: str, json_output: bool, external_duration_sec: float, engine: str
-):
-    response = json.loads(json_response)
-    # enrich the event with the external invoke duration
-    response.setdefault("context", {})
-    response["context"]["external_duration_sec"] = external_duration_sec
-    response["context"]["engine"] = engine
-    if json_output:
-        return json.dumps(response)
-    else:
-        output = ""
-        for key in ["parsed_queries", "context", "resp", "logs"]:
-            output += f"{key.upper()}\n{response.get(key, '')}\n\n"
-        return output
-
-
 @task(help=QUERY_HELP, autoprint=True)
 def run_lambda(c, engine, query, json_output=False):
     """Run ad-hoc SQL commands
@@ -255,12 +241,15 @@ def run_lambda(c, engine, query, json_output=False):
         Payload=json.dumps({"query": query_b64}).encode(),
         InvocationType="RequestResponse",
     )
-    external_duration_sec = time.time() - start_time
+    ext_dur = time.time() - start_time
     resp_payload = lambda_res["Payload"].read().decode()
     if "FunctionError" in lambda_res:
         raise Exit(message=resp_payload, code=1)
     return format_lambda_output(
-        resp_payload, json_output, external_duration_sec, engine
+        resp_payload,
+        json_output,
+        external_duration_sec=ext_dur,
+        engine=engine,
     )
 
 

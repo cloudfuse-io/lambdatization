@@ -4,7 +4,10 @@ resource "aws_lambda_function" "lambda" {
   function_name = "${module.env.module_name}-${var.function_base_name}-${module.env.stage}"
   role          = aws_iam_role.lambda_role.arn
   memory_size   = var.memory_size
-  timeout       = var.timeout
+  ephemeral_storage {
+    size = var.ephemeral_storage
+  }
+  timeout = var.timeout
 
   environment {
     variables = merge(
