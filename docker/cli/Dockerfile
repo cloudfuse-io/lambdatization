@@ -83,7 +83,7 @@ FROM cli-base as lambda
 
 COPY . /repo
 ENV REPO_DIR=/repo
-ENV CALLING_DIR=/tmp/
+ENV CALLING_DIR=/tmp
 ENV L12N_PLUGINS=lambdacli
 
 ENTRYPOINT [ "/repo/l12n", "lambdacli.run-bootstrap" ]

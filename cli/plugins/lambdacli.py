@@ -13,7 +13,7 @@ import subprocess
 
 import awslambdaric.bootstrap
 import dotenv
-from common import aws, terraform_output
+from common import aws, format_lambda_output, terraform_output
 from invoke import Exit, task
 
 logging.getLogger().setLevel(logging.INFO)
@@ -32,7 +32,7 @@ def run_bootstrap(c):
 
 
 @task(autoprint=True)
-def invoke(c, command):
+def invoke(c, command, json_output=False):
     """Invoke the AWS Lambda function with the CLI image"""
     lambda_name = terraform_output(c, "lambdacli", "lambda_name")
     cmd_b64 = base64.b64encode(command.encode()).decode()
@@ -44,7 +44,7 @@ def invoke(c, command):
     resp_payload = lambda_res["Payload"].read().decode()
     if "FunctionError" in lambda_res:
         raise Exit(message=resp_payload, code=1)
-    return resp_payload
+    return format_lambda_output(resp_payload, json_output)
 
 
 def handler(event, context):

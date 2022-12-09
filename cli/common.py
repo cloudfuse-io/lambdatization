@@ -150,18 +150,17 @@ def clean_modules(mod_dir):
                     os.remove(generated_file)
 
 
-def format_lambda_output(
-    json_response: str, json_output: bool, external_duration_sec: float, engine: str
-):
+def format_lambda_output(json_response: str, json_output: bool, **context):
     response = json.loads(json_response)
     # enrich the event with the external invoke duration
-    response.setdefault("context", {})
-    response["context"]["external_duration_sec"] = external_duration_sec
-    response["context"]["engine"] = engine
+    for key, value in context.items():
+        response.setdefault("context", {})
+        response["context"][key] = value
+
     if json_output:
         return json.dumps(response)
     else:
         output = ""
-        for key in ["parsed_queries", "context", "resp", "logs"]:
-            output += f"{key.upper()}\n{response.get(key, '')}\n\n"
+        for key, value in sorted(response.items()):
+            output += f"{key.upper()}\n{value}\n\n"
         return output

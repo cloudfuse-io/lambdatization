@@ -241,12 +241,15 @@ def run_lambda(c, engine, query, json_output=False):
         Payload=json.dumps({"query": query_b64}).encode(),
         InvocationType="RequestResponse",
     )
-    external_duration_sec = time.time() - start_time
+    ext_dur = time.time() - start_time
     resp_payload = lambda_res["Payload"].read().decode()
     if "FunctionError" in lambda_res:
         raise Exit(message=resp_payload, code=1)
     return format_lambda_output(
-        resp_payload, json_output, external_duration_sec, engine
+        resp_payload,
+        json_output,
+        external_duration_sec=ext_dur,
+        engine=engine,
     )
 
 
