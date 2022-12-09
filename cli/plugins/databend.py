@@ -1,4 +1,4 @@
-"""Dremio on AWS Lambda"""
+"""Databend on AWS Lambda"""
 
 import core
 from invoke import task

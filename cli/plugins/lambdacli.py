@@ -1,16 +1,20 @@
 """Deployment of the L12N cli image in Lambda"""
 
+# Local Terraform states are not added to the image, so you should use a remote
+# backend from which the function can fetch the outputs for any command that
+# requires them.
+
 import base64
+import io
 import json
 import logging
 import os
 import subprocess
-import io
 
 import awslambdaric.bootstrap
+import dotenv
 from common import aws, terraform_output
 from invoke import Exit, task
-import dotenv
 
 logging.getLogger().setLevel(logging.INFO)
 
