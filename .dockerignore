@@ -2,4 +2,5 @@
 *.generated.tf
 *.generated.tfvars
 __pycache__
-*.pyc 
+*.pyc
+.env

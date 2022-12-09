@@ -32,4 +32,6 @@ inputs = {
   region_name     = local.region_name
   lambdacli_image = ["dummy_overriden_by_before_hook"]
   bucket_arn      = dependency.core.outputs.bucket_arn
+  # Remove AWS_ vars as creds are provided through role in AWS Lambda
+  env_file = run_cmd("--terragrunt-quiet", "bash", "-c", "cat ${get_env("CALLING_DIR")}/.env | sed '/^AWS_/d'")
 }

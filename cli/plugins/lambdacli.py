@@ -1,12 +1,16 @@
+"""Deployment of the L12N cli image in Lambda"""
+
 import base64
 import json
 import logging
 import os
 import subprocess
+import io
 
 import awslambdaric.bootstrap
 from common import aws, terraform_output
 from invoke import Exit, task
+import dotenv
 
 logging.getLogger().setLevel(logging.INFO)
 
@@ -18,14 +22,15 @@ def run_bootstrap(c):
     """Call this as the lambda entrypoint"""
     awslambdaric.bootstrap.run(
         f"{READ_ONLY_REPO_DIR}/cli",
-        "plugins.lambdaric.handler",
+        "plugins.lambdacli.handler",
         os.getenv("AWS_LAMBDA_RUNTIME_API"),
     )
 
 
 @task(autoprint=True)
 def invoke(c, command):
-    lambda_name = terraform_output(c, "scheduling", "lambda_name")
+    """Invoke the AWS Lambda function with the CLI image"""
+    lambda_name = terraform_output(c, "lambdacli", "lambda_name")
     cmd_b64 = base64.b64encode(command.encode()).decode()
     lambda_res = aws("lambda").invoke(
         FunctionName=lambda_name,
@@ -39,13 +44,20 @@ def invoke(c, command):
 
 
 def handler(event, context):
-    """AWS Lambda handler"""
+    """Handler for the AWS Lambda function running the CLI image"""
 
     # Some gymnastic is required to have everything in the writable location /tmp
     os.system("rm -rf /tmp/*")
     os.system(f"cp -r {READ_ONLY_REPO_DIR} /tmp")
     os.environ["REPO_DIR"] = f"/tmp{READ_ONLY_REPO_DIR}"
     os.environ["PATH"] = f"{os.environ['PATH']}:/tmp{READ_ONLY_REPO_DIR}"
+
+    # Load envfile from secrets
+    envfile_str: str = aws("secretsmanager").get_secret_value(
+        SecretId=os.environ["ENV_FILE_SECRET_ID"],
+        VersionId=os.environ["ENV_FILE_SECRET_VERSION_ID"],
+    )["SecretString"]
+    dotenv.load_dotenv(stream=io.StringIO(envfile_str), override=True)
 
     cmd = base64.b64decode(event["cmd"]).decode("utf-8")
     res = subprocess.Popen(

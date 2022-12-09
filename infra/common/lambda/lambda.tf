@@ -7,7 +7,7 @@ resource "aws_lambda_function" "lambda" {
   ephemeral_storage {
     size = var.ephemeral_storage
   }
-  timeout       = var.timeout
+  timeout = var.timeout
 
   environment {
     variables = merge(

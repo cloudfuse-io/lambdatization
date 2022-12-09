@@ -20,12 +20,12 @@ locals {
 }
 
 terraform {
-    extra_arguments "data_dir" {
-        commands = local.common.locals.extra_arguments.commands
-        env_vars = {
-            TF_DATA_DIR = "${local.common.locals.extra_arguments.data_dir}/${path_relative_to_include()}"
-        }
+  extra_arguments "data_dir" {
+    commands = local.common.locals.extra_arguments.commands
+    env_vars = {
+      TF_DATA_DIR = "${local.common.locals.extra_arguments.data_dir}/${path_relative_to_include()}"
     }
+  }
 }
 
 generate = local.common.generate

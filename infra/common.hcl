@@ -19,15 +19,15 @@ EOF
 }
 
 locals {
-    extra_arguments = {
-        commands = [
-            "init",
-            "apply",
-            "destroy",
-            "output",
-            "fmt",
-        ]
+  extra_arguments = {
+    commands = [
+      "init",
+      "apply",
+      "destroy",
+      "output",
+      "fmt",
+    ]
 
-        data_dir = "${get_env("CALLING_DIR")}/.terraform/data/"
-    }
+    data_dir = "${get_env("CALLING_DIR")}/.terraform/data/"
+  }
 }

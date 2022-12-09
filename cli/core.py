@@ -13,6 +13,7 @@ from common import (
     auto_app_fmt,
     aws,
     clean_modules,
+    format_lambda_output,
     terraform_output,
 )
 from invoke import Context, Exit, task
@@ -224,23 +225,6 @@ QUERY_HELP = {
     "query": "SQL query to be executed. We recommend wrapping it with single\
  quotes to avoid unexpected interpolations",
 }
-
-
-def format_lambda_output(
-    json_response: str, json_output: bool, external_duration_sec: float, engine: str
-):
-    response = json.loads(json_response)
-    # enrich the event with the external invoke duration
-    response.setdefault("context", {})
-    response["context"]["external_duration_sec"] = external_duration_sec
-    response["context"]["engine"] = engine
-    if json_output:
-        return json.dumps(response)
-    else:
-        output = ""
-        for key in ["parsed_queries", "context", "resp", "logs"]:
-            output += f"{key.upper()}\n{response.get(key, '')}\n\n"
-        return output
 
 
 @task(help=QUERY_HELP, autoprint=True)

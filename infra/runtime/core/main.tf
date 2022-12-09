@@ -40,8 +40,8 @@ resource "aws_s3_object_copy" "nyc_taxi" {
   key    = "nyc-taxi/2019/0${count.index + 1}/data.parquet"
   source = "ursa-labs-taxi-data/2019/0${count.index + 1}/data.parquet"
 
-  lifecycle { 
-      ignore_changes = [tags_all]
+  lifecycle {
+    ignore_changes = [tags_all]
   }
 }
 
