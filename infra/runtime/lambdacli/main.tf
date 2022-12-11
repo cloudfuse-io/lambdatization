@@ -45,17 +45,34 @@ resource "aws_iam_policy" "secret_access" {
 EOF
 }
 
+resource "aws_iam_policy" "lambda_invoke" {
+  name = "${module.env.module_name}-lambdacli-invoke-${var.region_name}-${module.env.stage}"
+
+  policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "lambda:InvokeFunction",
+      "Resource": "*"
+    }
+  ]
+}
+EOF
+}
+
 module "lambdacli" {
   source = "../../common/lambda"
 
   function_base_name = "lambdacli"
   region_name        = var.region_name
   docker_image       = var.lambdacli_image
-  memory_size        = 2048
-  ephemeral_storage  = 2048
-  timeout            = 300
+  memory_size        = 3008
+  ephemeral_storage  = 8192
+  timeout            = 600
 
-  additional_policies = [aws_iam_policy.secret_access.arn]
+  additional_policies = [aws_iam_policy.secret_access.arn, aws_iam_policy.lambda_invoke.arn]
 
   environment = {
     ENV_FILE_SECRET_ID         = aws_secretsmanager_secret.envfile.id

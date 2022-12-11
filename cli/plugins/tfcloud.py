@@ -4,7 +4,14 @@ from typing import Any, Dict, List, Set
 
 import dynaconf
 import requests
-from common import REPOROOT, active_modules, conf, tf_version
+from common import (
+    REPOROOT,
+    active_modules,
+    active_plugins,
+    conf,
+    list_modules,
+    tf_version,
+)
 from invoke import task
 
 VALIDATORS = [
@@ -205,22 +212,31 @@ class Client:
         "auto": """if set to True, this will forward the values of your 
 current environement variables. Otherwise you will be prompted for 
 the values you want to give to the environment variables""",
-        "stack": "monitoring or runtime",
     }
 )
-def config(c, stack, auto=False):
+def config(c, auto=False):
     """Configure workspaces in your Terrraform Cloud account"""
     config = conf(VALIDATORS)
     client = Client(
         config["TF_ORGANIZATION"],
         config["TF_API_TOKEN"],
     )
+
     ws_list = client.upsert_workspaces(
-        f"{config['TF_WORKSPACE_PREFIX']}{stack}-",
-        active_modules(f"{REPOROOT}/infra/{stack}"),
+        f"{config['TF_WORKSPACE_PREFIX']}runtime-",
+        active_modules(f"{REPOROOT}/infra/runtime"),
         tf_version(c),
-        f"infra/{stack}",
+        f"infra/runtime",
     )
+
+    if "monitoring" in active_plugins():
+        mon_ws_list = client.upsert_workspaces(
+            f"{config['TF_WORKSPACE_PREFIX']}monitoring-",
+            set(list_modules(f"{REPOROOT}/infra/monitoring")),
+            tf_version(c),
+            f"infra/monitoring",
+        )
+        ws_list.extend(mon_ws_list)
 
     varset = client.create_varset(
         f"{config['TF_WORKSPACE_PREFIX']}aws-creds",

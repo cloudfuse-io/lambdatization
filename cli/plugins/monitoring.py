@@ -1,6 +1,7 @@
 import base64
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Dict, List
 
@@ -31,7 +32,7 @@ VALIDATORS = [
 
 
 def monitoring_output(c: Context, variable):
-    cmd = f"terraform -chdir={MONITORING_MODULE_DIR} output --raw {variable}"
+    cmd = f"terragrunt output --terragrunt-working-dir {MONITORING_MODULE_DIR} --raw {variable}"
     return c.run(cmd, hide=True).stdout
 
 
@@ -125,30 +126,27 @@ def bench_cold_warm(c):
         except Exception as e:
             print(f"Execution failure: {e}")
 
-    while True:
-        if "databend" in active_plugins:
-            run_and_send_twice(databend.lambda_example)
-        if "spark" in active_plugins:
-            run_and_send_twice(spark.lambda_example_hive)
-        if "dremio" in active_plugins:
-            run_and_send_twice(dremio.lambda_example)
-        if "dask" in active_plugins:
-            run_and_send_twice(dask.lambda_example)
+    with ThreadPoolExecutor(max_workers=5) as e:
         if "trino" in active_plugins:
-            run_and_send_twice(trino.lambda_example)
+            e.submit(run_and_send_twice, trino.lambda_example)
+        if "spark" in active_plugins:
+            e.submit(run_and_send_twice, spark.lambda_example_hive)
+        if "dremio" in active_plugins:
+            e.submit(run_and_send_twice, dremio.lambda_example)
+        if "databend" in active_plugins:
+            e.submit(run_and_send_twice, databend.lambda_example)
+        if "dask" in active_plugins:
+            e.submit(run_and_send_twice, dask.lambda_example)
         if "ballista" in active_plugins:
-            run_and_send_twice(ballista.lambda_example)
+            e.submit(run_and_send_twice, ballista.lambda_example)
         if "clickhouse" in active_plugins:
-            run_and_send_twice(clickhouse.lambda_example)
-        time.sleep(300)
+            e.submit(run_and_send_twice, clickhouse.lambda_example)
 
 
 @task
 def bench_scaling(c):
-    while True:
-        for nb in [50, 100, 200]:
-            for memory_mb in [2048, 4096, 8192]:
-                result = scaling.run(c, nb=nb, memory_mb=memory_mb)
-                send_scaling_duration(c, result)
-            time.sleep(60)
-        time.sleep(300)
+    for nb in [50, 100, 200]:
+        for memory_mb in [2048, 4096, 8192]:
+            result = scaling.run(c, nb=nb, memory_mb=memory_mb)
+            send_scaling_duration(c, result)
+        time.sleep(60)

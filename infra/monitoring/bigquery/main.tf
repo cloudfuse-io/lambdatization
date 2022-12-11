@@ -6,7 +6,9 @@ module "env" {
 }
 
 locals {
-  dataset_id                    = "${module.env.module_name}_metrics_${module.env.stage}"
+  account_id_raw                = "${module.env.module_name}${module.env.stage}"
+  stage_underscore              = replace(module.env.stage, "-", "_")
+  dataset_id                    = "${module.env.module_name}_metrics_${local.stage_underscore}"
   standalone_durations_table_id = "${module.env.module_name}-standalone-engine-durations-${module.env.stage}"
   scaling_durations_table_id    = "${module.env.module_name}-scaling-durations-${module.env.stage}"
 }
@@ -17,7 +19,7 @@ provider "google" {
 }
 
 resource "google_service_account" "bigquery_write" {
-  account_id   = "${module.env.module_name}-bigquery-write-${module.env.stage}"
+  account_id   = "bigquery-write-${substr(md5(local.account_id_raw), 0, 6)}"
   display_name = "BigQuery Write"
 }
 
