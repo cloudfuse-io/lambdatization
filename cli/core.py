@@ -70,7 +70,7 @@ def init_module(c, module):
     """Manually run terraform init on a specific module"""
     mods = active_modules(RUNTIME_TFDIR)
     if module not in mods:
-        raise Exit(f"Step {module} not part of the active modules {mods}")
+        raise Exit(f"{module} not part of the active modules {mods}")
     c.run(
         f"terragrunt init --terragrunt-working-dir {RUNTIME_TFDIR}/{module}",
     )
@@ -83,7 +83,7 @@ def init(c, module="", clean=False, flags=""):
         clean_modules(RUNTIME_TFDIR)
     if module == "":
         c.run(
-            f"terragrunt run-all init {active_include_dirs(c)} --terragrunt-working-dir {RUNTIME_TFDIR} {flags}",
+            f"terragrunt run-all init --terragrunt-include-external-dependencies {active_include_dirs(c)} --terragrunt-working-dir {RUNTIME_TFDIR} {flags}",
         )
     else:
         init_module(c, module)
@@ -102,7 +102,7 @@ def deploy(c, module="", auto_approve=False):
     """Deploy all the modules associated with active plugins or a specific module"""
     if module == "":
         c.run(
-            f"terragrunt run-all apply {auto_app_fmt(auto_approve)} {active_include_dirs(c)} --terragrunt-working-dir {RUNTIME_TFDIR}",
+            f"terragrunt run-all apply --terragrunt-ignore-external-dependencies {auto_app_fmt(auto_approve)} {active_include_dirs(c)} --terragrunt-working-dir {RUNTIME_TFDIR}",
         )
     else:
         deploy_module(c, module, auto_approve)
@@ -215,7 +215,7 @@ def destroy(c, module="", auto_approve=False):
     from the config afterwards, it will not be destroyed"""
     if module == "":
         c.run(
-            f"terragrunt run-all destroy {auto_app_fmt(auto_approve)} {active_include_dirs(c)} --terragrunt-working-dir {RUNTIME_TFDIR}",
+            f"terragrunt run-all destroy --terragrunt-ignore-external-dependencies {auto_app_fmt(auto_approve)} {active_include_dirs(c)} --terragrunt-working-dir {RUNTIME_TFDIR}",
         )
     else:
         destroy_module(c, module, auto_approve)

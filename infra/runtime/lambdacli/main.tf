@@ -85,3 +85,7 @@ module "lambdacli" {
 output "lambda_name" {
   value = module.lambdacli.lambda_name
 }
+
+output "lambda_arn" {
+  value = module.lambdacli.lambda_arn
+}
