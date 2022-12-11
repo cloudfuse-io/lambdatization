@@ -1,9 +1,9 @@
 import base64
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Dict, List
-from concurrent.futures import ThreadPoolExecutor
 
 import common
 import dynaconf
