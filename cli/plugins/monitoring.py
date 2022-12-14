@@ -23,6 +23,7 @@ from common import (
     TF_BACKEND_VALIDATORS,
     auto_app_fmt,
     clean_modules,
+    configure_tf_cache_dir,
     git_rev,
 )
 from google.cloud import bigquery
@@ -56,6 +57,7 @@ def init(c, clean=False, flags=""):
     """Init the monitoring modules"""
     if clean:
         clean_modules(MONITORING_TFDIR)
+    configure_tf_cache_dir()
     c.run(
         f"terragrunt init --terragrunt-working-dir {MONITORING_MODULE_DIR} {flags}",
     )
