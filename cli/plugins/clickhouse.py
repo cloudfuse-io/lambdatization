@@ -7,7 +7,6 @@ from invoke import task
 
 @task(autoprint=True)
 def lambda_example(c, json_output=False, month="01"):
-    c["run"]["env"]
     """SUM(trip_distance) GROUP_BY payment_type with direct FROM s3()"""
     sql = f"""
 SELECT payment_type, SUM(trip_distance) 

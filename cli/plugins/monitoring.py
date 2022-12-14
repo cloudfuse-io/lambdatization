@@ -1,3 +1,5 @@
+"""Utilities to collect metrics about benchmarks"""
+
 import base64
 import json
 import time

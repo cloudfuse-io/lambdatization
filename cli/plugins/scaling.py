@@ -46,6 +46,7 @@ def resize(lambda_name, size_mb) -> str:
 
 @task
 def run(c, nb=100, memory_mb=2048):
+    """Run "nb" Lambdas with "memory_mb" size"""
     lambda_names = terraform_output(c, "scaling", "lambda_names").split(",")
 
     results = []
