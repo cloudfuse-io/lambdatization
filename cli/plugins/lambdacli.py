@@ -67,11 +67,18 @@ def handler(event, context):
     res = subprocess.Popen(
         ["/bin/bash", "-c", cmd], stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
+    logging.info("""=== CMD ===""")
+    logging.info(cmd)
     stdout, stderr = res.communicate()
+    logging.info("""=== STDOUT ===""")
     logging.info(stdout)
-    logging.error(stderr)
+    logging.info("""=== STDERR ===""")
+    logging.info(stderr)
+    logging.info("""=== RETURNCODE ===""")
+    logging.info(res.returncode)
+    if res.returncode != 0:
+        raise Exception(stderr)
     return {
         "stdout": stdout.decode(),
         "stderr": stderr.decode(),
-        "returncode": res.returncode,
     }
