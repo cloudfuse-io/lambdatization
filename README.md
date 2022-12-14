@@ -22,7 +22,7 @@ free to play with it and give us your feedback!
   Lambda][datastudio-engine-duration]
 - [AWS Lambda scale up duration by payload and function size][datastudio-scaling-duration]
 
-[datastudio-engine-duration]: https://datastudio.google.com/reporting/c870737c-e8b6-467f-9860-8cd60c751f81
+[datastudio-engine-duration]: https://datastudio.google.com/reporting/3163969d-10eb-46da-b553-dd27f16bba8d
 [datastudio-scaling-duration]: https://datastudio.google.com/reporting/0ffe5983-2dd2-4d53-9644-5154dc980784
 
 ## :hammer: Lambdatize yourself

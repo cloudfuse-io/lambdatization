@@ -2,6 +2,7 @@ import json
 import os
 import shutil
 import sys
+from dataclasses import dataclass
 from functools import cache
 from typing import List, Set
 
@@ -39,6 +40,27 @@ REPOROOT = os.environ["REPO_DIR"]
 CURRENTDIR = os.getcwd()
 RUNTIME_TFDIR = f"{REPOROOT}/infra/runtime"
 DOCKERDIR = f"{REPOROOT}/docker"
+
+
+@dataclass
+class GitRev:
+    revision: str
+    is_dirty: bool
+
+
+def git_rev(c: Context) -> GitRev:
+    try:
+        revision = c.run(
+            f"cd {REPOROOT}; git rev-parse --short HEAD", hide=True
+        ).stdout.strip()
+    except Exception:
+        revision = "unknown"
+    try:
+        c.run(f"cd {REPOROOT}; git diff --quiet", hide=True)
+        dirty = False
+    except Exception:
+        dirty = True
+    return GitRev(revision, dirty)
 
 
 def conf(validators=[]) -> dict:
@@ -120,7 +142,7 @@ def terraform_output(c: Context, module, key) -> str:
     return output
 
 
-def AWS_REGION():
+def AWS_REGION() -> str:
     return conf(AWS_REGION_VALIDATOR)["L12N_AWS_REGION"]
 
 

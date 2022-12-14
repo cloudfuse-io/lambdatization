@@ -50,30 +50,7 @@ resource "google_bigquery_table" "standalone_engine_durations" {
     field = "timestamp"
   }
 
-  schema = <<EOF
-[
-  {
-    "name": "engine",
-    "mode": "NULLABLE",
-    "type": "STRING"
-  },
-  {
-    "name": "external_duration_ms",
-    "mode": "NULLABLE",
-    "type": "INTEGER"
-  },
-  {
-    "name": "cold_start",
-    "mode": "NULLABLE",
-    "type": "BOOLEAN"
-  },
-  {
-    "name": "timestamp",
-    "mode": "NULLABLE",
-    "type": "TIMESTAMP"
-  }
-]
-EOF
+  schema = file("${path.module}/engine_durations.json")
 }
 
 resource "google_bigquery_table" "scaling_durations" {
@@ -87,40 +64,7 @@ resource "google_bigquery_table" "scaling_durations" {
     field = "timestamp"
   }
 
-  schema = <<EOF
-[
-  {
-    "name": "placeholder_size_mb",
-    "mode": "NULLABLE",
-    "type": "INTEGER"
-  },
-  {
-    "name": "corrected_duration_ms",
-    "mode": "NULLABLE",
-    "type": "INTEGER"
-  },
-  {
-    "name": "nb_run",
-    "mode": "NULLABLE",
-    "type": "INTEGER"
-  },
-  {
-    "name": "nb_cold_start",
-    "mode": "NULLABLE",
-    "type": "INTEGER"
-  },
-  {
-    "name": "memory_size_mb",
-    "mode": "NULLABLE",
-    "type": "INTEGER"
-  },
-  {
-    "name": "timestamp",
-    "mode": "NULLABLE",
-    "type": "TIMESTAMP"
-  }
-]
-EOF
+  schema = file("${path.module}/scaling_durations.json")
 }
 
 output "service_account_key" {
