@@ -1,3 +1,5 @@
+"""Utilities to collect metrics about benchmarks"""
+
 import base64
 import json
 import time
@@ -15,7 +17,15 @@ import plugins.dremio as dremio
 import plugins.scaling as scaling
 import plugins.spark as spark
 import plugins.trino as trino
-from common import REPOROOT, TF_BACKEND_VALIDATORS, auto_app_fmt, clean_modules
+from common import (
+    AWS_REGION,
+    REPOROOT,
+    TF_BACKEND_VALIDATORS,
+    auto_app_fmt,
+    clean_modules,
+    configure_tf_cache_dir,
+    git_rev,
+)
 from google.cloud import bigquery
 from google.oauth2 import service_account
 from invoke import Context, Exit, task
@@ -38,13 +48,16 @@ def monitoring_output(c: Context, variable):
 
 @task
 def login(c):
+    """Login to GCP"""
     c.run("gcloud auth application-default login --no-launch-browser")
 
 
 @task(help={"clean": clean_modules.__doc__})
 def init(c, clean=False, flags=""):
+    """Init the monitoring modules"""
     if clean:
         clean_modules(MONITORING_TFDIR)
+    configure_tf_cache_dir()
     c.run(
         f"terragrunt init --terragrunt-working-dir {MONITORING_MODULE_DIR} {flags}",
     )
@@ -52,6 +65,7 @@ def init(c, clean=False, flags=""):
 
 @task
 def deploy(c, auto_approve=False):
+    """Deploy the monitoring modules"""
     init(c)
     c.run(
         f"terragrunt apply {auto_app_fmt(auto_approve)} --terragrunt-working-dir {MONITORING_MODULE_DIR}",
@@ -60,6 +74,7 @@ def deploy(c, auto_approve=False):
 
 @task
 def destroy(c, auto_approve=False):
+    """Destroy the monitoring modules"""
     init(c)
     c.run(
         f"terragrunt destroy {auto_app_fmt(auto_approve)} --terragrunt-working-dir {MONITORING_MODULE_DIR}",
@@ -67,6 +82,13 @@ def destroy(c, auto_approve=False):
 
 
 def send(c: Context, table_output_name: str, rows: List[Dict]):
+    """Enrich the events with common fields and them to the specified table
+
+    Added fields:
+    - aws_region
+    - timestamp
+    - revision
+    - is_dirty"""
     gcp_creds = monitoring_output(c, "service_account_key")
     bigquery_table_id = monitoring_output(c, table_output_name)
     client = bigquery.Client(
@@ -74,6 +96,12 @@ def send(c: Context, table_output_name: str, rows: List[Dict]):
             json.loads(base64.decodebytes(gcp_creds.encode()).decode())
         )
     )
+    rev = git_rev(c)
+    for row in rows:
+        row["timestamp"] = str(datetime.now())
+        row["aws_region"] = AWS_REGION()
+        row["revision"] = rev.revision
+        row["is_dirty"] = rev.is_dirty
     errors = client.insert_rows_json(bigquery_table_id, rows)
     if errors == []:
         print(f"{len(rows)} row(s) added, first row: {json.dumps(rows[0])}")
@@ -85,7 +113,6 @@ def send_standalone_durations(c: Context, lambda_json_output: str):
     """Read json from stdin and extracts appropriate fields to Bigquery"""
     context = json.loads(lambda_json_output)["context"]
     row = {
-        "timestamp": str(datetime.now()),
         "engine": context["engine"],
         "cold_start": context["cold_start"],
         "external_duration_ms": int(context["external_duration_sec"] * 1000),
@@ -96,7 +123,6 @@ def send_standalone_durations(c: Context, lambda_json_output: str):
 def send_scaling_duration(c: Context, durations: List[Dict]):
     rows = [
         {
-            "timestamp": str(datetime.now()),
             "corrected_duration_ms": int(
                 (dur["external_duration_sec"] - dur["sleep_duration"]) * 1000
             ),
@@ -145,6 +171,7 @@ def bench_cold_warm(c):
 
 @task
 def bench_scaling(c):
+    """Run benchmarks to assess how AWS scales Docker based Lambdas"""
     for nb in [50, 100, 200]:
         for memory_mb in [2048, 4096, 8192]:
             result = scaling.run(c, nb=nb, memory_mb=memory_mb)

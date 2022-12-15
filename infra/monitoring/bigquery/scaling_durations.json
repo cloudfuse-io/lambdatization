@@ -1,0 +1,47 @@
+[
+    {
+      "name": "placeholder_size_mb",
+      "mode": "NULLABLE",
+      "type": "INTEGER"
+    },
+    {
+      "name": "corrected_duration_ms",
+      "mode": "NULLABLE",
+      "type": "INTEGER"
+    },
+    {
+      "name": "nb_run",
+      "mode": "NULLABLE",
+      "type": "INTEGER"
+    },
+    {
+      "name": "nb_cold_start",
+      "mode": "NULLABLE",
+      "type": "INTEGER"
+    },
+    {
+      "name": "memory_size_mb",
+      "mode": "NULLABLE",
+      "type": "INTEGER"
+    },
+    {
+      "name": "timestamp",
+      "mode": "NULLABLE",
+      "type": "TIMESTAMP"
+    },
+    {
+      "name": "aws_region",
+      "mode": "NULLABLE",
+      "type": "STRING"
+    },
+    {
+      "name": "revision",
+      "mode": "NULLABLE",
+      "type": "STRING"
+    },
+    {
+      "name": "is_dirty",
+      "mode": "NULLABLE",
+      "type": "BOOLEAN"
+    }
+]

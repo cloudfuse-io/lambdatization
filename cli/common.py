@@ -2,7 +2,9 @@ import json
 import os
 import shutil
 import sys
+from dataclasses import dataclass
 from functools import cache
+from pathlib import Path
 from typing import List, Set
 
 import boto3
@@ -36,9 +38,30 @@ AWS_REGION_VALIDATOR = dynaconf.Validator(
 
 # Path aliases
 REPOROOT = os.environ["REPO_DIR"]
-CURRENTDIR = os.getcwd()
+CALLING_DIR = os.environ["CALLING_DIR"]
 RUNTIME_TFDIR = f"{REPOROOT}/infra/runtime"
 DOCKERDIR = f"{REPOROOT}/docker"
+
+
+@dataclass
+class GitRev:
+    revision: str
+    is_dirty: bool
+
+
+def git_rev(c: Context) -> GitRev:
+    try:
+        revision = c.run(
+            f"cd {REPOROOT}; git rev-parse --short HEAD", hide=True
+        ).stdout.strip()
+    except Exception:
+        revision = "unknown"
+    try:
+        c.run(f"cd {REPOROOT}; git diff --quiet", hide=True)
+        dirty = False
+    except Exception:
+        dirty = True
+    return GitRev(revision, dirty)
 
 
 def conf(validators=[]) -> dict:
@@ -120,7 +143,7 @@ def terraform_output(c: Context, module, key) -> str:
     return output
 
 
-def AWS_REGION():
+def AWS_REGION() -> str:
     return conf(AWS_REGION_VALIDATOR)["L12N_AWS_REGION"]
 
 
@@ -148,6 +171,13 @@ def clean_modules(mod_dir):
                     generated_file = f"{mod_dir}/{path}/{sub_path}"
                     print(f"deleting {generated_file}")
                     os.remove(generated_file)
+
+
+def configure_tf_cache_dir():
+    """Configure a directory from which TF can reuse the providers"""
+    cache_dir = f"{CALLING_DIR}/.terraform/data"
+    Path(cache_dir).mkdir(parents=True, exist_ok=True)
+    os.environ.update({"TF_PLUGIN_CACHE_DIR": cache_dir})
 
 
 def format_lambda_output(json_response: str, json_output: bool, **context):

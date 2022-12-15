@@ -13,6 +13,7 @@ from common import (
     auto_app_fmt,
     aws,
     clean_modules,
+    configure_tf_cache_dir,
     format_lambda_output,
     terraform_output,
 )
@@ -81,6 +82,7 @@ def init(c, module="", clean=False, flags=""):
     """Manually run terraform init on one or all modules"""
     if clean:
         clean_modules(RUNTIME_TFDIR)
+    configure_tf_cache_dir()
     if module == "":
         c.run(
             f"terragrunt run-all init --terragrunt-include-external-dependencies {active_include_dirs(c)} --terragrunt-working-dir {RUNTIME_TFDIR} {flags}",

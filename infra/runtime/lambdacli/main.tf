@@ -68,8 +68,8 @@ module "lambdacli" {
   function_base_name = "lambdacli"
   region_name        = var.region_name
   docker_image       = var.lambdacli_image
-  memory_size        = 3008
-  ephemeral_storage  = 8192
+  memory_size        = 2048
+  ephemeral_storage  = 4096
   timeout            = 600
 
   additional_policies = [aws_iam_policy.secret_access.arn, aws_iam_policy.lambda_invoke.arn]

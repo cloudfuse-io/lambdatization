@@ -1,0 +1,37 @@
+[
+    {
+      "name": "engine",
+      "mode": "NULLABLE",
+      "type": "STRING"
+    },
+    {
+      "name": "external_duration_ms",
+      "mode": "NULLABLE",
+      "type": "INTEGER"
+    },
+    {
+      "name": "cold_start",
+      "mode": "NULLABLE",
+      "type": "BOOLEAN"
+    },
+    {
+      "name": "timestamp",
+      "mode": "NULLABLE",
+      "type": "TIMESTAMP"
+    },
+    {
+      "name": "aws_region",
+      "mode": "NULLABLE",
+      "type": "STRING"
+    },
+    {
+      "name": "revision",
+      "mode": "NULLABLE",
+      "type": "STRING"
+    },
+    {
+      "name": "is_dirty",
+      "mode": "NULLABLE",
+      "type": "BOOLEAN"
+    }
+  ]
