@@ -88,7 +88,8 @@ def send(c: Context, table_output_name: str, rows: List[Dict]):
     - aws_region
     - timestamp
     - revision
-    - is_dirty"""
+    - is_dirty
+    - branch"""
     gcp_creds = monitoring_output(c, "service_account_key")
     bigquery_table_id = monitoring_output(c, table_output_name)
     client = bigquery.Client(
@@ -102,6 +103,7 @@ def send(c: Context, table_output_name: str, rows: List[Dict]):
         row["aws_region"] = AWS_REGION()
         row["revision"] = rev.revision
         row["is_dirty"] = rev.is_dirty
+        row["branch"] = rev.branch
     errors = client.insert_rows_json(bigquery_table_id, rows)
     if errors == []:
         print(f"{len(rows)} row(s) added, first row: {json.dumps(rows[0])}")

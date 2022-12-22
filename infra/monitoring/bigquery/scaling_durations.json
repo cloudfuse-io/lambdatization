@@ -58,5 +58,10 @@
       "name": "is_dirty",
       "mode": "NULLABLE",
       "type": "BOOLEAN"
+    },
+    {
+      "name": "branch",
+      "mode": "NULLABLE",
+      "type": "STRING"
     }
 ]

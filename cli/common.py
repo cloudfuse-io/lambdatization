@@ -50,6 +50,7 @@ DOCKERDIR = f"{REPOROOT}/docker"
 class GitRev:
     revision: str
     is_dirty: bool
+    branch: str
 
 
 def git_rev(c: Context) -> GitRev:
@@ -64,7 +65,13 @@ def git_rev(c: Context) -> GitRev:
         dirty = False
     except Exception:
         dirty = True
-    return GitRev(revision, dirty)
+    try:
+        branch = c.run(
+            f"cd {REPOROOT}; git rev-parse --abbrev-ref HEAD", hide=True
+        ).stdout.strip()
+    except Exception:
+        branch = "unknown"
+    return GitRev(revision, dirty, branch)
 
 
 def conf(validators=[]) -> dict:

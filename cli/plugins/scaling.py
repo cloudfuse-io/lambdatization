@@ -24,7 +24,7 @@ def wait_deployment(lambda_name):
         time.sleep(1)
 
 
-def resize(lambda_name, size_mb):
+def resize(lambda_name, size_mb) -> str:
     wait_deployment(lambda_name)
     aws("lambda").update_function_configuration(
         FunctionName=lambda_name, MemorySize=size_mb
@@ -33,13 +33,13 @@ def resize(lambda_name, size_mb):
     response = aws("lambda").publish_version(
         FunctionName=lambda_name,
     )
-    return f"{lambda_name}:{response['Version']}"
+    return response["Version"]
 
 
-async def invoke(lambda_name: str, session: AsyncAWS):
+async def invoke(lambda_name: str, version: str, session: AsyncAWS):
     resp = await session.aws_request(
         method="POST",
-        path=f"/2015-03-31/functions/{lambda_name}/invocations",
+        path=f"/2015-03-31/functions/{lambda_name}/invocations?Qualifier={version}",
         data=json.dumps({"sleep": SLEEP_DURATION}).encode(),
         headers={
             "X-Amz-Invocation-Type": "RequestResponse",
@@ -53,7 +53,7 @@ async def invoke(lambda_name: str, session: AsyncAWS):
     return res
 
 
-async def invoke_batch(nb, lambda_name, memory_mb):
+async def invoke_batch(nb, lambda_name, version, memory_mb):
     async with AsyncAWS("lambda") as s:
         start_time = time.time()
         cold_starts = 0
@@ -61,9 +61,11 @@ async def invoke_batch(nb, lambda_name, memory_mb):
         p90 = None
         p99 = None
         # start all invocations at once
-        tasks = asyncio.as_completed([invoke(lambda_name, s) for _ in range(nb)])
+        tasks = asyncio.as_completed(
+            [invoke(lambda_name, version, s) for _ in range(nb)]
+        )
         # iterate through results as they are generated
-        for cnt, task in enumerate(tasks):
+        for cnt, task in enumerate(tasks, start=1):
             res = await task
             if placeholder_size is None:
                 placeholder_size = res["placeholder_size"]
@@ -99,8 +101,8 @@ def run(c, nb=100, memory_mb=2048):
 
     results = []
     for lambda_name in lambda_names:
-        lambda_version = resize(lambda_name, memory_mb)
-        res = asyncio.run(invoke_batch(nb, lambda_version, memory_mb))
+        version = resize(lambda_name, memory_mb)
+        res = asyncio.run(invoke_batch(nb, lambda_name, version, memory_mb))
         results.append(res)
 
     return results
