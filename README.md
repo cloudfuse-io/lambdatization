@@ -15,9 +15,9 @@ this highly constrained environment.
 ## :chart_with_upwards_trend: Explore the results
 
 We want to provide an accurate and interactive representation of our
-experimental results. We believe that this is best achieved through
-open interactive dasboards. This work is still work in progress, feel
-free to play with it and give us your feedback!
+experimental results. We believe that this is best achieved through open
+interactive dashboards. This work is still work in progress, feel free to play
+with it and give us your feedback!
 - [NYC Taxi Parquet GROUP BY duration of various engines in AWS
   Lambda][datastudio-engine-duration]
 - [AWS Lambda scale up duration by payload and function size][datastudio-scaling-duration]
@@ -76,6 +76,9 @@ You can also provide the [usual][aws-cli-envvars] AWS variables:
 - `AWS_SHARED_CREDENTIALS_FILE`
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
+
+You might also want to verify you "Concurrent executions" quota for Lambda in
+your AWS account and ask for an increase if required.
 
 [aws-cli-envvars]: https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html
 

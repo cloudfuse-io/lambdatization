@@ -2,7 +2,7 @@
 
 import base64
 import json
-import time
+import random
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Dict, List
@@ -123,9 +123,10 @@ def send_standalone_durations(c: Context, lambda_json_output: str):
 def send_scaling_duration(c: Context, durations: List[Dict]):
     rows = [
         {
-            "corrected_duration_ms": int(
-                (dur["external_duration_sec"] - dur["sleep_duration"]) * 1000
-            ),
+            "sleep_duration_ms": int(dur["sleep_duration_sec"] * 1000),
+            "total_duration_ms": int(dur["total_duration_sec"] * 1000),
+            "p90_duration_ms": int(dur["p90_duration_sec"] * 1000),
+            "p99_duration_ms": int(dur["p99_duration_sec"] * 1000),
             "placeholder_size_mb": int(dur["placeholder_size"] / 10**6),
             "nb_run": dur["nb_run"],
             "nb_cold_start": dur["nb_cold_start"],
@@ -170,10 +171,8 @@ def bench_cold_warm(c):
 
 
 @task
-def bench_scaling(c):
+def bench_scaling(c, nb_invocations=50):
     """Run benchmarks to assess how AWS scales Docker based Lambdas"""
-    for nb in [50, 100, 200]:
-        for memory_mb in [2048, 4096, 8192]:
-            result = scaling.run(c, nb=nb, memory_mb=memory_mb)
-            send_scaling_duration(c, result)
-        time.sleep(60)
+    for memory_mb in random.sample([2048, 4096, 8192], k=3):
+        result = scaling.run(c, nb=nb_invocations, memory_mb=memory_mb)
+        send_scaling_duration(c, result)

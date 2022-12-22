@@ -7,9 +7,12 @@ from functools import cache
 from pathlib import Path
 from typing import List, Set
 
+import aiohttp
 import boto3
 import botocore.client
 import dynaconf
+from botocore.auth import SigV4Auth
+from botocore.awsrequest import AWSRequest
 from flags import TRACE
 from invoke import Context, Exit, Failure
 
@@ -194,3 +197,43 @@ def format_lambda_output(json_response: str, json_output: bool, **context):
         for key, value in sorted(response.items()):
             output += f"{key.upper()}\n{value}\n\n"
         return output
+
+
+class AsyncAWS:
+    """A helper to write async queries to AWS
+
+    This is a low level function that requires manually writing the HTTP queries.
+    Should be used with the async context manager.
+    The service endpoint"""
+
+    def __init__(self, service_name, region_name=AWS_REGION()):
+        # No need to specify a region as we only use the session to get the
+        # frozen credentials
+        session = boto3.Session(region_name=region_name)
+        credentials = session.get_credentials()
+        self.creds = credentials.get_frozen_credentials()
+        self.region = region_name
+        self.service_name = service_name
+        self.endpoint = f"https://{service_name}.{region_name}.amazonaws.com"
+
+    async def __aenter__(self):
+        self.aiohttp_session = aiohttp.ClientSession()
+        return self
+
+    async def __aexit__(self, *args):
+        await self.aiohttp_session.close()
+
+    async def aws_request(
+        self, method, path, data=None, params=None, headers=None
+    ) -> aiohttp.ClientResponse:
+        url = f"{self.endpoint}{path}"
+        request = AWSRequest(
+            method=method, url=url, data=data, params=params, headers=headers
+        )
+        SigV4Auth(self.creds, self.service_name, self.region).add_auth(request)
+        async with aiohttp.ClientSession() as session:
+            async with session.request(
+                method, url, headers=dict(request.headers), data=data
+            ) as resp:
+                await resp.read()
+            return resp

@@ -5,7 +5,22 @@
       "type": "INTEGER"
     },
     {
-      "name": "corrected_duration_ms",
+      "name": "sleep_duration_ms",
+      "mode": "NULLABLE",
+      "type": "INTEGER"
+    },
+    {
+      "name": "total_duration_ms",
+      "mode": "NULLABLE",
+      "type": "INTEGER"
+    },
+    {
+      "name": "p90_duration_ms",
+      "mode": "NULLABLE",
+      "type": "INTEGER"
+    },
+    {
+      "name": "p99_duration_ms",
       "mode": "NULLABLE",
       "type": "INTEGER"
     },
