@@ -57,6 +57,7 @@ resource "aws_iam_policy" "lambda_invoke" {
       "Action": [
         "lambda:InvokeFunction",
         "lambda:GetFunctionConfiguration",
+        "lambda:PublishVersion",
         "lambda:UpdateFunctionConfiguration"
       ],
       "Resource": "*"

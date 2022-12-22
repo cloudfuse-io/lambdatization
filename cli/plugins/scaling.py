@@ -30,6 +30,10 @@ def resize(lambda_name, size_mb):
         FunctionName=lambda_name, MemorySize=size_mb
     )
     wait_deployment(lambda_name)
+    response = aws("lambda").publish_version(
+        FunctionName=lambda_name,
+    )
+    return f"{lambda_name}:{response['Version']}"
 
 
 async def invoke(lambda_name: str, session: AsyncAWS):
@@ -95,8 +99,8 @@ def run(c, nb=100, memory_mb=2048):
 
     results = []
     for lambda_name in lambda_names:
-        resize(lambda_name, memory_mb)
-        res = asyncio.run(invoke_batch(nb, lambda_name, memory_mb))
+        lambda_version = resize(lambda_name, memory_mb)
+        res = asyncio.run(invoke_batch(nb, lambda_version, memory_mb))
         results.append(res)
 
     return results
