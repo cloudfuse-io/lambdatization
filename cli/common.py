@@ -70,6 +70,9 @@ def git_rev(c: Context) -> GitRev:
 def conf(validators=[]) -> dict:
     """Load variables from the environment if:
     - their key is prefixed with either L12N_, TF_ or AWS_"""
+    assert isinstance(
+        validators, list
+    ), "validators should be a list of dynaconf.Validator"
     dc = dynaconf.Dynaconf(
         # dotenv file is loaded by l12n-shell
         load_dotenv=False,
@@ -147,7 +150,7 @@ def terraform_output(c: Context, module, key) -> str:
 
 
 def AWS_REGION() -> str:
-    return conf(AWS_REGION_VALIDATOR)["L12N_AWS_REGION"]
+    return conf([AWS_REGION_VALIDATOR])["L12N_AWS_REGION"]
 
 
 def aws(service=None):
