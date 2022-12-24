@@ -71,13 +71,13 @@ def handler(event, context):
     logging.info(cmd)
     stdout, stderr = res.communicate()
     logging.info("""=== STDOUT ===""")
-    logging.info(stdout)
+    logging.info(stdout.decode())
     logging.info("""=== STDERR ===""")
-    logging.info(stderr)
+    logging.info(stderr.decode())
     logging.info("""=== RETURNCODE ===""")
     logging.info(res.returncode)
     if res.returncode != 0:
-        raise Exception(stderr)
+        raise Exception(stderr.decode())
     return {
         "stdout": stdout.decode(),
         "stderr": stderr.decode(),
