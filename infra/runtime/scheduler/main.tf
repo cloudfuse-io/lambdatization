@@ -55,9 +55,9 @@ locals {
 }
 
 resource "aws_cloudwatch_event_rule" "scaling_schedule" {
-  count               = length(local.scales)
-  name                = "${module.env.module_name}-scaling-sched-${local.scales[count.index]}-${module.env.stage}"
-  description         = "Start scaling benchmark with ${local.scales[count.index]} functions"
+  count       = length(local.scales)
+  name        = "${module.env.module_name}-scaling-sched-${local.scales[count.index]}-${module.env.stage}"
+  description = "Start scaling benchmark with ${local.scales[count.index]} functions"
   # run larger tests less often
   schedule_expression = "cron(${count.index * 10 + 4} */${count.index} * * ? *)"
 }
