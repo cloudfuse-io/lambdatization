@@ -173,7 +173,7 @@ def bench_cold_warm(c):
 
 
 @task
-def bench_scaling(c, nb_invocations=50):
+def bench_scaling(c, nb_invocations=64):
     """Run benchmarks to assess how AWS scales Docker based Lambdas"""
     for memory_mb in random.sample([2048, 4096, 8192], k=3):
         result = scaling.run(c, nb=nb_invocations, memory_mb=memory_mb)

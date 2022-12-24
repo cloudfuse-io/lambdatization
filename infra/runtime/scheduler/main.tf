@@ -49,7 +49,7 @@ resource "aws_lambda_permission" "allow_standalone_engine" {
 ## LAMBDA SCALE UP
 
 locals {
-  scales         = [50, 100, 200]
+  scales         = [64, 128, 256]
   scaling_cmds   = [for n in local.scales : "${local.randomize} l12n init monitoring.bench-scaling -n ${n}"]
   scaling_inputs = [for s in local.scaling_cmds : "{\"cmd\":\"${base64encode(s)}\"}"]
 }

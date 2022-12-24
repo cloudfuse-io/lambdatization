@@ -97,7 +97,7 @@ async def invoke_batch(nb, lambda_name, version, memory_mb):
 
 
 @task(autoprint=True)
-def run(c, nb=100, memory_mb=2048):
+def run(c, nb=128, memory_mb=2048):
     """Run "nb" Lambdas with "memory_mb" size"""
     lambda_names = terraform_output(c, "scaling", "lambda_names").split(",")
     random.shuffle(lambda_names)
