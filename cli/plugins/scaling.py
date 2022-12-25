@@ -48,7 +48,7 @@ async def invoke(lambda_name: str, version: str, session: AsyncAWS):
     )
     if resp.status != 200:
         raise Exception(
-            f"Lambda Invoke failed with status {resp.status}: {resp.text()}"
+            f"Lambda Invoke failed with status {resp.status}: {await resp.text()}"
         )
     res = json.loads(await resp.text())
     if "errorMessage" in res:
