@@ -30,7 +30,7 @@ terraform {
 
 inputs = {
   region_name       = local.region_name
-  images            = ["dummy-50", "dummy-100", "dummy-200", "dummy-400", "dummy-800"]
-  placeholder_sizes = [50, 100, 200, 400, 800]
+  images            = ["dummy-50", "dummy-200", "dummy-800"]
+  placeholder_sizes = [50, 200, 800]
   bucket_arn        = dependency.core.outputs.bucket_arn
 }
