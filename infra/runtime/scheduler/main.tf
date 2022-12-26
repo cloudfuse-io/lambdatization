@@ -15,15 +15,10 @@ provider "aws" {
   }
 }
 
-locals {
-  # randomly cancel the benchmarks to make them less predictable
-  randomize = "[ $(($RANDOM % 2)) = 0 ] ||"
-}
-
 ## STANDALONE ENGINES
 
 locals {
-  standalone_engine_cmd   = "${local.randomize} l12n init monitoring.bench-cold-warm"
+  standalone_engine_cmd   = "[ $(($RANDOM % 2)) = 0 ] || l12n init monitoring.bench-cold-warm"
   standalone_engine_input = "{\"cmd\":\"${base64encode(local.standalone_engine_cmd)}\"}"
 }
 
@@ -50,7 +45,8 @@ resource "aws_lambda_permission" "allow_standalone_engine" {
 
 locals {
   scales         = [64, 128, 256]
-  scaling_cmds   = [for n in local.scales : "${local.randomize} l12n init monitoring.bench-scaling -n ${n}"]
+  # run larger tests less often
+  scaling_cmds   = [for sc in local.scales : "[ $(($RANDOM % ${sc/32})) = 0 ] l12n init monitoring.bench-scaling -n ${sc}"]
   scaling_inputs = [for s in local.scaling_cmds : "{\"cmd\":\"${base64encode(s)}\"}"]
 }
 
@@ -58,8 +54,7 @@ resource "aws_cloudwatch_event_rule" "scaling_schedule" {
   count       = length(local.scales)
   name        = "${module.env.module_name}-scaling-sched-${local.scales[count.index]}-${module.env.stage}"
   description = "Start scaling benchmark with ${local.scales[count.index]} functions"
-  # run larger tests less often
-  schedule_expression = "cron(${count.index * 10 + 4} */${count.index} * * ? *)"
+  schedule_expression = "cron(${count.index * 10 + 4} * * * ? *)"
 }
 
 resource "aws_cloudwatch_event_target" "scaling_schedule" {
