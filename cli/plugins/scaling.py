@@ -46,11 +46,10 @@ async def invoke(lambda_name: str, version: str, session: AsyncAWS):
             "X-Amz-Log-Type": "None",
         },
     )
+    body = await resp.text()
     if resp.status != 200:
-        raise Exception(
-            f"Lambda Invoke failed with status {resp.status}: {await resp.text()}"
-        )
-    res = json.loads(await resp.text())
+        raise Exception(f"Lambda Invoke failed with status {resp.status}: {body}")
+    res = json.loads(body)
     if "errorMessage" in res:
         raise Exception(res["errorMessage"])
     return res
@@ -63,13 +62,21 @@ async def invoke_batch(nb, lambda_name, version, memory_mb):
         placeholder_size = None
         p90 = None
         p99 = None
+        error = None
         # start all invocations at once
         tasks = asyncio.as_completed(
             [invoke(lambda_name, version, s) for _ in range(nb)]
         )
         # iterate through results as they are generated
         for cnt, task in enumerate(tasks, start=1):
-            res = await task
+            try:
+                res = await task
+            except Exception as e:
+                if "We currently do not have sufficient capacity" in str(e):
+                    error = "insufficient_capacity"
+                    break
+                else:
+                    raise e
             if placeholder_size is None:
                 placeholder_size = res["placeholder_size"]
             else:
@@ -82,17 +89,19 @@ async def invoke_batch(nb, lambda_name, version, memory_mb):
                 p90 = time.time() - start_time
             elif cnt == int(0.99 * nb):
                 p99 = time.time() - start_time
-
+        if error is None and cold_starts != nb:
+            error = "warm_starts"
         external_duration_sec = time.time() - start_time
         return {
-            "placeholder_size": placeholder_size,
             "nb_run": nb,
-            "nb_cold_start": cold_starts,
+            "memory_size_mb": memory_mb,
             "sleep_duration_sec": SLEEP_DURATION,
+            "placeholder_size": placeholder_size,
+            "nb_cold_start": cold_starts,
             "total_duration_sec": external_duration_sec,
             "p90_duration_sec": p90,
             "p99_duration_sec": p99,
-            "memory_size_mb": memory_mb,
+            "error": error,
         }
 
 
