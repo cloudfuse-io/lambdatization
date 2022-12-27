@@ -18,7 +18,7 @@ provider "aws" {
 ## STANDALONE ENGINES
 
 locals {
-  standalone_engine_cmd   = "[ $(($RANDOM % 2)) = 0 ] || l12n init monitoring.bench-cold-warm"
+  standalone_engine_cmd   = "[ $(($RANDOM % 2)) != 0 ] || l12n init monitoring.bench-cold-warm"
   standalone_engine_input = "{\"cmd\":\"${base64encode(local.standalone_engine_cmd)}\"}"
 }
 
@@ -46,7 +46,7 @@ resource "aws_lambda_permission" "allow_standalone_engine" {
 locals {
   scales = [64, 128, 256]
   # run larger tests less often
-  scaling_cmds   = [for sc in local.scales : "[ $(($RANDOM % ${sc / 32})) = 0 ] l12n init monitoring.bench-scaling -n ${sc}"]
+  scaling_cmds   = [for sc in local.scales : "[ $(($RANDOM % ${sc / 32})) != 0 ] || l12n init monitoring.bench-scaling -n ${sc}"]
   scaling_inputs = [for s in local.scaling_cmds : "{\"cmd\":\"${base64encode(s)}\"}"]
 }
 
