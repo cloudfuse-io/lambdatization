@@ -44,16 +44,16 @@ resource "aws_lambda_permission" "allow_standalone_engine" {
 ## LAMBDA SCALE UP
 
 locals {
-  scales         = [64, 128, 256]
+  scales = [64, 128, 256]
   # run larger tests less often
-  scaling_cmds   = [for sc in local.scales : "[ $(($RANDOM % ${sc/32})) = 0 ] l12n init monitoring.bench-scaling -n ${sc}"]
+  scaling_cmds   = [for sc in local.scales : "[ $(($RANDOM % ${sc / 32})) = 0 ] l12n init monitoring.bench-scaling -n ${sc}"]
   scaling_inputs = [for s in local.scaling_cmds : "{\"cmd\":\"${base64encode(s)}\"}"]
 }
 
 resource "aws_cloudwatch_event_rule" "scaling_schedule" {
-  count       = length(local.scales)
-  name        = "${module.env.module_name}-scaling-sched-${local.scales[count.index]}-${module.env.stage}"
-  description = "Start scaling benchmark with ${local.scales[count.index]} functions"
+  count               = length(local.scales)
+  name                = "${module.env.module_name}-scaling-sched-${local.scales[count.index]}-${module.env.stage}"
+  description         = "Start scaling benchmark with ${local.scales[count.index]} functions"
   schedule_expression = "cron(${count.index * 10 + 4} * * * ? *)"
 }
 
