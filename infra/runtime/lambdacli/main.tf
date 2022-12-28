@@ -54,7 +54,12 @@ resource "aws_iam_policy" "lambda_invoke" {
   "Statement": [
     {
       "Effect": "Allow",
-      "Action": "lambda:InvokeFunction",
+      "Action": [
+        "lambda:InvokeFunction",
+        "lambda:GetFunctionConfiguration",
+        "lambda:PublishVersion",
+        "lambda:UpdateFunctionConfiguration"
+      ],
       "Resource": "*"
     }
   ]
@@ -68,7 +73,7 @@ module "lambdacli" {
   function_base_name = "lambdacli"
   region_name        = var.region_name
   docker_image       = var.lambdacli_image
-  memory_size        = 2048
+  memory_size        = 3008
   ephemeral_storage  = 4096
   timeout            = 600
 

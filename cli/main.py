@@ -3,17 +3,8 @@ import sys
 
 import common
 import core
-import flags
 import plugins
 from invoke import Collection, Program
-
-
-def unhandled_exception(type, value, traceback):
-    """Override for `sys.excepthook` only showing stack trace if requested"""
-    if flags.TRACE:
-        sys.__excepthook__(type, value, traceback)
-    else:
-        print(f"{type.__name__}: {str(value)}", file=sys.stderr)
 
 
 def list_plugins():
@@ -45,8 +36,6 @@ Plugins:
 
 
 if __name__ == "__main__":
-    sys.excepthook = unhandled_exception
-
     namespace = Collection.from_module(core)
     namespace.configure({"run": {"env": common.conf(core.VALIDATORS)}})
 

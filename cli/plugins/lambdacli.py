@@ -5,6 +5,7 @@ import io
 import json
 import logging
 import os
+import random
 import subprocess
 
 import awslambdaric.bootstrap
@@ -28,7 +29,7 @@ def run_bootstrap(c):
 
 
 @task(autoprint=True)
-def invoke(c, command, json_output=False):
+def invoke(c, command, sampling=None, json_output=False):
     """Invoke the AWS Lambda function with the CLI image
 
     Commands that need to connect to a Docker server will fail. Local Terraform
@@ -36,9 +37,12 @@ def invoke(c, command, json_output=False):
     commands that use Terraform outputs."""
     lambda_name = terraform_output(c, "lambdacli", "lambda_name")
     cmd_b64 = base64.b64encode(command.encode()).decode()
+    body = {"cmd": cmd_b64}
+    if sampling is not None:
+        body["sampling"] = sampling
     lambda_res = aws("lambda").invoke(
         FunctionName=lambda_name,
-        Payload=json.dumps({"cmd": cmd_b64}).encode(),
+        Payload=json.dumps(body).encode(),
         InvocationType="RequestResponse",
     )
     resp_payload = lambda_res["Payload"].read().decode()
@@ -48,7 +52,11 @@ def invoke(c, command, json_output=False):
 
 
 def handler(event, context):
-    """Handler for the AWS Lambda function running the CLI image"""
+    """Handler for the AWS Lambda function running the CLI image
+
+    Fields in event object:
+    - cmd: base64 encoded command to run
+    - sampling: 0.25 means 3 out of 4 runs will be randomly canceled"""
 
     # Some gymnastic is required to have the repo in the writable location /tmp
     os.system("rm -rf /tmp/*")
@@ -64,6 +72,9 @@ def handler(event, context):
     dotenv.load_dotenv(stream=io.StringIO(envfile_str), override=True)
 
     cmd = base64.b64decode(event["cmd"]).decode("utf-8")
+    if random.uniform(0, 1) > float(event.get("sampling", 1)):
+        logging.info(f"Skipping run of CMD: {cmd}")
+        return {"stdout": "Run skipped"}
     res = subprocess.Popen(
         ["/bin/bash", "-c", cmd], stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
@@ -71,13 +82,13 @@ def handler(event, context):
     logging.info(cmd)
     stdout, stderr = res.communicate()
     logging.info("""=== STDOUT ===""")
-    logging.info(stdout)
+    logging.info(stdout.decode())
     logging.info("""=== STDERR ===""")
-    logging.info(stderr)
+    logging.info(stderr.decode())
     logging.info("""=== RETURNCODE ===""")
     logging.info(res.returncode)
     if res.returncode != 0:
-        raise Exception(stderr)
+        raise Exception(stderr.decode())
     return {
         "stdout": stdout.decode(),
         "stderr": stderr.decode(),
