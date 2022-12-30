@@ -123,19 +123,29 @@ def send_standalone_durations(c: Context, lambda_json_output: str):
 
 
 def send_scaling_duration(c: Context, durations: List[Dict]):
-    rows = [
-        {
-            "sleep_duration_ms": int(dur["sleep_duration_sec"] * 1000),
-            "total_duration_ms": int(dur["total_duration_sec"] * 1000),
-            "p90_duration_ms": int(dur["p90_duration_sec"] * 1000),
-            "p99_duration_ms": int(dur["p99_duration_sec"] * 1000),
-            "placeholder_size_mb": int(dur["placeholder_size"] / 10**6),
+    def _map(optional, func):
+        if optional is None:
+            return None
+        return func(optional)
+
+    rows = []
+    for dur in durations:
+        sleep_dur_ms = _map(dur["sleep_duration_sec"], lambda x: int(x * 1000))
+        total_dur_ms = _map(dur["total_duration_sec"], lambda x: int(x * 1000))
+        p90_dur_ms = _map(dur["p90_duration_sec"], lambda x: int(x * 1000))
+        p99_dur_ms = _map(dur["placeholder_size"], lambda x: int(x / 10**6))
+        ph_size_mb = _map(dur["placeholder_size"], lambda x: int(x / 10**6))
+        row = {
+            "sleep_duration_ms": sleep_dur_ms,
+            "total_duration_ms": total_dur_ms,
+            "p90_duration_ms": p90_dur_ms,
+            "p99_duration_ms": p99_dur_ms,
+            "placeholder_size_mb": ph_size_mb,
             "nb_run": dur["nb_run"],
             "nb_cold_start": dur["nb_cold_start"],
             "memory_size_mb": dur["memory_size_mb"],
         }
-        for dur in durations
-    ]
+        rows.append(row)
     send(c, "scaling_durations_table_id", rows)
 
 
