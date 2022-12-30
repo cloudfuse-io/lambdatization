@@ -133,7 +133,7 @@ def send_scaling_duration(c: Context, durations: List[Dict]):
         sleep_dur_ms = _map(dur["sleep_duration_sec"], lambda x: int(x * 1000))
         total_dur_ms = _map(dur["total_duration_sec"], lambda x: int(x * 1000))
         p90_dur_ms = _map(dur["p90_duration_sec"], lambda x: int(x * 1000))
-        p99_dur_ms = _map(dur["placeholder_size"], lambda x: int(x / 10**6))
+        p99_dur_ms = _map(dur["p99_duration_sec"], lambda x: int(x * 1000))
         ph_size_mb = _map(dur["placeholder_size"], lambda x: int(x / 10**6))
         row = {
             "sleep_duration_ms": sleep_dur_ms,
