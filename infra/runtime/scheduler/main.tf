@@ -15,10 +15,15 @@ provider "aws" {
   }
 }
 
+locals {
+  # avoid undesired updates of .terraform.lock.hcl that dirty the git status
+  init_flags = "--flags='-lockfile=readonly'"
+}
+
 ## STANDALONE ENGINES
 
 locals {
-  standalone_engine_cmd   = "l12n init monitoring.bench-cold-warm"
+  standalone_engine_cmd   = "l12n init ${local.init_flags} monitoring.bench-cold-warm"
   standalone_engine_input = jsonencode({ "cmd" : base64encode(local.standalone_engine_cmd), "sampling" : 0.5 })
 }
 
@@ -45,7 +50,7 @@ resource "aws_lambda_permission" "allow_standalone_engine" {
 
 locals {
   scales          = [64, 128, 256]
-  scaling_cmds    = [for sc in local.scales : "l12n init monitoring.bench-scaling -n ${sc}"]
+  scaling_cmds    = [for sc in local.scales : "l12n init ${local.init_flags} monitoring.bench-scaling -n ${sc}"]
   scaling_encoded = [for cmd in local.scaling_cmds : base64encode(cmd)]
   samplings       = [for sc in local.scales : 32 / sc]
   scaling_inputs  = [for i in range(length(local.scales)) : jsonencode({ "cmd" : local.scaling_encoded[i], "sampling" : local.samplings[i] })]
