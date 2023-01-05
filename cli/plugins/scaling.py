@@ -109,12 +109,7 @@ async def invoke_batch(nb, lambda_name, version, memory_mb):
 def run(c, nb=128, memory_mb=2048):
     """Run "nb" Lambdas with "memory_mb" size"""
     lambda_names = terraform_output(c, "scaling", "lambda_names").split(",")
-    random.shuffle(lambda_names)
-
-    results = []
-    for lambda_name in lambda_names:
-        version = resize(lambda_name, memory_mb)
-        res = asyncio.run(invoke_batch(nb, lambda_name, version, memory_mb))
-        results.append(res)
-
-    return results
+    picked_lambda = random.choice(lambda_names)
+    version = resize(picked_lambda, memory_mb)
+    res = asyncio.run(invoke_batch(nb, picked_lambda, version, memory_mb))
+    return [res]
