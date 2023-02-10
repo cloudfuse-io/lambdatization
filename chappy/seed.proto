@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package seed;
+
+message Address {
+    string ip = 1;
+    int32 port = 2;
+}
+
+message ClientPunchRequest {
+    string cluster_id = 1;
+    Address target_virtual_addr = 2;
+    Address source_virtual_addr = 3;
+}
+
+message ClientPunchResponse {
+    Address target_nated_addr = 1;
+}
+
+message RegisterRequest {
+    string cluster_id = 1;
+    Address virtual_addr = 2;
+}
+
+message ServerPunchRequest {
+    Address client_nated_addr = 2;
+}
+
+service Seed {
+    rpc Punch(ClientPunchRequest) returns (ClientPunchResponse) {}
+    rpc Register(RegisterRequest) returns (stream ServerPunchRequest) {}
+}
