@@ -1,3 +1,7 @@
+locals {
+  seed_port = 8000
+}
+
 module "vpc" {
   source = "terraform-aws-modules/vpc/aws"
 
@@ -122,7 +126,16 @@ resource "aws_ecs_task_definition" "chappydev_seed" {
         "awslogs-stream-prefix" : "ecs"
       }
     },          
-    "environment": [],
+    "environment": [{
+        "name": "PORT",
+        "value": "${local.seed_port}"
+      },{
+        "name": "RUST_LOG",
+        "value": "debug,h2=error"
+      },{
+        "name": "RUST_BACKTRACE",
+        "vallue": "1"
+    }],
     "entrypoint": ["sleep", "infinity"]
   }
 ]
@@ -131,13 +144,13 @@ DEFINITION
 
 resource "aws_security_group" "seed_all" {
   name        = "${module.env.module_name}-chappydev-seed-${module.env.stage}"
-  description = "Allow all inbound and outbound"
+  description = "Allow inbound port for GRPC and all outbound"
   vpc_id      = module.vpc.vpc_id
 
   ingress {
     protocol    = "tcp"
-    from_port   = 0
-    to_port     = 0
+    from_port   = local.seed_port
+    to_port     = local.seed_port
     cidr_blocks = ["0.0.0.0/0"]
   }
 

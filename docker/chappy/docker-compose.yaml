@@ -11,7 +11,7 @@ services:
       - chappy-dev-tmp:/tmp
     entrypoint:
       - python3
-      - lambda-handler.py
+      - dev-handler.py
     environment:
       - AWS_REGION=$L12N_AWS_REGION
       - AWS_ACCESS_KEY_ID=$LAMBDA_ACCESS_KEY_ID

@@ -10,7 +10,10 @@ use std::ptr;
 use utils::{parse_virtual, register, request_punch};
 
 fn init_logger() {
-    env_logger::try_init().ok();
+    env_logger::Builder::from_default_env()
+        .format_timestamp_millis()
+        .try_init()
+        .ok();
 }
 
 lazy_static! {
@@ -40,7 +43,9 @@ pub unsafe extern "C" fn connect(sockfd: c_int, addr: *const sockaddr, len: sock
             );
             let code = libc_connect(sockfd, ptr::addr_of!(new_addr).cast(), new_addr.len());
             if code == -1 {
-                debug!("errno for libc.connect({})", nix::errno::errno())
+                debug!("errno for libc.connect(): {}", nix::errno::errno())
+            } else {
+                debug!("libc.connect() success")
             }
             code
         }
@@ -77,4 +82,35 @@ pub unsafe extern "C" fn bind(sockfd: c_int, addr: *const sockaddr, len: socklen
         }
         None => libc_bind(sockfd, addr, len),
     }
+}
+
+/////// Interception of accept() for debugging purposes ///////
+
+type AcceptSymbol<'a> =
+    libloading::Symbol<'a, unsafe extern "C" fn(c_int, *const sockaddr, socklen_t) -> c_int>;
+
+#[no_mangle]
+pub unsafe extern "C" fn accept(sockfd: c_int, addr: *const sockaddr, len: socklen_t) -> c_int {
+    init_logger();
+    debug!("Entering interception accept({})", sockfd);
+    let libc_accept: AcceptSymbol = LIBC_LOADED.get(b"accept").unwrap();
+    libc_accept(sockfd, addr, len)
+}
+
+type Accept4Symbol<'a> =
+    libloading::Symbol<'a, unsafe extern "C" fn(c_int, *const sockaddr, socklen_t, c_int) -> c_int>;
+
+#[no_mangle]
+pub unsafe extern "C" fn accept4(
+    sockfd: c_int,
+    addr: *const sockaddr,
+    len: socklen_t,
+    flags: c_int,
+) -> c_int {
+    init_logger();
+    debug!("Entering interception accept4({})", sockfd);
+    let libc_accept4: Accept4Symbol = LIBC_LOADED.get(b"accept4").unwrap();
+    let accept_res = libc_accept4(sockfd, addr, len, flags);
+    debug!("accept4({})->{}", sockfd, accept_res);
+    accept_res
 }

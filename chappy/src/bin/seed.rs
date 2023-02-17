@@ -51,7 +51,7 @@ impl Seed for SeedService {
         let guard = self.server_nated_addr.lock().await;
         let dst_nated_addr = guard.as_ref().unwrap();
         debug!(
-            "corresponding natted tuple {} -> {}",
+            "corresponding NATed tuple {} -> {}",
             src_nated_addr, dst_nated_addr
         );
         self.req_tx
@@ -73,6 +73,8 @@ impl Seed for SeedService {
         req: Request<RegisterRequest>,
     ) -> Result<Response<Self::RegisterStream>, Status> {
         let server_nated_addr = req.remote_addr().unwrap();
+        let srv_nated_ip = server_nated_addr.ip().to_string();
+        let srv_nated_port = server_nated_addr.port();
         self.server_nated_addr
             .lock()
             .await
@@ -83,7 +85,11 @@ impl Seed for SeedService {
             .await
             .take()
             .expect("Receiver already used");
-        let stream = UnboundedReceiverStream::new(req_rx).map(|addr| {
+        let stream = UnboundedReceiverStream::new(req_rx).map(move |addr| {
+            debug!(
+                "forwarding punch request to srv {}:{} for client {}:{} (NATed addresses)",
+                srv_nated_ip, srv_nated_port, addr.ip, addr.port,
+            );
             Ok(ServerPunchRequest {
                 client_nated_addr: Some(addr),
             })
@@ -94,10 +100,12 @@ impl Seed for SeedService {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    env_logger::init();
-    debug!("Starting seed...");
-    let service = SeedService::new();
+    env_logger::Builder::from_default_env()
+        .format_timestamp_millis()
+        .init();
     let port = env::var("PORT").unwrap();
+    debug!("Starting seed on port {}...", port);
+    let service = SeedService::new();
     Server::builder()
         .add_service(SeedServer::new(service))
         .serve(format!("0.0.0.0:{}", port).parse()?)

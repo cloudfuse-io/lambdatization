@@ -4,13 +4,13 @@ use std::io::prelude::*;
 use std::net::TcpStream;
 
 fn main() {
-    env_logger::init();
+    env_logger::Builder::from_default_env()
+        .format_timestamp_millis()
+        .init();
     let virtual_ip = env::var("SERVER_VIRTUAL_IP").unwrap();
     let server_address = format!("{}:8080", virtual_ip);
     debug!("Connecting to echo server {}", server_address);
     let stream_res = TcpStream::connect(&server_address);
-    // let the time for all loggers to flush
-    std::thread::sleep(std::time::Duration::from_millis(500));
     let mut stream = stream_res.unwrap();
     // first write/read
     debug!("Connection to echo server successful");

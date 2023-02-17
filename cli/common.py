@@ -132,6 +132,7 @@ def tf_version(c: Context):
 
 def terraform_output(c: Context, module, key) -> str:
     cmd = f"terragrunt output --terragrunt-working-dir {RUNTIME_TFDIR}/{module} --raw {key}"
+    configure_tf_cache_dir()
     try:
         output = c.run(
             cmd,

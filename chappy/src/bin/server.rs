@@ -49,7 +49,9 @@ fn run() {
 }
 
 fn main() {
-    env_logger::init();
+    env_logger::Builder::from_default_env()
+        .format_timestamp_millis()
+        .init();
     debug!("Starting server...");
     run()
 }

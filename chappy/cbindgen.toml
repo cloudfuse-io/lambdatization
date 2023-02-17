@@ -1,6 +1,0 @@
-language = "C"
-no_includes = false
-sys_includes = ["sys/socket.h"]
-
-[export.rename]
-"sockaddr" = "struct sockaddr"

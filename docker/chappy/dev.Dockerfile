@@ -27,7 +27,7 @@ RUN pip3 install \
     boto3
 
 WORKDIR ${FUNCTION_DIR}
-COPY dev-handler.py ./lambda-handler.py
+COPY dev-handler.py .
 
 ENTRYPOINT [ "python3", "-m", "awslambdaric" ]
-CMD [ "lambda-handler.handler" ]
+CMD [ "dev-handler.handler" ]

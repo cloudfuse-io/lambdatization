@@ -1,10 +1,9 @@
 use crate::{seed_client, utils};
 use futures::StreamExt;
 use log::debug;
-use nix::libc::{c_int, sockaddr, socklen_t};
+use nix::libc::{c_int, sockaddr, socklen_t, suseconds_t};
 use nix::sys::socket::{
-    self, sockopt::ReusePort, AddressFamily, SockFlag, SockType, SockaddrIn, SockaddrLike,
-    SockaddrStorage,
+    self, sockopt, AddressFamily, SockFlag, SockType, SockaddrIn, SockaddrLike, SockaddrStorage,
 };
 use std::env;
 use std::net::{Ipv4Addr, SocketAddrV4};
@@ -21,6 +20,9 @@ lazy_static! {
     static ref VIRTUAL_NET: ipnet::Ipv4Net = env::var("VIRTUAL_SUBNET").unwrap().parse().unwrap();
 }
 
+const NAT_CONFIGURATION_SOCKET_TIMEOUT_MS: suseconds_t = 49;
+const SLEEP_AFTER_PUNCH_RESPONSE_MS: u64 = 50;
+
 pub(crate) fn bind_random_port(sockfd: RawFd) -> u16 {
     // TODO support ipv6
     socket::bind(
@@ -36,7 +38,7 @@ pub(crate) fn bind_random_port(sockfd: RawFd) -> u16 {
 
 pub(crate) fn request_punch(sockfd: c_int, addr_in: SockaddrIn) -> SockaddrIn {
     // bind the socket connect() is planning to use to a reusable random port
-    socket::setsockopt(sockfd, ReusePort, &true).unwrap();
+    socket::setsockopt(sockfd, sockopt::ReusePort, &true).unwrap();
     debug!("SO_REUSEPORT=true set on {}", sockfd);
     let source_port = utils::bind_random_port(sockfd);
     debug!("bound source socket {} to port {}", sockfd, source_port);
@@ -51,12 +53,18 @@ pub(crate) fn request_punch(sockfd: c_int, addr_in: SockaddrIn) -> SockaddrIn {
         ))
         .target_nated_addr
         .unwrap();
-    std::thread::sleep(std::time::Duration::from_millis(1000));
+    debug!(
+        "NATed server address received from Seed {}:{}",
+        resp.ip, resp.port
+    );
+    std::thread::sleep(std::time::Duration::from_millis(
+        SLEEP_AFTER_PUNCH_RESPONSE_MS,
+    ));
     SockaddrIn::from_str(&format!("{}:{}", resp.ip, resp.port)).unwrap()
 }
 
 pub(crate) fn register(sockfd: c_int, addr_in: SockaddrIn) -> SockaddrIn {
-    socket::setsockopt(sockfd, ReusePort, &true).unwrap();
+    socket::setsockopt(sockfd, sockopt::ReusePort, &true).unwrap();
     debug!("SO_REUSEPORT=true set on {}", sockfd);
     let registered_port = addr_in.port();
     RUNTIME.spawn(async move {
@@ -74,15 +82,14 @@ pub(crate) fn register(sockfd: c_int, addr_in: SockaddrIn) -> SockaddrIn {
                     None,
                 )
                 .unwrap();
-                socket::setsockopt(sockfd, ReusePort, &true).unwrap();
+                socket::setsockopt(sockfd, sockopt::ReusePort, &true).unwrap();
                 debug!("SO_REUSEPORT=true set on {}", sockfd);
 
                 // set socket timeouts
-                let time_val = nix::sys::time::TimeVal::new(0, 1);
-                socket::setsockopt(sockfd, nix::sys::socket::sockopt::SendTimeout, &time_val)
-                    .unwrap();
-                socket::setsockopt(sockfd, nix::sys::socket::sockopt::ReceiveTimeout, &time_val)
-                    .unwrap();
+                let time_val =
+                    nix::sys::time::TimeVal::new(0, NAT_CONFIGURATION_SOCKET_TIMEOUT_MS * 1000);
+                socket::setsockopt(sockfd, sockopt::SendTimeout, &time_val).unwrap();
+                socket::setsockopt(sockfd, sockopt::ReceiveTimeout, &time_val).unwrap();
 
                 nix::sys::socket::bind(sockfd, &SockaddrIn::new(0, 0, 0, 0, registered_port))
                     .unwrap();
