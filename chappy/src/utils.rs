@@ -1,7 +1,7 @@
 use crate::{seed_client, utils};
 use futures::StreamExt;
 use log::debug;
-use nix::libc::{c_int, sockaddr, socklen_t, suseconds_t};
+use nix::libc::{c_int, sockaddr, socklen_t};
 use nix::sys::socket::{
     self, sockopt, AddressFamily, SockFlag, SockType, SockaddrIn, SockaddrLike, SockaddrStorage,
 };
@@ -9,6 +9,7 @@ use std::env;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::os::fd::RawFd;
 use std::str::FromStr;
+use std::time::Duration;
 use tokio::runtime;
 
 lazy_static! {
@@ -20,8 +21,8 @@ lazy_static! {
     static ref VIRTUAL_NET: ipnet::Ipv4Net = env::var("VIRTUAL_SUBNET").unwrap().parse().unwrap();
 }
 
-const NAT_CONFIGURATION_SOCKET_TIMEOUT_MS: suseconds_t = 49;
-const SLEEP_AFTER_PUNCH_RESPONSE_MS: u64 = 50;
+const NAT_CONFIGURATION_SOCKET_TIMEOUT_MS: u64 = 10;
+const SLEEP_AFTER_PUNCH_RESPONSE_MS: u64 = 500;
 
 pub(crate) fn bind_random_port(sockfd: RawFd) -> u16 {
     // TODO support ipv6
@@ -85,28 +86,35 @@ pub(crate) fn register(sockfd: c_int, addr_in: SockaddrIn) -> SockaddrIn {
                 socket::setsockopt(sockfd, sockopt::ReusePort, &true).unwrap();
                 debug!("SO_REUSEPORT=true set on {}", sockfd);
 
-                // set socket timeouts
-                let time_val =
-                    nix::sys::time::TimeVal::new(0, NAT_CONFIGURATION_SOCKET_TIMEOUT_MS * 1000);
-                socket::setsockopt(sockfd, sockopt::SendTimeout, &time_val).unwrap();
-                socket::setsockopt(sockfd, sockopt::ReceiveTimeout, &time_val).unwrap();
-
                 nix::sys::socket::bind(sockfd, &SockaddrIn::new(0, 0, 0, 0, registered_port))
                     .unwrap();
-                // This can be used to controll which sides tries to connect first
-                // tokio::time::sleep(Duration::from_millis(50)).await;
                 let url = format!("{}:{}", client_nated_addr.ip, client_nated_addr.port);
-                debug!(
-                    "Configure NAT by connecting 0.0.0.0:{} -> {}",
-                    registered_port, url
-                );
-                match nix::sys::socket::connect(sockfd, &SockaddrIn::from_str(&url).unwrap()) {
-                    Ok(_) => debug!("NAT configuration: successful connection"),
-                    Err(err) => debug!("NAT configuration: error {}", err),
-                }
+                let connect_fut = tokio::task::spawn_blocking(move || {
+                    debug!(
+                        "Configure NAT by connecting 0.0.0.0:{} -> {}",
+                        registered_port, url
+                    );
+                    match nix::sys::socket::connect(sockfd, &SockaddrIn::from_str(&url).unwrap()) {
+                        Ok(_) => debug!("NAT configuration: successful connection"),
+                        Err(err) => debug!("NAT configuration: error {}", err),
+                    }
+                });
+                // Wait for the SYN packet to go through before closing
+                tokio::time::sleep(Duration::from_millis(NAT_CONFIGURATION_SOCKET_TIMEOUT_MS))
+                    .await;
                 // safety: this socket was created here and isn't reused after
+                socket::setsockopt(
+                    sockfd,
+                    sockopt::Linger,
+                    &nix::libc::linger {
+                        l_onoff: 1,
+                        l_linger: 0,
+                    },
+                )
+                .unwrap();
                 let close_res = unsafe { nix::libc::close(sockfd) };
                 debug!("Socket {} closed with return code {}", sockfd, close_res);
+                connect_fut.await.unwrap();
             })
             .buffer_unordered(usize::MAX)
             .for_each(|_| async {})
