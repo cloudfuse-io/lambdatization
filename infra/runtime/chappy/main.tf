@@ -50,7 +50,7 @@ module "dev_lambda" {
 
   additional_policies = [aws_iam_policy.s3_access.arn]
   environment         = {
-    SEED_PORT = tostring(local.seed_port)
+    CHAPPY_SEED_PORT = tostring(local.seed_port)
   }
 
 }

@@ -1,28 +1,12 @@
-use crate::{seed_client, utils};
+use crate::{seed_client, utils, RUNTIME, VIRTUAL_NET};
 use futures::StreamExt;
 use log::debug;
 use nix::libc::{c_int, sockaddr, socklen_t};
-use nix::sys::socket::{
-    self, sockopt, AddressFamily, SockFlag, SockType, SockaddrIn, SockaddrLike, SockaddrStorage,
-};
-use std::env;
-use std::net::{Ipv4Addr, SocketAddrV4};
+use nix::sys::socket::{self, sockopt, SockaddrIn, SockaddrLike, SockaddrStorage};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::os::fd::RawFd;
 use std::str::FromStr;
-use std::time::Duration;
-use tokio::runtime;
-
-lazy_static! {
-    static ref RUNTIME: runtime::Runtime = runtime::Builder::new_multi_thread()
-        .worker_threads(1)
-        .enable_all()
-        .build()
-        .unwrap();
-    static ref VIRTUAL_NET: ipnet::Ipv4Net = env::var("VIRTUAL_SUBNET").unwrap().parse().unwrap();
-}
-
-const NAT_CONFIGURATION_SOCKET_TIMEOUT_MS: u64 = 10;
-const SLEEP_AFTER_PUNCH_RESPONSE_MS: u64 = 500;
+use tokio::net::{TcpSocket, TcpStream};
 
 pub(crate) fn bind_random_port(sockfd: RawFd) -> u16 {
     // TODO support ipv6
@@ -58,9 +42,6 @@ pub(crate) fn request_punch(sockfd: c_int, addr_in: SockaddrIn) -> SockaddrIn {
         "NATed server address received from Seed {}:{}",
         resp.ip, resp.port
     );
-    std::thread::sleep(std::time::Duration::from_millis(
-        SLEEP_AFTER_PUNCH_RESPONSE_MS,
-    ));
     SockaddrIn::from_str(&format!("{}:{}", resp.ip, resp.port)).unwrap()
 }
 
@@ -70,57 +51,48 @@ pub(crate) fn register(sockfd: c_int, addr_in: SockaddrIn) -> SockaddrIn {
     let registered_port = addr_in.port();
     RUNTIME.spawn(async move {
         let stream = seed_client::register(addr_in.port()).await;
-        // For each incoming server punch request, connect to the client
-        // NATed address from the server port to configure the NAT on the
-        // server side.
+        // For each incoming server punch request, we create a hole punched connection
+        // by starting a connection from both sides. We then forward that connection
+        // to the local listening server.
         stream
             .map(|punch_req| async {
+                // holepunch connection
+                let socket = TcpSocket::new_v4().unwrap();
+                socket.set_reuseport(true).unwrap();
+                let punch_bind_sock_addr =
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), registered_port);
+                socket.bind(punch_bind_sock_addr).unwrap();
                 let client_nated_addr = punch_req.unwrap().client_nated_addr.unwrap();
-                let sockfd = nix::sys::socket::socket(
-                    AddressFamily::Inet,
-                    SockType::Stream,
-                    SockFlag::empty(),
-                    None,
-                )
-                .unwrap();
-                socket::setsockopt(sockfd, sockopt::ReusePort, &true).unwrap();
-                debug!("SO_REUSEPORT=true set on {}", sockfd);
-
-                nix::sys::socket::bind(sockfd, &SockaddrIn::new(0, 0, 0, 0, registered_port))
+                let client_nated_url =
+                    format!("{}:{}", client_nated_addr.ip, client_nated_addr.port);
+                let punch_stream = socket
+                    .connect(client_nated_url.parse().unwrap())
+                    .await
                     .unwrap();
-                let url = format!("{}:{}", client_nated_addr.ip, client_nated_addr.port);
-                let connect_fut = tokio::task::spawn_blocking(move || {
-                    debug!(
-                        "Configure NAT by connecting 0.0.0.0:{} -> {}",
-                        registered_port, url
-                    );
-                    match nix::sys::socket::connect(sockfd, &SockaddrIn::from_str(&url).unwrap()) {
-                        Ok(_) => debug!("NAT configuration: successful connection"),
-                        Err(err) => debug!("NAT configuration: error {}", err),
-                    }
+
+                // forwarding connection
+                let localhost_url = format!("localhost:{}", registered_port);
+                let fwd_stream = TcpStream::connect(localhost_url).await.unwrap();
+
+                // pipe holepunch connection to forwarding connection
+                let (mut punch_read, mut punch_write) = punch_stream.into_split();
+                let (mut fwd_read, mut fwd_write) = fwd_stream.into_split();
+                tokio::spawn(async move {
+                    tokio::io::copy(&mut punch_read, &mut fwd_write)
+                        .await
+                        .unwrap()
                 });
-                // Wait for the SYN packet to go through before closing
-                tokio::time::sleep(Duration::from_millis(NAT_CONFIGURATION_SOCKET_TIMEOUT_MS))
-                    .await;
-                // safety: this socket was created here and isn't reused after
-                socket::setsockopt(
-                    sockfd,
-                    sockopt::Linger,
-                    &nix::libc::linger {
-                        l_onoff: 1,
-                        l_linger: 0,
-                    },
-                )
-                .unwrap();
-                let close_res = unsafe { nix::libc::close(sockfd) };
-                debug!("Socket {} closed with return code {}", sockfd, close_res);
-                connect_fut.await.unwrap();
+                tokio::spawn(async move {
+                    tokio::io::copy(&mut fwd_read, &mut punch_write)
+                        .await
+                        .unwrap()
+                });
             })
             .buffer_unordered(usize::MAX)
             .for_each(|_| async {})
             .await
     });
-    SockaddrIn::new(0, 0, 0, 0, registered_port)
+    SockaddrIn::new(127, 0, 0, 1, registered_port)
 }
 
 pub(crate) unsafe fn parse_virtual(addr: *const sockaddr, len: socklen_t) -> Option<SockaddrIn> {
@@ -131,7 +103,7 @@ pub(crate) unsafe fn parse_virtual(addr: *const sockaddr, len: socklen_t) -> Opt
         }
         Some(addr_in) => {
             debug!(
-                "{} not in virtual network {}, forwarding to libc",
+                "{} not in virtual network {}",
                 Ipv4Addr::from(addr_in.ip()).to_string(),
                 VIRTUAL_NET.to_string()
             );

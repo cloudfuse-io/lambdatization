@@ -34,7 +34,7 @@ def setup_binaries(bucket_name: str, bin_object_key: str, lib_object_key="") -> 
 
 def handler(event: dict, context):
     """AWS Lambda handler"""
-    start = time.time()
+    handler_start = time.time()
     global IS_COLD_START
     if not IS_COLD_START:
         return {"error": "Not a cold start"}
@@ -49,6 +49,7 @@ def handler(event: dict, context):
 
     local_binary_location = setup_binaries(bucket_name, bin_object_key, lib_object_key)
 
+    subproc_start = time.time()
     try:
         res = subprocess.run(
             [local_binary_location],
@@ -70,7 +71,8 @@ def handler(event: dict, context):
         "stderr": stderr,
         "returncode": returncode,
         "context": {
-            "handler_duration_sec": time.time() - start,
+            "handler_duration_sec": time.time() - handler_start,
+            "subproc_duration_sec": time.time() - subproc_start,
         },
     }
     return result

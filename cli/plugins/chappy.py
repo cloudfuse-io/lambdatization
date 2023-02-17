@@ -184,10 +184,8 @@ def run_lambda(c, seed=None):
         server_up_fut.result()
 
         common_env = {
-            "SEED_HOSTNAME": seed,
-            "VIRTUAL_SUBNET": "172.28.0.0/16",
-            "SERVER_VIRTUAL_IP": "172.28.0.1",
-            "CLIENT_VIRTUAL_IP": "172.28.0.2",
+            "CHAPPY_SEED_HOSTNAME": seed,
+            "CHAPPY_VIRTUAL_SUBNET": "172.28.0.0/16",
             "RUST_LOG": "debug,h2=error",
             "RUST_BACKTRACE": "1",
         }
@@ -200,10 +198,10 @@ def run_lambda(c, seed=None):
             3,
             "dev/debug/server",
             "dev/debug/libchappy.so",
-            common_env,
+            {**common_env, "CHAPPY_VIRTUAL_IP": "172.28.0.1"},
         )
 
-        time.sleep(1)
+        time.sleep(0.5)
 
         client_fut = executor.submit(
             invoke_lambda,
@@ -213,7 +211,11 @@ def run_lambda(c, seed=None):
             3,
             "dev/debug/client",
             "dev/debug/libchappy.so",
-            common_env,
+            {
+                **common_env,
+                "CHAPPY_VIRTUAL_IP": "172.28.0.2",
+                "SERVER_VIRTUAL_IP": "172.28.0.1",
+            },
         )
 
         print(client_fut.result())

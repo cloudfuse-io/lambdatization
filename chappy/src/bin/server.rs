@@ -1,5 +1,5 @@
 use env_logger;
-use log::{debug, error};
+use log::{error, info};
 use std::env;
 use std::io::Read;
 use std::io::Write;
@@ -26,13 +26,13 @@ fn handle_client(mut stream: TcpStream) {
 }
 
 fn run() {
-    let virtual_ip = env::var("SERVER_VIRTUAL_IP").unwrap();
+    let virtual_ip = env::var("CHAPPY_VIRTUAL_IP").unwrap();
     let listener = TcpListener::bind(format!("{}:8080", virtual_ip)).unwrap();
 
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
-                debug!(
+                info!(
                     "New incomming request on {} from {}",
                     stream.local_addr().unwrap(),
                     stream.peer_addr().unwrap()
@@ -52,6 +52,6 @@ fn main() {
     env_logger::Builder::from_default_env()
         .format_timestamp_millis()
         .init();
-    debug!("Starting server...");
+    info!("Starting server...");
     run()
 }

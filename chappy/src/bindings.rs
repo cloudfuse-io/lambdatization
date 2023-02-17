@@ -1,11 +1,10 @@
-use crate::utils;
+use crate::{debug_fmt, utils, LIBC_LOADED};
 use env_logger;
 use log::debug;
 use nix::{
     libc::{c_int, sockaddr, socklen_t},
     sys::socket::SockaddrLike,
 };
-use std::net::Ipv4Addr;
 use std::ptr;
 use utils::{parse_virtual, register, request_punch};
 
@@ -16,20 +15,6 @@ fn init_logger() {
         .ok();
 }
 
-unsafe fn debug_parse(addr: *const sockaddr, len: socklen_t) -> String {
-    let addr_stor = nix::sys::socket::SockaddrStorage::from_raw(addr, Some(len)).unwrap();
-    if let Some(addr) = addr_stor.as_sockaddr_in() {
-        return format!("{}:{}", Ipv4Addr::from(addr.ip()), addr.port());
-    } else {
-        String::from("not-ipv4")
-    }
-}
-
-lazy_static! {
-    static ref LIBC_LOADED: libloading::Library =
-        unsafe { libloading::Library::new("/lib/x86_64-linux-gnu/libc.so.6").unwrap() };
-}
-
 type ConnectSymbol<'a> =
     libloading::Symbol<'a, unsafe extern "C" fn(c_int, *const sockaddr, socklen_t) -> c_int>;
 
@@ -38,35 +23,19 @@ pub unsafe extern "C" fn connect(sockfd: c_int, addr: *const sockaddr, len: sock
     init_logger();
     let libc_connect: ConnectSymbol = LIBC_LOADED.get(b"connect").unwrap();
     debug!("Entering interception connect({})", sockfd);
-    match parse_virtual(addr, len) {
+    let code = match parse_virtual(addr, len) {
         Some(addr_in) => {
             let new_addr = request_punch(sockfd, addr_in);
-            debug!(
-                "Calling libc.connect({}, {}:{}) instead of ({}, {}:{})",
-                sockfd,
-                Ipv4Addr::from(new_addr.ip()),
-                new_addr.port(),
-                sockfd,
-                Ipv4Addr::from(addr_in.ip()),
-                addr_in.port()
-            );
-            let code = libc_connect(sockfd, ptr::addr_of!(new_addr).cast(), new_addr.len());
-            if code == -1 {
-                debug!("errno for libc.connect(): {}", nix::errno::errno())
-            } else {
-                debug!("libc.connect() success")
-            }
-            code
+            debug_fmt::dst_rewrite("connect", sockfd, &new_addr, &addr_in);
+            libc_connect(sockfd, ptr::addr_of!(new_addr).cast(), new_addr.len())
         }
         None => {
-            debug!(
-                "Calling libc.connect({}, {})",
-                sockfd,
-                debug_parse(addr, len)
-            );
+            debug_fmt::dst("connect", sockfd, addr, len);
             libc_connect(sockfd, addr, len)
         }
-    }
+    };
+    debug_fmt::return_code("connect", sockfd, code);
+    code
 }
 
 type BindSymbol<'a> =
@@ -78,54 +47,17 @@ pub unsafe extern "C" fn bind(sockfd: c_int, addr: *const sockaddr, len: socklen
     debug!("Entering interception bind({})", sockfd);
     let libc_bind: BindSymbol = LIBC_LOADED.get(b"bind").unwrap();
 
-    match parse_virtual(addr, len) {
+    let code = match parse_virtual(addr, len) {
         Some(addr_in) => {
             let new_addr = register(sockfd, addr_in);
-            debug!(
-                "Calling libc.bind({}, {}:{}) instead of ({}, {}:{})",
-                sockfd,
-                Ipv4Addr::from(new_addr.ip()),
-                new_addr.port(),
-                sockfd,
-                Ipv4Addr::from(addr_in.ip()),
-                addr_in.port()
-            );
-            let code = libc_bind(sockfd, ptr::addr_of!(new_addr).cast(), new_addr.len());
-            if code == -1 {
-                debug!("errno for libc.bind({})", nix::errno::errno())
-            }
-            code
+            debug_fmt::dst_rewrite("bind", sockfd, &new_addr, &addr_in);
+            libc_bind(sockfd, ptr::addr_of!(new_addr).cast(), new_addr.len())
         }
         None => {
-            debug!("Calling libc.bind({}, {})", sockfd, debug_parse(addr, len));
+            debug_fmt::dst("bind", sockfd, addr, len);
             libc_bind(sockfd, addr, len)
         }
-    }
+    };
+    debug_fmt::return_code("bind", sockfd, code);
+    code
 }
-
-/////// Interception of accept() for debugging purposes ///////
-
-// #[no_mangle]
-// pub unsafe extern "C" fn accept(sockfd: c_int, addr: *mut sockaddr, len: *mut socklen_t) -> c_int {
-//     accept4(sockfd, addr, len, 0)
-// }
-
-// type Accept4Symbol<'a> = libloading::Symbol<
-//     'a,
-//     unsafe extern "C" fn(c_int, *mut sockaddr, *mut socklen_t, c_int) -> c_int,
-// >;
-
-// #[no_mangle]
-// pub unsafe extern "C" fn accept4(
-//     sockfd: c_int,
-//     addr: *mut sockaddr,
-//     len: *mut socklen_t,
-//     flags: c_int,
-// ) -> c_int {
-//     init_logger();
-//     debug!("Entering interception accept4({})", sockfd);
-//     let libc_accept4: Accept4Symbol = LIBC_LOADED.get(b"accept4").unwrap();
-//     let accept_res = libc_accept4(sockfd, addr, len, flags);
-//     debug!("accept4({})->{}", sockfd, accept_res);
-//     accept_res
-// }

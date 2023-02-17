@@ -1,6 +1,6 @@
+use crate::CHAPPY_CONF;
 use log::debug;
 use seed::{seed_client::SeedClient, Address, ClientPunchRequest, RegisterRequest};
-use std::env;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, ToSocketAddrs};
 use std::os::fd::AsRawFd;
 use tokio::net::TcpSocket;
@@ -27,11 +27,7 @@ pub(crate) async fn connect_seed(source_port: u16) -> SeedClient<Channel> {
                 source_port,
             ))
             .unwrap();
-            let url = format!(
-                "{}:{}",
-                env::var("SEED_HOSTNAME").unwrap(),
-                env::var("SEED_PORT").unwrap()
-            );
+            let url = format!("{}:{}", CHAPPY_CONF.seed_hostname, CHAPPY_CONF.seed_port);
             let socket_addr = url
                 .to_socket_addrs()
                 .expect(&format!("Error solving {}:", url))
@@ -56,17 +52,16 @@ pub(crate) async fn request_punch(
     target_virtual_ip: String,
     target_port: u16,
 ) -> ClientPunchResponse {
-    let source_virtual_ip = env::var("CLIENT_VIRTUAL_IP").unwrap();
     debug!(
         "request punch to enable {}:{} -> {}:{}",
-        source_virtual_ip, source_port, target_virtual_ip, target_port
+        CHAPPY_CONF.virtual_ip, source_port, target_virtual_ip, target_port
     );
     let mut client = connect_seed(source_port).await;
     let resp = client
         .punch(ClientPunchRequest {
             cluster_id: String::from("test"),
             source_virtual_addr: Some(Address {
-                ip: source_virtual_ip,
+                ip: CHAPPY_CONF.virtual_ip.clone(),
                 port: source_port.try_into().unwrap(),
             }),
             target_virtual_addr: Some(Address {
@@ -80,14 +75,13 @@ pub(crate) async fn request_punch(
 }
 
 pub(crate) async fn register(port: u16) -> Streaming<ServerPunchRequest> {
-    let virtual_ip = env::var("SERVER_VIRTUAL_IP").unwrap();
-    debug!("register {}:{}", virtual_ip, port);
+    debug!("register {}:{}", CHAPPY_CONF.virtual_ip, port);
     let mut client = connect_seed(port).await;
     let resp = client
         .register(RegisterRequest {
             cluster_id: String::from("test"),
             virtual_addr: Some(Address {
-                ip: virtual_ip,
+                ip: CHAPPY_CONF.virtual_ip.clone(),
                 port: port.try_into().unwrap(),
             }),
         })
