@@ -15,7 +15,8 @@ fn handle_client(mut stream: TcpStream) {
             Ok(n) => {
                 bytes_echoed += n;
                 if n == 0 {
-                    debug!("Connection closed, bytes echoed: {}", bytes_echoed);
+                    stream.flush().unwrap();
+                    debug!("Stream EOF, bytes echoed: {}", bytes_echoed);
                     break;
                 }
                 stream.write_all(&read[0..n]).unwrap();

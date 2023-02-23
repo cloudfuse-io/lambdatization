@@ -1,9 +1,12 @@
 mod bindings;
 mod conf;
 mod debug_fmt;
-mod quic_utils;
-mod seed_client;
+pub mod quic_utils;
+pub mod seed_client;
 mod utils;
+
+pub const REGISTER_MAGIC_LENGTH: usize = 10;
+pub const REGISTER_MAGIC_BYTES: [u8; REGISTER_MAGIC_LENGTH] = *b"chappy_reg";
 
 #[macro_use]
 extern crate lazy_static;

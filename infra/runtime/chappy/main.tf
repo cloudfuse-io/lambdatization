@@ -49,7 +49,7 @@ module "dev_lambda" {
   timeout            = 300
 
   additional_policies = [aws_iam_policy.s3_access.arn]
-  environment         = {
+  environment = {
     CHAPPY_SEED_PORT = tostring(local.seed_port)
   }
 

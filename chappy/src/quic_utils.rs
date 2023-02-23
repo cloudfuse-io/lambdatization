@@ -56,7 +56,7 @@ impl rustls::client::ServerCertVerifier for SkipServerVerification {
     }
 }
 
-pub(crate) fn configure_client() -> ClientConfig {
+pub fn configure_client() -> ClientConfig {
     let crypto = rustls::ClientConfig::builder()
         .with_safe_defaults()
         .with_custom_certificate_verifier(SkipServerVerification::new())

@@ -123,15 +123,25 @@ def redeploy(lambda_name) -> str:
     return response["Version"]
 
 
-def invoke_lambda(lambda_name, bucket_name, lambda_version, timeout, bin, lib, env):
+def invoke_lambda(
+    lambda_name,
+    bucket_name,
+    lambda_version,
+    timeout,
+    app_bin,
+    perf_bin,
+    chappy_lib,
+    env,
+):
     start_time = time.time()
     lambda_res = aws("lambda").invoke(
         FunctionName=lambda_name,
         Payload=json.dumps(
             {
                 "bucket_name": bucket_name,
-                "bin_object_key": bin,
-                "lib_object_key": lib,
+                "app_object_key": app_bin,
+                "perforator_object_key": perf_bin,
+                "libchappy_object_key": chappy_lib,
                 "timeout_sec": timeout,
                 "env": env,
             }
@@ -142,7 +152,7 @@ def invoke_lambda(lambda_name, bucket_name, lambda_version, timeout, bin, lib, e
     )
     result = []
     result.append(f"==============================")
-    result.append(f"RESULTS FOR {bin}")
+    result.append(f"RESULTS FOR {app_bin}")
     result.append(f"EXTERNAL_DURATION: {time.time() - start_time}")
     resp_payload = lambda_res["Payload"].read().decode()
     result.append("== LOGS ==")
@@ -178,15 +188,17 @@ def run_lambda(c, seed=None):
         lib_up_fut = executor.submit(upload, "debug/libchappy.so")
         client_up_fut = executor.submit(upload, "debug/client")
         server_up_fut = executor.submit(upload, "debug/server")
+        perforator_up_fut = executor.submit(upload, "debug/perforator")
         lambda_version = redeploy_fut.result()
         lib_up_fut.result()
         client_up_fut.result()
         server_up_fut.result()
+        perforator_up_fut.result()
 
         common_env = {
             "CHAPPY_SEED_HOSTNAME": seed,
             "CHAPPY_VIRTUAL_SUBNET": "172.28.0.0/16",
-            "RUST_LOG": "debug,h2=error",
+            "RUST_LOG": "debug,h2=error,quinn=info",
             "RUST_BACKTRACE": "1",
         }
 
@@ -195,8 +207,9 @@ def run_lambda(c, seed=None):
             lambda_name,
             bucket_name,
             lambda_version,
-            3,
+            4,
             "dev/debug/server",
+            "",
             "dev/debug/libchappy.so",
             {**common_env, "CHAPPY_VIRTUAL_IP": "172.28.0.1"},
         )
@@ -208,8 +221,9 @@ def run_lambda(c, seed=None):
             lambda_name,
             bucket_name,
             lambda_version,
-            3,
+            4,
             "dev/debug/client",
+            "dev/debug/perforator",
             "dev/debug/libchappy.so",
             {
                 **common_env,

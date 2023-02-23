@@ -6,6 +6,7 @@ use nix::{
     sys::socket::SockaddrLike,
 };
 use std::ptr;
+
 use utils::{parse_virtual, register, request_punch};
 
 fn init_logger() {
@@ -25,9 +26,11 @@ pub unsafe extern "C" fn connect(sockfd: c_int, addr: *const sockaddr, len: sock
     debug!("Entering interception connect({})", sockfd);
     let code = match parse_virtual(addr, len) {
         Some(addr_in) => {
-            let new_addr = request_punch(addr_in);
+            let new_addr = request_punch(sockfd, addr_in);
             debug_fmt::dst_rewrite("connect", sockfd, &new_addr, &addr_in);
-            libc_connect(sockfd, ptr::addr_of!(new_addr).cast(), new_addr.len())
+            let code = libc_connect(sockfd, ptr::addr_of!(new_addr).cast(), new_addr.len());
+
+            return code;
         }
         None => {
             debug_fmt::dst("connect", sockfd, addr, len);

@@ -15,7 +15,7 @@ mod seed {
     tonic::include_proto!("seed");
 }
 
-pub(crate) async fn connect_seed(source_port: u16) -> SeedClient<Channel> {
+pub async fn connect_seed(source_port: u16) -> SeedClient<Channel> {
     let channel = Endpoint::from_static("http://placeholder")
         .connect_with_connector(service_fn(move |_: Uri| {
             // see https://github.com/hyperium/tonic/blob/master/examples/src/uds/client.rs
@@ -47,7 +47,7 @@ pub(crate) async fn connect_seed(source_port: u16) -> SeedClient<Channel> {
     return SeedClient::new(channel);
 }
 
-pub(crate) async fn request_punch(
+pub async fn request_punch(
     source_port: u16,
     target_virtual_ip: String,
     target_port: u16,
