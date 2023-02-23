@@ -1,6 +1,6 @@
 use crate::CHAPPY_CONF;
 use log::debug;
-use seed::{seed_client::SeedClient, Address, ClientPunchRequest, RegisterRequest};
+pub use seed::{seed_client::SeedClient, Address, ClientPunchRequest, RegisterRequest};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, ToSocketAddrs};
 use std::os::fd::AsRawFd;
 use tokio::net::TcpSocket;
@@ -74,15 +74,18 @@ pub(crate) async fn request_punch(
     success.into_inner()
 }
 
-pub(crate) async fn register(port: u16) -> Streaming<ServerPunchRequest> {
-    debug!("register {}:{}", CHAPPY_CONF.virtual_ip, port);
-    let mut client = connect_seed(port).await;
+pub(crate) async fn register(p2p_port: u16, registered_port: u16) -> Streaming<ServerPunchRequest> {
+    debug!(
+        "register local port {} for virtual addr {}:{}",
+        p2p_port, CHAPPY_CONF.virtual_ip, registered_port
+    );
+    let mut client = connect_seed(p2p_port).await;
     let resp = client
         .register(RegisterRequest {
             cluster_id: String::from("test"),
             virtual_addr: Some(Address {
                 ip: CHAPPY_CONF.virtual_ip.clone(),
-                port: port.try_into().unwrap(),
+                port: registered_port.try_into().unwrap(),
             }),
         })
         .await;

@@ -21,6 +21,9 @@ log = "0.4.17"
 env_logger = "0.10.0"
 ipnet = "2.7.1"
 rand = "0.8.5"
+quinn = "0.9.3"
+rcgen = "0.10.0"
+rustls = { version = "0.20.8", features = ["dangerous_configuration", "quic"] }
 
 
 

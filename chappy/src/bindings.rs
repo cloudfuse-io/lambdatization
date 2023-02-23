@@ -25,7 +25,7 @@ pub unsafe extern "C" fn connect(sockfd: c_int, addr: *const sockaddr, len: sock
     debug!("Entering interception connect({})", sockfd);
     let code = match parse_virtual(addr, len) {
         Some(addr_in) => {
-            let new_addr = request_punch(sockfd, addr_in);
+            let new_addr = request_punch(addr_in);
             debug_fmt::dst_rewrite("connect", sockfd, &new_addr, &addr_in);
             libc_connect(sockfd, ptr::addr_of!(new_addr).cast(), new_addr.len())
         }
@@ -49,7 +49,7 @@ pub unsafe extern "C" fn bind(sockfd: c_int, addr: *const sockaddr, len: socklen
 
     let code = match parse_virtual(addr, len) {
         Some(addr_in) => {
-            let new_addr = register(sockfd, addr_in);
+            let new_addr = register(addr_in);
             debug_fmt::dst_rewrite("bind", sockfd, &new_addr, &addr_in);
             libc_bind(sockfd, ptr::addr_of!(new_addr).cast(), new_addr.len())
         }

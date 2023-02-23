@@ -1,6 +1,7 @@
 mod bindings;
 mod conf;
 mod debug_fmt;
+mod quic_utils;
 mod seed_client;
 mod utils;
 
