@@ -17,7 +17,7 @@ use std::{error::Error, sync::Arc};
 
 /// Returns default server configuration along with its certificate.
 #[allow(clippy::field_reassign_with_default)] // https://github.com/rust-lang/rust-clippy/issues/6527
-pub(crate) fn configure_server() -> Result<(ServerConfig, Vec<u8>), Box<dyn Error>> {
+pub fn configure_server() -> Result<(ServerConfig, Vec<u8>), Box<dyn Error>> {
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
     let cert_der = cert.serialize_der().unwrap();
     let priv_key = cert.serialize_private_key_der();

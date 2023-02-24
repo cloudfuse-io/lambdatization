@@ -6,7 +6,7 @@ use seed::{
     seed_server::{Seed, SeedServer},
     Address, ClientPunchRequest, ClientPunchResponse, RegisterRequest, ServerPunchRequest,
 };
-use std::{env, net::SocketAddr, pin::Pin};
+use std::{env, net::SocketAddr, pin::Pin, time::Duration};
 use tokio::sync::{mpsc, Mutex};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::{transport::Server, Request, Response, Result, Status};
@@ -48,8 +48,17 @@ impl Seed for SeedService {
             src_addr.ip, src_addr.port, tgt_addr.ip, tgt_addr.port,
         );
         let src_nated_addr: SocketAddr = req.remote_addr().unwrap().to_string().parse().unwrap();
-        let guard = self.server_nated_addr.lock().await;
-        let dst_nated_addr = guard.as_ref().unwrap();
+        let dst_nated_addr;
+        loop {
+            // TODO: add timeout and replace polling with notification mechanism
+            let guard = self.server_nated_addr.lock().await;
+            if guard.is_some() {
+                dst_nated_addr = guard.as_ref().unwrap().clone();
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+
         debug!(
             "corresponding NATed tuple {} -> {}",
             src_nated_addr, dst_nated_addr

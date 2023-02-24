@@ -5,8 +5,9 @@ pub mod quic_utils;
 pub mod seed_client;
 mod utils;
 
-pub const REGISTER_MAGIC_LENGTH: usize = 10;
-pub const REGISTER_MAGIC_BYTES: [u8; REGISTER_MAGIC_LENGTH] = *b"chappy_reg";
+pub const REGISTER_HEADER_LENGTH: usize = 13;
+pub const REGISTER_CLIENT_HEADER_BYTES: [u8; REGISTER_HEADER_LENGTH] = *b"chappy_client";
+pub const REGISTER_SERVER_HEADER_BYTES: [u8; REGISTER_HEADER_LENGTH] = *b"chappy_server";
 
 #[macro_use]
 extern crate lazy_static;

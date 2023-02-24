@@ -74,7 +74,7 @@ pub async fn request_punch(
     success.into_inner()
 }
 
-pub(crate) async fn register(p2p_port: u16, registered_port: u16) -> Streaming<ServerPunchRequest> {
+pub async fn register(p2p_port: u16, registered_port: u16) -> Streaming<ServerPunchRequest> {
     debug!(
         "register local port {} for virtual addr {}:{}",
         p2p_port, CHAPPY_CONF.virtual_ip, registered_port

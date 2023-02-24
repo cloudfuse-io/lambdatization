@@ -1,13 +1,13 @@
-use crate::{quic_utils, seed_client, REGISTER_MAGIC_BYTES, RUNTIME, VIRTUAL_NET};
-use futures::StreamExt;
+use crate::{REGISTER_CLIENT_HEADER_BYTES, REGISTER_SERVER_HEADER_BYTES, RUNTIME, VIRTUAL_NET};
 use log::debug;
 use nix::libc::{c_int, sockaddr, socklen_t};
-use nix::sys::socket::{self, sockopt, SockaddrIn, SockaddrLike, SockaddrStorage};
+use nix::sys::socket::{self, SockaddrIn, SockaddrLike, SockaddrStorage};
 use std::net::{Ipv4Addr, SocketAddrV4};
-use std::os::fd::AsRawFd;
 use std::str::FromStr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
+
+const PERFORATOR_ADDRESS: &str = "127.0.0.1:5000";
 
 fn bind_random_port(sockfd: c_int) -> u16 {
     // TODO support ipv6
@@ -23,12 +23,14 @@ fn bind_random_port(sockfd: c_int) -> u16 {
 }
 
 pub(crate) fn request_punch(sockfd: c_int, addr_in: SockaddrIn) -> SockaddrIn {
-    let perforator_addr = "127.0.0.1:5000";
     let src_port = bind_random_port(sockfd);
 
     RUNTIME.block_on(async move {
-        let mut stream = TcpStream::connect(perforator_addr).await.unwrap();
-        stream.write_all(&REGISTER_MAGIC_BYTES).await.unwrap();
+        let mut stream = TcpStream::connect(PERFORATOR_ADDRESS).await.unwrap();
+        stream
+            .write_all(&REGISTER_CLIENT_HEADER_BYTES)
+            .await
+            .unwrap();
         stream.write_u16(src_port).await.unwrap();
         stream.write_u32(addr_in.ip()).await.unwrap();
         stream.write_u16(addr_in.port()).await.unwrap();
@@ -41,58 +43,23 @@ pub(crate) fn request_punch(sockfd: c_int, addr_in: SockaddrIn) -> SockaddrIn {
             sockfd,
         )
     });
-    SockaddrIn::from_str(perforator_addr).unwrap()
+    SockaddrIn::from_str(PERFORATOR_ADDRESS).unwrap()
 }
 
 pub(crate) fn register(addr_in: SockaddrIn) -> SockaddrIn {
     let registered_port = addr_in.port();
-    RUNTIME.spawn(async move {
-        let p2p_port = 5002;
-        let stream = seed_client::register(p2p_port, registered_port).await;
-        // For each incoming server punch request, we create a hole punched connection.
-        // We then forward that connection to the local listening server.
+    RUNTIME.block_on(async move {
+        let mut stream = TcpStream::connect(PERFORATOR_ADDRESS).await.unwrap();
         stream
-            .map(|punch_req| async {
-                // holepunch connection
-                let socket = std::net::UdpSocket::bind(format!("0.0.0.0:{}", p2p_port)).unwrap();
-                socket::setsockopt(socket.as_raw_fd(), sockopt::ReusePort, &true).unwrap();
-                let client_nated_addr = punch_req.unwrap().client_nated_addr.unwrap();
-                let client_nated_url =
-                    format!("{}:{}", client_nated_addr.ip, client_nated_addr.port);
-                socket.send_to(&[1, 2, 3, 4], client_nated_url).unwrap();
-
-                // quic server
-                let (server_config, _server_cert) = quic_utils::configure_server().unwrap();
-                let endpoint =
-                    quinn::Endpoint::server(server_config, "0.0.0.0:0".parse().unwrap()).unwrap();
-                // let socket = std::net::UdpSocket::bind(format!("0.0.0.0:{}", p2p_port)).unwrap();
-                // socket::setsockopt(socket.as_raw_fd(), sockopt::ReusePort, &true).unwrap();
-                endpoint.rebind(socket).unwrap();
-                let conn = endpoint.accept().await.unwrap().await.unwrap();
-                let (mut quic_send, mut quic_recv) = conn.accept_bi().await.unwrap();
-
-                // forwarding connection
-                let localhost_url = format!("localhost:{}", registered_port);
-                let fwd_stream = TcpStream::connect(localhost_url).await.unwrap();
-
-                // pipe holepunch connection to forwarding connection
-                let (mut fwd_read, mut fwd_write) = fwd_stream.into_split();
-                let out_handle = tokio::spawn(async move {
-                    tokio::io::copy(&mut quic_recv, &mut fwd_write)
-                        .await
-                        .unwrap()
-                });
-                let in_handle = tokio::spawn(async move {
-                    tokio::io::copy(&mut fwd_read, &mut quic_send)
-                        .await
-                        .unwrap()
-                });
-                out_handle.await.unwrap();
-                in_handle.await.unwrap();
-            })
-            .buffer_unordered(usize::MAX)
-            .for_each(|_| async {})
+            .write_all(&REGISTER_SERVER_HEADER_BYTES)
             .await
+            .unwrap();
+        stream.write_u16(registered_port).await.unwrap();
+        assert_eq!(stream.read_u8().await.unwrap(), 1);
+        debug!(
+            "Registered server on port {} to perforator",
+            registered_port,
+        )
     });
     SockaddrIn::new(127, 0, 0, 1, registered_port)
 }
