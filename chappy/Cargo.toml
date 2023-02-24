@@ -1,32 +1,26 @@
-[package]
-name = "chappy"
-version = "0.1.0"
-edition = "2021"
-build = "build.rs"
+[workspace]
+members = [
+    "util",
+    "interceptor",
+    "perforator",
+    "seed",
+    "examples",
+]
 
-[lib]
-crate-type = ["rlib", "cdylib"] 
-
-[dependencies]
+[workspace.dependencies]
+env_logger = "0.10.0"
 futures = "0.3.25"
-nix = "0.26.1"
-prost = "0.11.6"
-tokio = { version = "1.24.2", features = ["macros", "rt", "rt-multi-thread"] }
-tokio-stream = "0.1.11"
-tonic = "0.8.3"
-tower = "0.4.13"
+ipnet = "2.7.1"
 lazy_static = "1.4.0"
 libloading = "0.7.4"
 log = "0.4.17"
-env_logger = "0.10.0"
-ipnet = "2.7.1"
-rand = "0.8.5"
+nix = "0.26.1"
+prost = "0.11.7"
 quinn = "0.9.3"
+rand = "0.8.5"
 rcgen = "0.10.0"
-rustls = { version = "0.20.8", features = ["dangerous_configuration", "quic"] }
-
-
-
-[build-dependencies]
-cbindgen = "0.24.3"
-tonic-build = "0.8.3"
+rustls = "0.20.8"
+tokio = { version = "1.24.2", features = ["macros"] }
+tokio-stream = "0.1.11"
+tonic = "0.8.3"
+tower = "0.4.13"

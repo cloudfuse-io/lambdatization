@@ -1,20 +1,15 @@
+use chappy_seed::{
+    seed_server::{Seed, SeedServer},
+    Address, ClientPunchRequest, ClientPunchResponse, RegisterRequest, ServerPunchRequest,
+};
 use env_logger;
 use futures::stream::StreamExt;
 use futures::Stream;
 use log::debug;
-use seed::{
-    seed_server::{Seed, SeedServer},
-    Address, ClientPunchRequest, ClientPunchResponse, RegisterRequest, ServerPunchRequest,
-};
 use std::{collections::HashMap, env, net::SocketAddr, pin::Pin, sync::Arc, time::Duration};
 use tokio::sync::{mpsc, Mutex};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::{transport::Server, Request, Response, Result, Status};
-
-mod seed {
-    use tonic;
-    tonic::include_proto!("seed");
-}
 
 #[derive(PartialEq, Eq, Hash)]
 struct VirtualEndpoint {
@@ -133,7 +128,7 @@ impl Seed for SeedService {
     }
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::Builder::from_default_env()
         .format_timestamp_millis()

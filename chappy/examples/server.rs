@@ -1,4 +1,3 @@
-use env_logger;
 use log::{debug, error, info};
 use std::env;
 use std::io::Read;

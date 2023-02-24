@@ -1,7 +1,9 @@
-use chappy::{
-    quic_utils, seed_client, REGISTER_CLIENT_HEADER_BYTES, REGISTER_HEADER_LENGTH,
-    REGISTER_SERVER_HEADER_BYTES,
+use chappy_perforator::{quic_utils, seed_client};
+
+use chappy_util::{
+    REGISTER_CLIENT_HEADER_BYTES, REGISTER_HEADER_LENGTH, REGISTER_SERVER_HEADER_BYTES,
 };
+
 use futures::StreamExt;
 use log::debug;
 use nix::sys::socket::{self, sockopt};

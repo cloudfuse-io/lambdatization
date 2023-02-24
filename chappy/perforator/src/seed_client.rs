@@ -1,19 +1,15 @@
 use crate::CHAPPY_CONF;
+use chappy_seed::{
+    seed_client::SeedClient, Address, ClientPunchRequest, ClientPunchResponse, RegisterRequest,
+    ServerPunchRequest,
+};
 use log::debug;
-pub use seed::{seed_client::SeedClient, Address, ClientPunchRequest, RegisterRequest};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, ToSocketAddrs};
 use std::os::fd::AsRawFd;
 use tokio::net::TcpSocket;
 use tonic::transport::{Channel, Endpoint, Uri};
 use tonic::Streaming;
 use tower::service_fn;
-
-use self::seed::{ClientPunchResponse, ServerPunchRequest};
-
-mod seed {
-    use tonic;
-    tonic::include_proto!("seed");
-}
 
 pub async fn connect_seed(source_port: u16) -> SeedClient<Channel> {
     let channel = Endpoint::from_static("http://placeholder")

@@ -1,4 +1,5 @@
-use crate::{REGISTER_CLIENT_HEADER_BYTES, REGISTER_SERVER_HEADER_BYTES, RUNTIME, VIRTUAL_NET};
+use crate::{RUNTIME, VIRTUAL_NET};
+use chappy_util::{REGISTER_CLIENT_HEADER_BYTES, REGISTER_SERVER_HEADER_BYTES};
 use log::debug;
 use nix::libc::{c_int, sockaddr, socklen_t};
 use nix::sys::socket::{self, SockaddrIn, SockaddrLike, SockaddrStorage};

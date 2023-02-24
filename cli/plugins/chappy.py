@@ -4,6 +4,7 @@ import base64
 import json
 import time
 import uuid
+from collections import namedtuple
 from concurrent.futures import ThreadPoolExecutor
 
 import core
@@ -28,6 +29,31 @@ def service_outputs(c: Context) -> tuple[str, str, str]:
         family_fut = ex.submit(terraform_output, c, "chappy", "seed_task_family")
         service_name_fut = ex.submit(terraform_output, c, "chappy", "seed_service_name")
     return (cluster_fut.result(), service_name_fut.result(), family_fut.result())
+
+
+BuildOutput = namedtuple("BuildOutput", ["build_image", "output_dir"])
+
+
+def build_chappy(c: Context, release=False) -> BuildOutput:
+    target_img = "cloudfuse-io/l12n:chappy-build"
+    if release:
+        output_dir = "/target/release"
+        build_flag = "--release"
+    else:
+        output_dir = "/target/debug"
+        build_flag = ""
+    c.run(
+        f"docker build \
+            --build-arg BUILD_FLAG={build_flag} \
+            -f {DOCKERDIR}/chappy/build.Dockerfile \
+            -t {target_img} \
+            {REPOROOT}/chappy"
+    )
+    return BuildOutput(build_image=target_img, output_dir=output_dir)
+
+
+def to_s3_key(output_dir, file) -> str:
+    return f"dev{output_dir}/{file}"
 
 
 @task
@@ -84,21 +110,17 @@ def seed_exec(c, cmd="/bin/bash", pty=True):
 
 
 @task
-def run_seed(c):
+def run_seed(c, release=False):
     bucket_name = core.bucket_name(c)
-    file = "debug/seed"
-    key = f"dev/{file}"
+    build_image, output_dir = build_chappy(c, release)
+    file = "chappy-seed"
+    s3_key = to_s3_key(output_dir, file)
+
     c.run(
-        f"docker build \
-            -f {DOCKERDIR}/chappy/build.Dockerfile \
-            -t cloudfuse-io/l12n:chappy-build \
-            {REPOROOT}/chappy"
+        f"docker run --rm --entrypoint cat {build_image} {output_dir}/{file} | \
+            aws s3 cp - s3://{bucket_name}/{s3_key} --region {AWS_REGION()}"
     )
-    c.run(
-        f"docker run --rm --entrypoint cat cloudfuse-io/l12n:chappy-build /target/{file} | \
-            aws s3 cp - s3://{bucket_name}/{key} --region {AWS_REGION()}"
-    )
-    seed_exec(c, f"python3 dev-handler.py {bucket_name} {key}", pty=False)
+    seed_exec(c, f"python3 dev-handler.py {bucket_name} {s3_key}", pty=False)
 
 
 @task
@@ -166,7 +188,7 @@ def invoke_lambda(
 
 
 @task
-def run_lambda(c, seed=None):
+def run_lambda(c, seed=None, release=False):
     """Run the Chappy binaries on Lambda using the provided seed public IP"""
     bucket_name = core.bucket_name(c)
     lambda_name = terraform_output(c, "chappy", "dev_lambda_name")
@@ -175,20 +197,15 @@ def run_lambda(c, seed=None):
 
     with ThreadPoolExecutor() as executor:
         redeploy_fut = executor.submit(redeploy, lambda_name)
-        c.run(
-            f"docker build \
-                -f {DOCKERDIR}/chappy/build.Dockerfile \
-                -t cloudfuse-io/l12n:chappy-build \
-                {REPOROOT}/chappy"
-        )
+        build_image, output_dir = build_chappy(c, release)
         upload = lambda file: c.run(
-            f"docker run --rm --entrypoint cat cloudfuse-io/l12n:chappy-build /target/{file} | \
-                aws s3 cp - s3://{bucket_name}/dev/{file} --region {AWS_REGION()}"
+            f"docker run --rm --entrypoint cat {build_image} {output_dir}/{file} | \
+                aws s3 cp - s3://{bucket_name}/{to_s3_key(output_dir, file)} --region {AWS_REGION()}"
         )
-        lib_up_fut = executor.submit(upload, "debug/libchappy.so")
-        client_up_fut = executor.submit(upload, "debug/client")
-        server_up_fut = executor.submit(upload, "debug/server")
-        perforator_up_fut = executor.submit(upload, "debug/perforator")
+        lib_up_fut = executor.submit(upload, "libchappy.so")
+        client_up_fut = executor.submit(upload, "example-client")
+        server_up_fut = executor.submit(upload, "example-server")
+        perforator_up_fut = executor.submit(upload, "chappy-perforator")
         lambda_version = redeploy_fut.result()
         lib_up_fut.result()
         client_up_fut.result()
@@ -208,9 +225,9 @@ def run_lambda(c, seed=None):
             bucket_name,
             lambda_version,
             6,
-            "dev/debug/server",
-            "dev/debug/perforator",
-            "dev/debug/libchappy.so",
+            to_s3_key(output_dir, "example-server"),
+            to_s3_key(output_dir, "chappy-perforator"),
+            to_s3_key(output_dir, "libchappy.so"),
             {**common_env, "CHAPPY_VIRTUAL_IP": "172.28.0.1"},
         )
 
@@ -222,9 +239,9 @@ def run_lambda(c, seed=None):
             bucket_name,
             lambda_version,
             5,
-            "dev/debug/client",
-            "dev/debug/perforator",
-            "dev/debug/libchappy.so",
+            to_s3_key(output_dir, "example-client"),
+            to_s3_key(output_dir, "chappy-perforator"),
+            to_s3_key(output_dir, "libchappy.so"),
             {
                 **common_env,
                 "CHAPPY_VIRTUAL_IP": "172.28.0.2",
