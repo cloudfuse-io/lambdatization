@@ -6,7 +6,7 @@ use seed::{
     seed_server::{Seed, SeedServer},
     Address, ClientPunchRequest, ClientPunchResponse, RegisterRequest, ServerPunchRequest,
 };
-use std::{env, net::SocketAddr, pin::Pin, time::Duration};
+use std::{collections::HashMap, env, net::SocketAddr, pin::Pin, sync::Arc, time::Duration};
 use tokio::sync::{mpsc, Mutex};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::{transport::Server, Request, Response, Result, Status};
@@ -16,19 +16,30 @@ mod seed {
     tonic::include_proto!("seed");
 }
 
+#[derive(PartialEq, Eq, Hash)]
+struct VirtualEndpoint {
+    cluster_id: String,
+    address: Address,
+}
+
+#[derive(Clone)]
+struct ResolvedEndpoint {
+    pub natted_address: SocketAddr,
+    pub punch_req_stream: mpsc::UnboundedSender<Address>,
+}
+
+/// Map virtual addresses to the NATed endpoint and punch request stream
+type RegisteredEndpoints = Arc<Mutex<HashMap<VirtualEndpoint, ResolvedEndpoint>>>;
+
 struct SeedService {
-    req_rx: Mutex<Option<mpsc::UnboundedReceiver<Address>>>,
-    server_nated_addr: Mutex<Option<SocketAddr>>,
-    req_tx: mpsc::UnboundedSender<Address>,
+    // req_rx: Mutex<Option<mpsc::UnboundedReceiver<Address>>>,
+    registered_endpoints: RegisteredEndpoints,
 }
 
 impl SeedService {
     pub fn new() -> Self {
-        let (req_tx, req_rx) = mpsc::unbounded_channel();
         Self {
-            req_rx: Mutex::new(Some(req_rx)),
-            server_nated_addr: Mutex::new(None),
-            req_tx,
+            registered_endpoints: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
@@ -48,12 +59,15 @@ impl Seed for SeedService {
             src_addr.ip, src_addr.port, tgt_addr.ip, tgt_addr.port,
         );
         let src_nated_addr: SocketAddr = req.remote_addr().unwrap().to_string().parse().unwrap();
-        let dst_nated_addr;
+        let endpoint;
         loop {
             // TODO: add timeout and replace polling with notification mechanism
-            let guard = self.server_nated_addr.lock().await;
-            if guard.is_some() {
-                dst_nated_addr = guard.as_ref().unwrap().clone();
+            let guard = self.registered_endpoints.lock().await;
+            if let Some(dst) = guard.get(&VirtualEndpoint {
+                address: tgt_addr.clone(),
+                cluster_id: req.get_ref().cluster_id.clone(),
+            }) {
+                endpoint = dst.clone();
                 break;
             }
             tokio::time::sleep(Duration::from_millis(20)).await;
@@ -61,9 +75,10 @@ impl Seed for SeedService {
 
         debug!(
             "corresponding NATed tuple {} -> {}",
-            src_nated_addr, dst_nated_addr
+            src_nated_addr, endpoint.natted_address
         );
-        self.req_tx
+        endpoint
+            .punch_req_stream
             .send(Address {
                 ip: src_nated_addr.ip().to_string(),
                 port: src_nated_addr.port().try_into().unwrap(),
@@ -71,8 +86,8 @@ impl Seed for SeedService {
             .unwrap();
         Ok(Response::new(ClientPunchResponse {
             target_nated_addr: Some(Address {
-                ip: dst_nated_addr.ip().to_string(),
-                port: dst_nated_addr.port().try_into().unwrap(),
+                ip: endpoint.natted_address.ip().to_string(),
+                port: endpoint.natted_address.port().try_into().unwrap(),
             }),
         }))
     }
@@ -84,16 +99,27 @@ impl Seed for SeedService {
         let server_nated_addr = req.remote_addr().unwrap();
         let srv_nated_ip = server_nated_addr.ip().to_string();
         let srv_nated_port = server_nated_addr.port();
-        self.server_nated_addr
-            .lock()
-            .await
-            .replace(server_nated_addr);
-        let req_rx = self
-            .req_rx
-            .lock()
-            .await
-            .take()
-            .expect("Receiver already used");
+        let registered_addr = req.get_ref().virtual_addr.as_ref().unwrap().clone();
+        debug!(
+            "received register request of virtual addr {}:{} to NATed addr {}:{}",
+            registered_addr.ip, registered_addr.port, srv_nated_ip, srv_nated_port,
+        );
+
+        let (req_tx, req_rx) = mpsc::unbounded_channel();
+
+        let endpoint = ResolvedEndpoint {
+            natted_address: server_nated_addr,
+            punch_req_stream: req_tx,
+        };
+
+        self.registered_endpoints.lock().await.insert(
+            VirtualEndpoint {
+                address: registered_addr,
+                cluster_id: req.get_ref().cluster_id.clone(),
+            },
+            endpoint,
+        );
+
         let stream = UnboundedReceiverStream::new(req_rx).map(move |addr| {
             debug!(
                 "forwarding punch request to srv {}:{} for client {}:{} (NATed addresses)",
