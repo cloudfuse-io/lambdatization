@@ -5,7 +5,6 @@ edition = "2021"
 
 [dependencies]
 chappy-seed = { path = "../seed" }
-chappy-util = { path = "../util" }
 env_logger = { workspace = true }
 futures = { workspace = true }
 lazy_static = { workspace = true }

@@ -1,6 +1,5 @@
 [workspace]
 members = [
-    "util",
     "interceptor",
     "perforator",
     "seed",

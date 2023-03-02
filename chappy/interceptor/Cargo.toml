@@ -8,7 +8,7 @@ name = "chappy"
 crate-type = ["cdylib"] 
 
 [dependencies]
-chappy-util = { path = "../util" }
+chappy-perforator = { path = "../perforator" }
 env_logger = { workspace = true }
 futures = { workspace = true }
 ipnet = { workspace = true }

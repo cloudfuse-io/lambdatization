@@ -156,7 +156,7 @@ dependencies = [
 name = "chappy-interceptor"
 version = "0.1.0"
 dependencies = [
- "chappy-util",
+ "chappy-perforator",
  "env_logger",
  "futures",
  "ipnet",
@@ -172,7 +172,6 @@ name = "chappy-perforator"
 version = "0.1.0"
 dependencies = [
  "chappy-seed",
- "chappy-util",
  "env_logger",
  "futures",
  "lazy_static",
@@ -199,10 +198,6 @@ dependencies = [
  "tonic",
  "tonic-build",
 ]
-
-[[package]]
-name = "chappy-util"
-version = "0.1.0"
 
 [[package]]
 name = "core-foundation"

@@ -1,11 +1,9 @@
 use crate::{RUNTIME, VIRTUAL_NET};
-use chappy_util::{REGISTER_CLIENT_HEADER_BYTES, REGISTER_SERVER_HEADER_BYTES};
 use log::debug;
 use nix::libc::{c_int, sockaddr, socklen_t};
 use nix::sys::socket::{self, SockaddrIn, SockaddrLike, SockaddrStorage};
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::str::FromStr;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
 const PERFORATOR_ADDRESS: &str = "127.0.0.1:5000";
@@ -27,21 +25,20 @@ pub(crate) fn request_punch(sockfd: c_int, addr_in: SockaddrIn) -> SockaddrIn {
     let src_port = bind_random_port(sockfd);
 
     RUNTIME.block_on(async move {
-        let mut stream = TcpStream::connect(PERFORATOR_ADDRESS).await.unwrap();
-        stream
-            .write_all(&REGISTER_CLIENT_HEADER_BYTES)
-            .await
-            .unwrap();
-        stream.write_u16(src_port).await.unwrap();
-        stream.write_u32(addr_in.ip()).await.unwrap();
-        stream.write_u16(addr_in.port()).await.unwrap();
-        assert_eq!(stream.read_u8().await.unwrap(), 1);
-        debug!(
-            "Port mapping {}->{}:{} for socket {} registered on perforator",
+        let stream = TcpStream::connect(PERFORATOR_ADDRESS).await.unwrap();
+        chappy_perforator::protocol::register_client(
+            stream,
             src_port,
+            addr_in.ip().into(),
+            addr_in.port(),
+        )
+        .await;
+        debug!(
+            "Perforator call for registering client port {} (socket {}) to address {}:{} completed",
+            src_port,
+            sockfd,
             Ipv4Addr::from(addr_in.ip()),
             addr_in.port(),
-            sockfd,
         )
     });
     SockaddrIn::from_str(PERFORATOR_ADDRESS).unwrap()
@@ -50,15 +47,10 @@ pub(crate) fn request_punch(sockfd: c_int, addr_in: SockaddrIn) -> SockaddrIn {
 pub(crate) fn register(addr_in: SockaddrIn) -> SockaddrIn {
     let registered_port = addr_in.port();
     RUNTIME.block_on(async move {
-        let mut stream = TcpStream::connect(PERFORATOR_ADDRESS).await.unwrap();
-        stream
-            .write_all(&REGISTER_SERVER_HEADER_BYTES)
-            .await
-            .unwrap();
-        stream.write_u16(registered_port).await.unwrap();
-        assert_eq!(stream.read_u8().await.unwrap(), 1);
+        let stream = TcpStream::connect(PERFORATOR_ADDRESS).await.unwrap();
+        chappy_perforator::protocol::register_server(stream, registered_port).await;
         debug!(
-            "Registered server on port {} to perforator",
+            "Perforator call for registering server on port {} completed",
             registered_port,
         )
     });

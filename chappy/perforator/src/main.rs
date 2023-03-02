@@ -1,8 +1,4 @@
-use chappy_perforator::{quic_utils, seed_client};
-
-use chappy_util::{
-    REGISTER_CLIENT_HEADER_BYTES, REGISTER_HEADER_LENGTH, REGISTER_SERVER_HEADER_BYTES,
-};
+use chappy_perforator::{protocol::ParsedTcpStream, quic_utils, seed_client};
 
 use futures::StreamExt;
 use log::debug;
@@ -12,21 +8,21 @@ use std::collections::HashMap;
 use std::net::Ipv4Addr;
 use std::os::fd::AsRawFd;
 use std::sync::Arc;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
 
 type Mappings = Arc<Mutex<HashMap<u16, Connection>>>;
 
-async fn register_client(mut stream: TcpStream, mappings: Mappings) {
-    let source_port = stream.read_u16().await.unwrap();
-    let target_virtual_ip: Ipv4Addr = stream.read_u32().await.unwrap().into();
-    let target_port = stream.read_u16().await.unwrap();
+async fn register_client(
+    mappings: Mappings,
+    source_port: u16,
+    target_virtual_ip: Ipv4Addr,
+    target_port: u16,
+) {
     debug!(
         "Registering client source port mapping {}->{}:{}",
         source_port, target_virtual_ip, target_port
     );
-    stream.write_u8(1).await.unwrap();
     let src_p2p_port = 5001;
     tokio::spawn(async move {
         let addr =
@@ -86,10 +82,8 @@ async fn forward_client(stream: TcpStream, mappings: Mappings) {
     in_handle.await.unwrap();
 }
 
-async fn register_server(mut stream: TcpStream) {
-    let registered_port = stream.read_u16().await.unwrap();
+async fn register_server(registered_port: u16) {
     debug!("Registering server port {}", registered_port);
-    stream.write_u8(1).await.unwrap();
     let dest_p2p_port = 5002;
 
     tokio::spawn(async move {
@@ -146,22 +140,31 @@ async fn register_server(mut stream: TcpStream) {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
+    env_logger::Builder::from_default_env()
+        .format_timestamp_millis()
+        .init();
     let listener = TcpListener::bind("127.0.0.1:5000").await.unwrap();
     let mappings: Mappings = Arc::new(Mutex::new(HashMap::new()));
     loop {
-        let (mut stream, _) = listener.accept().await.unwrap();
+        let (stream, _) = listener.accept().await.unwrap();
+        debug!(
+            "New connection to perforator TCP server from {}:{}",
+            stream.peer_addr().unwrap().ip(),
+            stream.peer_addr().unwrap().port()
+        );
         let mappings = Arc::clone(&mappings);
         tokio::spawn(async move {
-            let mut buff = [0; REGISTER_HEADER_LENGTH];
-            stream.peek(&mut buff).await.unwrap();
-            if buff == REGISTER_CLIENT_HEADER_BYTES {
-                stream.read_exact(&mut buff).await.unwrap();
-                register_client(stream, mappings).await;
-            } else if buff == REGISTER_SERVER_HEADER_BYTES {
-                stream.read_exact(&mut buff).await.unwrap();
-                register_server(stream).await;
-            } else {
-                forward_client(stream, mappings).await;
+            let parsed_stream = ParsedTcpStream::from(stream).await;
+            match parsed_stream {
+                ParsedTcpStream::ClientRegistration {
+                    source_port,
+                    target_virtual_ip,
+                    target_port,
+                } => register_client(mappings, source_port, target_virtual_ip, target_port).await,
+                ParsedTcpStream::ServerRegistration { registered_port } => {
+                    register_server(registered_port).await
+                }
+                ParsedTcpStream::Raw(stream) => forward_client(stream, mappings).await,
             }
         });
     }
