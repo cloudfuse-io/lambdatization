@@ -3,3 +3,4 @@ mod seed {
 }
 
 pub use seed::*;
+pub mod seed_service;

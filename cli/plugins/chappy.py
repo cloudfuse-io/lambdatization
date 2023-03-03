@@ -145,6 +145,21 @@ def redeploy(lambda_name) -> str:
     return response["Version"]
 
 
+def format_lambda_result(name, external_duration, lambda_res):
+    result = []
+    result.append(f"==============================")
+    result.append(f"RESULTS FOR {name}")
+    result.append(f"EXTERNAL_DURATION: {external_duration}")
+    result.append("== LOGS ==")
+    result.append(base64.b64decode(lambda_res["LogResult"]).decode())
+    if "FunctionError" in lambda_res:
+        raise Exit(message=lambda_res["Payload"], code=1)
+    result.append("== PAYLOAD ==")
+    result.append(format_lambda_output(lambda_res["Payload"], False))
+    result.append(f"==============================")
+    return "\n".join(result)
+
+
 def invoke_lambda(
     lambda_name,
     bucket_name,
@@ -154,7 +169,7 @@ def invoke_lambda(
     perf_bin,
     chappy_lib,
     env,
-):
+) -> tuple[dict, float]:
     start_time = time.time()
     lambda_res = aws("lambda").invoke(
         FunctionName=lambda_name,
@@ -172,19 +187,8 @@ def invoke_lambda(
         LogType="Tail",
         Qualifier=lambda_version,
     )
-    result = []
-    result.append(f"==============================")
-    result.append(f"RESULTS FOR {app_bin}")
-    result.append(f"EXTERNAL_DURATION: {time.time() - start_time}")
-    resp_payload = lambda_res["Payload"].read().decode()
-    result.append("== LOGS ==")
-    result.append(base64.b64decode(lambda_res["LogResult"]).decode())
-    if "FunctionError" in lambda_res:
-        raise Exit(message=resp_payload, code=1)
-    result.append("== PAYLOAD ==")
-    result.append(format_lambda_output(resp_payload, False))
-    result.append(f"==============================")
-    return "\n".join(result)
+    lambda_res["Payload"] = lambda_res["Payload"].read().decode()
+    return (lambda_res, time.time() - start_time)
 
 
 @task
@@ -224,7 +228,7 @@ def run_lambda(c, seed=None, release=False):
             lambda_name,
             bucket_name,
             lambda_version,
-            6,
+            20,
             to_s3_key(output_dir, "example-server"),
             to_s3_key(output_dir, "chappy-perforator"),
             to_s3_key(output_dir, "libchappy.so"),
@@ -232,13 +236,14 @@ def run_lambda(c, seed=None, release=False):
         )
 
         time.sleep(0.5)
+        mb_sent = 500
 
         client_fut = executor.submit(
             invoke_lambda,
             lambda_name,
             bucket_name,
             lambda_version,
-            5,
+            19,
             to_s3_key(output_dir, "example-client"),
             to_s3_key(output_dir, "chappy-perforator"),
             to_s3_key(output_dir, "libchappy.so"),
@@ -246,8 +251,23 @@ def run_lambda(c, seed=None, release=False):
                 **common_env,
                 "CHAPPY_VIRTUAL_IP": "172.28.0.2",
                 "SERVER_VIRTUAL_IP": "172.28.0.1",
+                "BATCH_SIZE": 32 * 1024,
+                "BYTES_SENT": mb_sent * 1024 * 1024,
             },
         )
 
-        print(client_fut.result())
-        print(server_fut.result())
+        (client_result, client_duration) = client_fut.result()
+        print(format_lambda_result("CLIENT", client_duration, client_result))
+        (server_result, server_duration) = server_fut.result()
+        print(format_lambda_result("SERVER", server_duration, server_result))
+        # show bandwidth
+        client_payload = json.loads(client_result["Payload"])
+        if (
+            "context" in client_payload
+            and "subproc_duration_sec" in client_payload["context"]
+        ):
+            # x8 -> conversion from bytes to bits
+            # x2 -> bytes are echoed so transfered twice
+            print(
+                f'=> BANDWIDTH={mb_sent*8*2/client_payload["context"]["subproc_duration_sec"]} Mbit/s'
+            )

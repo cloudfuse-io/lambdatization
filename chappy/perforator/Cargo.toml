@@ -11,7 +11,7 @@ lazy_static = { workspace = true }
 log = { workspace = true }
 quinn = { workspace = true }
 rcgen = { workspace = true }
-rustls = { workspace = true, features = ["dangerous_configuration", "quic"] }
+rustls = { workspace = true, features = ["quic"] }
 socket2 = { workspace = true, features = ["all"] }
 tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }
 tonic = { workspace = true }

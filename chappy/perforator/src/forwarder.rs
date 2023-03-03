@@ -6,6 +6,8 @@ use std::net::{Ipv4Addr, SocketAddrV4};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
+const SERVER_NAME: &str = "chappy";
+
 /// A service relays TCP streams through a QUIC tunnel
 ///
 /// The forwarder currently uses two different QUIC connections that match the
@@ -21,11 +23,17 @@ pub struct Forwarder {
     src_quic_endpoint: Endpoint,
     client_p2p_port: u16,
     server_p2p_port: u16,
+    server_certificate_der: Vec<u8>,
 }
 
 impl Forwarder {
-    async fn start_quic_server(server_p2p_port: u16) {
-        let (server_config, _server_cert) = quic_utils::configure_server().unwrap();
+    async fn start_quic_server(
+        server_p2p_port: u16,
+        private_key_der: Vec<u8>,
+        server_certificate_der: Vec<u8>,
+    ) {
+        let server_config =
+            quic_utils::configure_server(server_certificate_der, private_key_der).unwrap();
 
         let sock = socket2::Socket::new(socket2::Domain::IPV4, socket2::Type::DGRAM, None).unwrap();
         sock.set_reuse_port(true).unwrap();
@@ -77,24 +85,31 @@ impl Forwarder {
         let src_addr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, client_p2p_port);
         sock.bind(&src_addr.into()).unwrap();
 
-        let mut src_quic_endpoint = quinn::Endpoint::new(
+        quinn::Endpoint::new(
             quinn::EndpointConfig::default(),
             None,
             sock.into(),
             quinn::TokioRuntime,
         )
-        .unwrap();
-        src_quic_endpoint.set_default_client_config(quic_utils::configure_client());
-        src_quic_endpoint
+        .unwrap()
     }
 
     pub fn new(client_p2p_port: u16, server_p2p_port: u16) -> Self {
-        tokio::spawn(Self::start_quic_server(server_p2p_port));
+        let cert = rcgen::generate_simple_self_signed(vec![SERVER_NAME.into()]).unwrap();
+        let server_certificate_der = cert.serialize_der().unwrap();
+        let private_key_der = cert.serialize_private_key_der();
+
+        tokio::spawn(Self::start_quic_server(
+            server_p2p_port,
+            private_key_der,
+            server_certificate_der.clone(),
+        ));
 
         Self {
             src_quic_endpoint: Self::create_quic_client(client_p2p_port),
             client_p2p_port,
             server_p2p_port,
+            server_certificate_der,
         }
     }
 
@@ -104,14 +119,21 @@ impl Forwarder {
     /// Empirically, opening multiple QUIC connections to the same target on a
     /// given endpoint works. It might be suboptimal as the connection
     /// management might involve some overhead (keepalive...)
-    pub async fn forward(&self, tcp_stream: TcpStream, nated_addr: Address, target_port: u16) {
+    pub async fn forward(
+        &self,
+        tcp_stream: TcpStream,
+        nated_addr: Address,
+        target_port: u16,
+        target_server_certificate_der: Vec<u8>,
+    ) {
         let quic_con = self
             .src_quic_endpoint
-            .connect(
+            .connect_with(
+                quic_utils::configure_client(target_server_certificate_der),
                 format!("{}:{}", nated_addr.ip, nated_addr.port)
                     .parse()
                     .unwrap(),
-                "chappy",
+                SERVER_NAME,
             )
             .unwrap()
             .await
@@ -143,5 +165,9 @@ impl Forwarder {
 
     pub fn server_p2p_port(&self) -> u16 {
         self.server_p2p_port
+    }
+
+    pub fn server_certificate(&self) -> &[u8] {
+        &self.server_certificate_der
     }
 }

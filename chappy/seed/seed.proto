@@ -15,11 +15,13 @@ message ClientPunchRequest {
 
 message ClientPunchResponse {
     Address target_nated_addr = 1;
+    bytes server_certificate = 2;
 }
 
 message RegisterRequest {
     string cluster_id = 1;
     Address virtual_addr = 2;
+    bytes server_certificate = 3;
 }
 
 message ServerPunchRequest {

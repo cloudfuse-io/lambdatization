@@ -13,6 +13,7 @@ use tokio::sync::Mutex;
 struct TargetAddress {
     pub natted_address: Address,
     pub target_port: u16,
+    pub certificate_der: Vec<u8>,
 }
 
 /// Map source ports to target addresses
@@ -44,19 +45,18 @@ impl Perforator {
         let mappings = Arc::clone(&self.mappings);
         let client_p2p_port = self.forwarder.client_p2p_port();
         tokio::spawn(async move {
-            let natted_address = seed_client::request_punch(
+            let punch_resp = seed_client::request_punch(
                 client_p2p_port,
                 target_virtual_ip.to_string(),
                 target_port,
             )
-            .await
-            .target_nated_addr
-            .unwrap();
+            .await;
             mappings.lock().await.insert(
                 source_port,
                 TargetAddress {
-                    natted_address,
+                    natted_address: punch_resp.target_nated_addr.unwrap(),
                     target_port,
+                    certificate_der: punch_resp.server_certificate,
                 },
             );
             debug!("QUIC connection registered for source port {}", source_port)
@@ -80,6 +80,7 @@ impl Perforator {
                 stream,
                 target_address.natted_address,
                 target_address.target_port,
+                target_address.certificate_der,
             )
             .await;
     }
@@ -87,8 +88,10 @@ impl Perforator {
     pub async fn register_server(&self, registered_port: u16) {
         debug!("Registering server port {}", registered_port);
         let server_p2p_port = self.forwarder.server_p2p_port();
+        let server_certificate = self.forwarder.server_certificate().to_owned();
         tokio::spawn(async move {
-            let stream = seed_client::register(server_p2p_port, registered_port).await;
+            let stream =
+                seed_client::register(server_p2p_port, registered_port, server_certificate).await;
             // For each incoming server punch request, send a random packet to punch
             // a hole in the NAT
             stream

@@ -9,7 +9,7 @@ fn handle_client(mut stream: TcpStream) {
     // read 20 bytes at a time from stream echoing back to stream
     let mut bytes_echoed = 0;
     loop {
-        let mut read = [0; 1028];
+        let mut read = [0; 16 * 1028];
         match stream.read(&mut read) {
             Ok(n) => {
                 bytes_echoed += n;
