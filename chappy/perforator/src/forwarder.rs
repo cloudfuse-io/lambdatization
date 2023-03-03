@@ -98,9 +98,13 @@ impl Forwarder {
         }
     }
 
+    /// Open a QUIC connection on the forwarder client endpoint to relay the
+    /// provided TcpStream
+    ///
+    /// Empirically, opening multiple QUIC connections to the same target on a
+    /// given endpoint works. It might be suboptimal as the connection
+    /// management might involve some overhead (keepalive...)
     pub async fn forward(&self, tcp_stream: TcpStream, nated_addr: Address, target_port: u16) {
-        // TODO: it is probably not okay to connect multiple time to the same
-        // target address from the same Endpoint
         let quic_con = self
             .src_quic_endpoint
             .connect(

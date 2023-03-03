@@ -1,5 +1,6 @@
 mod conf;
 pub mod forwarder;
+pub mod perforator;
 pub mod protocol;
 pub mod quic_utils;
 pub mod seed_client;
