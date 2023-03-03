@@ -9,10 +9,10 @@ env_logger = { workspace = true }
 futures = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
-nix = { workspace = true }
 quinn = { workspace = true }
 rcgen = { workspace = true }
 rustls = { workspace = true, features = ["dangerous_configuration", "quic"] }
+socket2 = { workspace = true, features = ["all"] }
 tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }
 tonic = { workspace = true }
 tower = { workspace = true }

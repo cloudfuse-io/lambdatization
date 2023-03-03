@@ -1,136 +1,88 @@
-use chappy_perforator::{protocol::ParsedTcpStream, quic_utils, seed_client};
+use chappy_perforator::{forwarder::Forwarder, protocol::ParsedTcpStream, seed_client, udp_utils};
+use chappy_seed::Address;
 
 use futures::StreamExt;
 use log::debug;
-use nix::sys::socket::{self, sockopt};
-use quinn::Connection;
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
-use std::os::fd::AsRawFd;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
 
-type Mappings = Arc<Mutex<HashMap<u16, Connection>>>;
+#[derive(Debug, Clone)]
+struct TargetAddress {
+    pub natted_address: Address,
+    pub target_port: u16,
+}
+
+type Mappings = Arc<Mutex<HashMap<u16, TargetAddress>>>;
 
 async fn register_client(
     mappings: Mappings,
     source_port: u16,
     target_virtual_ip: Ipv4Addr,
     target_port: u16,
+    src_p2p_port: u16,
 ) {
     debug!(
         "Registering client source port mapping {}->{}:{}",
         source_port, target_virtual_ip, target_port
     );
-    let src_p2p_port = 5001;
     tokio::spawn(async move {
-        let addr =
+        let natted_address =
             seed_client::request_punch(src_p2p_port, target_virtual_ip.to_string(), target_port)
                 .await
                 .target_nated_addr
                 .unwrap();
-        let socket = std::net::UdpSocket::bind(format!("0.0.0.0:{}", src_p2p_port)).unwrap();
-        socket::setsockopt(socket.as_raw_fd(), sockopt::ReusePort, &true).unwrap();
-        let mut quic_endpoint = quinn::Endpoint::client("127.0.0.1:0".parse().unwrap()).unwrap();
-        quic_endpoint.rebind(socket).unwrap();
-        quic_endpoint.set_default_client_config(quic_utils::configure_client());
-        let quic_con = quic_endpoint
-            .connect(
-                format!("{}:{}", addr.ip, addr.port).parse().unwrap(),
-                "chappy",
-            )
-            .unwrap()
-            .await
-            .unwrap();
-        mappings.lock().await.insert(source_port, quic_con);
+        mappings.lock().await.insert(
+            source_port,
+            TargetAddress {
+                natted_address,
+                target_port,
+            },
+        );
         debug!("QUIC connection registered for source port {}", source_port)
     });
 }
 
-async fn forward_client(stream: TcpStream, mappings: Mappings) {
+async fn forward_client(stream: TcpStream, mappings: Mappings, forwarder: Arc<Forwarder>) {
     let src_port = stream.peer_addr().unwrap().port();
     debug!("Forwarding source port {}", src_port);
-    let quic_bi;
+    let target_address: TargetAddress;
     loop {
         // TODO: add timeout and replace polling with notification mechanism
-        if let Some(conn) = mappings.lock().await.get(&src_port) {
-            quic_bi = Some(conn.open_bi().await.unwrap());
+        if let Some(addr) = mappings.lock().await.get(&src_port) {
+            target_address = addr.clone();
             break;
-        } else {
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
-    debug!("QUIC bidirectional stream created");
-    let (mut quic_send, mut quic_recv) = quic_bi.unwrap();
-    let (mut tcp_read, mut tcp_write) = stream.into_split();
-    let out_handle = tokio::spawn(async move {
-        debug!("Outbound forwarding started");
-        let bytes_copied = tokio::io::copy(&mut tcp_read, &mut quic_send)
-            .await
-            .unwrap();
-        debug!("Outbound forwarding of {} bytes completed", bytes_copied);
-    });
-    let in_handle = tokio::spawn(async move {
-        debug!("Inbound forwarding started");
-        let bytes_copied = tokio::io::copy(&mut quic_recv, &mut tcp_write)
-            .await
-            .unwrap();
-        debug!("Inbound forwarding of {} bytes completed", bytes_copied);
-    });
-    out_handle.await.unwrap();
-    in_handle.await.unwrap();
+    forwarder
+        .forward(
+            stream,
+            target_address.natted_address,
+            target_address.target_port,
+        )
+        .await;
 }
 
-async fn register_server(registered_port: u16) {
+async fn register_server(registered_port: u16, dest_p2p_port: u16) {
     debug!("Registering server port {}", registered_port);
-    let dest_p2p_port = 5002;
 
     tokio::spawn(async move {
         let stream = seed_client::register(dest_p2p_port, registered_port).await;
-        // For each incoming server punch request, we create a hole punched connection.
-        // We then forward that connection to the local listening server.
+        // For each incoming server punch request, send a random packet to punch
+        // a hole in the NAT
         stream
             .map(|punch_req| async {
-                // holepunch connection
-                let socket =
-                    std::net::UdpSocket::bind(format!("0.0.0.0:{}", dest_p2p_port)).unwrap();
-                socket::setsockopt(socket.as_raw_fd(), sockopt::ReusePort, &true).unwrap();
-                let client_nated_addr = punch_req.unwrap().client_nated_addr.unwrap();
-                let client_nated_url =
-                    format!("{}:{}", client_nated_addr.ip, client_nated_addr.port);
-                socket.send_to(&[1, 2, 3, 4], client_nated_url).unwrap();
-
-                // quic server
-                let (server_config, _server_cert) = quic_utils::configure_server().unwrap();
-                let endpoint =
-                    quinn::Endpoint::server(server_config, "0.0.0.0:0".parse().unwrap()).unwrap();
-                endpoint.rebind(socket).unwrap();
-                let conn = endpoint.accept().await.unwrap().await.unwrap();
-                let (mut quic_send, mut quic_recv) = conn.accept_bi().await.unwrap();
-
-                // forwarding connection
-                let localhost_url = format!("localhost:{}", registered_port);
-                let fwd_stream = TcpStream::connect(localhost_url).await.unwrap();
-
-                // pipe holepunch connection to forwarding connection
-                let (mut fwd_read, mut fwd_write) = fwd_stream.into_split();
-                let out_handle = tokio::spawn(async move {
-                    debug!("Outbound forwarding started");
-                    let bytes_copied = tokio::io::copy(&mut quic_recv, &mut fwd_write)
-                        .await
-                        .unwrap();
-                    debug!("Outbound forwarding of {} bytes completed", bytes_copied);
-                });
-                let in_handle = tokio::spawn(async move {
-                    debug!("Inbound forwarding started");
-                    let bytes_copied = tokio::io::copy(&mut fwd_read, &mut quic_send)
-                        .await
-                        .unwrap();
-                    debug!("Inbound forwarding of {} bytes completed", bytes_copied);
-                });
-                out_handle.await.unwrap();
-                in_handle.await.unwrap();
+                let client_natted_addr = punch_req.unwrap().client_nated_addr.unwrap();
+                let client_natted_str =
+                    format!("{}:{}", client_natted_addr.ip, client_natted_addr.port);
+                udp_utils::send_from_reusable_port(
+                    dest_p2p_port,
+                    &[1, 2, 3, 4],
+                    &client_natted_str,
+                );
             })
             .buffer_unordered(usize::MAX)
             .for_each(|_| async {})
@@ -145,6 +97,7 @@ async fn main() {
         .init();
     let listener = TcpListener::bind("127.0.0.1:5000").await.unwrap();
     let mappings: Mappings = Arc::new(Mutex::new(HashMap::new()));
+    let forwarder = Arc::new(Forwarder::new(5001, 5002));
     loop {
         let (stream, _) = listener.accept().await.unwrap();
         debug!(
@@ -153,6 +106,7 @@ async fn main() {
             stream.peer_addr().unwrap().port()
         );
         let mappings = Arc::clone(&mappings);
+        let forwarder = Arc::clone(&forwarder);
         tokio::spawn(async move {
             let parsed_stream = ParsedTcpStream::from(stream).await;
             match parsed_stream {
@@ -160,11 +114,22 @@ async fn main() {
                     source_port,
                     target_virtual_ip,
                     target_port,
-                } => register_client(mappings, source_port, target_virtual_ip, target_port).await,
-                ParsedTcpStream::ServerRegistration { registered_port } => {
-                    register_server(registered_port).await
+                } => {
+                    register_client(
+                        mappings,
+                        source_port,
+                        target_virtual_ip,
+                        target_port,
+                        forwarder.client_p2p_port(),
+                    )
+                    .await
                 }
-                ParsedTcpStream::Raw(stream) => forward_client(stream, mappings).await,
+                ParsedTcpStream::ServerRegistration { registered_port } => {
+                    register_server(registered_port, forwarder.server_p2p_port()).await
+                }
+                ParsedTcpStream::Raw(stream) => {
+                    forward_client(stream, mappings, Arc::clone(&forwarder)).await
+                }
             }
         });
     }
