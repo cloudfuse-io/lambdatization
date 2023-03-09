@@ -1,6 +1,6 @@
 use crate::quic_utils;
 use chappy_seed::Address;
-use log::debug;
+use log::{debug, info};
 use quinn::Endpoint;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -50,32 +50,40 @@ impl Forwarder {
 
         loop {
             let conn = endpoint.accept().await.unwrap().await.unwrap();
-            loop {
-                let (mut quic_send, mut quic_recv) = conn.accept_bi().await.unwrap();
-                let target_port = quic_recv.read_u16().await.unwrap();
-                // forwarding connection
-                let localhost_url = format!("localhost:{}", target_port);
-                let fwd_stream = TcpStream::connect(localhost_url).await.unwrap();
+            tokio::spawn(async move {
+                loop {
+                    let (mut quic_send, mut quic_recv) = match conn.accept_bi().await {
+                        Ok(streams) => streams,
+                        Err(e) => {
+                            info!("Connection with {} ended: {}", conn.remote_address(), e);
+                            break;
+                        }
+                    };
+                    let target_port = quic_recv.read_u16().await.unwrap();
+                    // forwarding connection
+                    let localhost_url = format!("localhost:{}", target_port);
+                    let fwd_stream = TcpStream::connect(localhost_url).await.unwrap();
 
-                // pipe holepunch connection to forwarding connection
-                let (mut fwd_read, mut fwd_write) = fwd_stream.into_split();
-                let out_handle = tokio::spawn(async move {
-                    debug!("Outbound forwarding started");
-                    let bytes_copied = tokio::io::copy(&mut quic_recv, &mut fwd_write)
-                        .await
-                        .unwrap();
-                    debug!("Outbound forwarding of {} bytes completed", bytes_copied);
-                });
-                let in_handle = tokio::spawn(async move {
-                    debug!("Inbound forwarding started");
-                    let bytes_copied = tokio::io::copy(&mut fwd_read, &mut quic_send)
-                        .await
-                        .unwrap();
-                    debug!("Inbound forwarding of {} bytes completed", bytes_copied);
-                });
-                out_handle.await.unwrap();
-                in_handle.await.unwrap();
-            }
+                    // pipe holepunch connection to forwarding connection
+                    let (mut fwd_read, mut fwd_write) = fwd_stream.into_split();
+                    let out_handle = tokio::spawn(async move {
+                        debug!("Outbound forwarding started");
+                        let bytes_copied = tokio::io::copy(&mut quic_recv, &mut fwd_write)
+                            .await
+                            .unwrap();
+                        debug!("Outbound forwarding of {} bytes completed", bytes_copied);
+                    });
+                    let in_handle = tokio::spawn(async move {
+                        debug!("Inbound forwarding started");
+                        let bytes_copied = tokio::io::copy(&mut fwd_read, &mut quic_send)
+                            .await
+                            .unwrap();
+                        debug!("Inbound forwarding of {} bytes completed", bytes_copied);
+                    });
+                    out_handle.await.unwrap();
+                    in_handle.await.unwrap();
+                }
+            });
         }
     }
 

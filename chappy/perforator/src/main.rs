@@ -28,13 +28,9 @@ async fn main() {
                     source_port,
                     target_virtual_ip,
                     target_port,
-                } => {
-                    perforator
-                        .register_client(source_port, target_virtual_ip, target_port)
-                        .await
-                }
+                } => perforator.register_client(source_port, target_virtual_ip, target_port),
                 ParsedTcpStream::ServerRegistration { registered_port } => {
-                    perforator.register_server(registered_port).await
+                    perforator.register_server(registered_port)
                 }
                 ParsedTcpStream::Raw(stream) => perforator.forward_client(stream).await,
             }

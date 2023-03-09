@@ -44,11 +44,12 @@ impl ParsedTcpStream {
 }
 
 pub async fn register_client(
-    mut stream: TcpStream,
+    perforator_address: &str,
     source_port: u16,
     target_virtual_ip: Ipv4Addr,
     target_port: u16,
 ) {
+    let mut stream = TcpStream::connect(perforator_address).await.unwrap();
     stream
         .write_all(&REGISTER_CLIENT_HEADER_BYTES)
         .await
@@ -60,7 +61,8 @@ pub async fn register_client(
     stream.read_u8().await.unwrap_err();
 }
 
-pub async fn register_server(mut stream: TcpStream, registered_port: u16) {
+pub async fn register_server(perforator_address: &str, registered_port: u16) {
+    let mut stream = TcpStream::connect(perforator_address).await.unwrap();
     stream
         .write_all(&REGISTER_SERVER_HEADER_BYTES)
         .await

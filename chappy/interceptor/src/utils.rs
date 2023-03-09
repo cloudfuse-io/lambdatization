@@ -4,7 +4,6 @@ use nix::libc::{c_int, sockaddr, socklen_t};
 use nix::sys::socket::{self, SockaddrIn, SockaddrLike, SockaddrStorage};
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::str::FromStr;
-use tokio::net::TcpStream;
 
 const PERFORATOR_ADDRESS: &str = "127.0.0.1:5000";
 
@@ -24,10 +23,12 @@ fn bind_random_port(sockfd: c_int) -> u16 {
 pub(crate) fn request_punch(sockfd: c_int, addr_in: SockaddrIn) -> SockaddrIn {
     let src_port = bind_random_port(sockfd);
 
+    // TODO: blocking here is not ideal because it makes the connect blocking
+    // event if it wasn't supposed to be. But if made none-blocking by spawning a task,
+    // we have to make sure that the task is brought to completion.
     RUNTIME.block_on(async move {
-        let stream = TcpStream::connect(PERFORATOR_ADDRESS).await.unwrap();
         chappy_perforator::protocol::register_client(
-            stream,
+            PERFORATOR_ADDRESS,
             src_port,
             addr_in.ip().into(),
             addr_in.port(),
@@ -47,8 +48,7 @@ pub(crate) fn request_punch(sockfd: c_int, addr_in: SockaddrIn) -> SockaddrIn {
 pub(crate) fn register(addr_in: SockaddrIn) -> SockaddrIn {
     let registered_port = addr_in.port();
     RUNTIME.block_on(async move {
-        let stream = TcpStream::connect(PERFORATOR_ADDRESS).await.unwrap();
-        chappy_perforator::protocol::register_server(stream, registered_port).await;
+        chappy_perforator::protocol::register_server(PERFORATOR_ADDRESS, registered_port).await;
         debug!(
             "Perforator call for registering server on port {} completed",
             registered_port,
