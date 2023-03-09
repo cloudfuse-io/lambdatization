@@ -1,0 +1,25 @@
+[package]
+name = "chappy-examples"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "example-client"
+path = "client.rs"
+
+[[bin]]
+name = "example-multi-clients"
+path = "multi_clients.rs"
+
+[[bin]]
+name = "example-server"
+path = "server.rs"
+
+[lib]
+name = "helpers"
+path = "helpers.rs"
+
+[dependencies]
+env_logger = { workspace = true }
+log = { workspace = true }
+rand = { workspace = true }

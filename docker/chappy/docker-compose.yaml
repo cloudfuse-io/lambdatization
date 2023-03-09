@@ -1,0 +1,23 @@
+version: "3.9"
+services:
+  chappydev:
+    build:
+      dockerfile: dev.Dockerfile
+    image: cloudfuse-io/l12n:chappy-dev
+    cap_drop:
+      - ALL
+    read_only: true
+    volumes:
+      - chappy-dev-tmp:/tmp
+    entrypoint:
+      - python3
+      - dev-handler.py
+    environment:
+      - AWS_REGION=$L12N_AWS_REGION
+      - AWS_ACCESS_KEY_ID=$LAMBDA_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY=$LAMBDA_SECRET_ACCESS_KEY
+      - AWS_SESSION_TOKEN=$LAMBDA_SESSION_TOKEN
+      - DATA_BUCKET_NAME
+
+volumes:
+  chappy-dev-tmp:

@@ -1,0 +1,18 @@
+[package]
+name = "chappy-seed"
+version = "0.1.0"
+edition = "2021"
+build = "build.rs"
+
+[dependencies]
+env_logger = { workspace = true }
+futures = { workspace = true }
+log = { workspace = true }
+prost = { workspace = true }
+tokio = { workspace = true, features = ["rt"] }
+tokio-stream = { workspace = true }
+tonic = { workspace = true }
+
+
+[build-dependencies]
+tonic-build = "0.8.3"

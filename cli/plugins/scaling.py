@@ -5,23 +5,12 @@ import json
 import random
 import time
 
-from common import AsyncAWS, aws, terraform_output
+from common import AsyncAWS, aws, terraform_output, wait_deployment
 from invoke import task
 
 # Set a sleep duration to make sure every invocation is alocated to a new Lambda
 # container and doesn't trigger a warm start
 SLEEP_DURATION = 2
-
-
-def wait_deployment(lambda_name):
-    start = time.time()
-    while True:
-        conf = aws("lambda").get_function_configuration(FunctionName=lambda_name)
-        if conf["LastUpdateStatus"] == "Successful":
-            break
-        if time.time() - start > 120:
-            raise Exception("Function resizing timed out")
-        time.sleep(1)
 
 
 def resize(lambda_name, size_mb) -> str:

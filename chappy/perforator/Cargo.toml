@@ -1,0 +1,18 @@
+[package]
+name = "chappy-perforator"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+chappy-seed = { path = "../seed" }
+env_logger = { workspace = true }
+futures = { workspace = true }
+lazy_static = { workspace = true }
+log = { workspace = true }
+quinn = { workspace = true }
+rcgen = { workspace = true }
+rustls = { workspace = true, features = ["quic"] }
+socket2 = { workspace = true, features = ["all"] }
+tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }
+tonic = { workspace = true }
+tower = { workspace = true }

@@ -1,0 +1,19 @@
+[package]
+name = "chappy-interceptor"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "chappy"
+crate-type = ["cdylib"] 
+
+[dependencies]
+chappy-perforator = { path = "../perforator" }
+env_logger = { workspace = true }
+futures = { workspace = true }
+ipnet = { workspace = true }
+lazy_static = { workspace = true }
+libloading = { workspace = true }
+log = { workspace = true }
+nix = { workspace = true }
+tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }

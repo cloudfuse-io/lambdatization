@@ -31,7 +31,8 @@ resource "aws_ecr_repository" "main" {
 }
 
 resource "aws_s3_bucket" "data" {
-  bucket = "${module.env.module_name}-${data.aws_caller_identity.current.account_id}-${var.region_name}-${module.env.stage}"
+  bucket        = "${module.env.module_name}-${data.aws_caller_identity.current.account_id}-${var.region_name}-${module.env.stage}"
+  force_destroy = true
 }
 
 resource "aws_s3_object_copy" "nyc_taxi" {
