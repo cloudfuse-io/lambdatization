@@ -3,6 +3,7 @@ import io
 import json
 import time
 
+import boto3
 from botocore.exceptions import ClientError
 from common import (
     AWS_REGION_VALIDATOR,
@@ -279,7 +280,7 @@ def dockerized(c, engine):
             error.response["Error"]["Message"]
             == "Cannot call GetSessionToken with session credentials"
         ):
-            creds = aws().get_credentials().get_frozen_credentials()
+            creds = boto3.Session().get_credentials().get_frozen_credentials()
             c.config.run.env = {
                 "LAMBDA_ACCESS_KEY_ID": creds.access_key,
                 "LAMBDA_SECRET_ACCESS_KEY": creds.secret_key,

@@ -1,6 +1,6 @@
 variable "region_name" {}
 
-variable "ballista_image" {}
+variable "ballista_standalone_image" {}
 
 variable "ballista_distributed_image" {}
 
@@ -46,7 +46,7 @@ module "engine" {
 
   function_base_name = "ballista"
   region_name        = var.region_name
-  docker_image       = var.ballista_image
+  docker_image       = var.ballista_standalone_image
   memory_size        = 2048
   timeout            = 300
 

@@ -33,7 +33,7 @@ ARG FUNCTION_DIR
 RUN mkdir -p ${FUNCTION_DIR}
 
 # Copy function code
-COPY lambda-handler.py ${FUNCTION_DIR}
+COPY standalone-handler.py ${FUNCTION_DIR}/lambda-handler.py
 
 # Install the runtime interface client and lambda requirements
 RUN pip3 install \

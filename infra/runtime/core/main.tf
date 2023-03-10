@@ -36,7 +36,7 @@ resource "aws_s3_bucket" "data" {
 }
 
 resource "aws_s3_object_copy" "nyc_taxi" {
-  count  = 2
+  count  = 6
   bucket = aws_s3_bucket.data.id
   key    = "nyc-taxi/2019/0${count.index + 1}/data.parquet"
   source = "ursa-labs-taxi-data/2019/0${count.index + 1}/data.parquet"

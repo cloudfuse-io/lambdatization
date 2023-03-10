@@ -48,13 +48,13 @@ def run_executor(
             {
                 "role": "executor",
                 "bucket_name": bucket_name,
-                "timeout_sec": 20,
+                "timeout_sec": 40,
                 "scheduler_ip": scheduler_ip,
                 "env": {
                     "CHAPPY_SEED_HOSTNAME": seed_ip,
                     "CHAPPY_SEED_PORT": 8000,
                     "CHAPPY_VIRTUAL_IP": virtual_ip,
-                    "RUST_LOG": "debug,h2=error,quinn=info",
+                    "RUST_LOG": "debug,h2=info,quinn=info,rustls=info,datafusion_optimizer=info,sqlparser=info,tower=info,hyper=info",
                     "RUST_BACKTRACE": "1",
                 },
             }
@@ -76,13 +76,13 @@ def run_scheduler(
             {
                 "role": "scheduler",
                 "bucket_name": bucket_name,
-                "timeout_sec": 20,
+                "timeout_sec": 38,
                 "query": base64.b64encode(query.encode()).decode(),
                 "env": {
                     "CHAPPY_SEED_HOSTNAME": seed_ip,
                     "CHAPPY_SEED_PORT": 8000,
                     "CHAPPY_VIRTUAL_IP": virtual_ip,
-                    "RUST_LOG": "debug,h2=error,quinn=info",
+                    "RUST_LOG": "debug,h2=info,quinn=info,rustls=info,datafusion_optimizer=info,sqlparser=info,tower=info,hyper=info",
                     "RUST_BACKTRACE": "1",
                 },
             }
@@ -95,12 +95,12 @@ def run_scheduler(
 
 
 @task
-def distributed(c, seed, month="01"):
+def distributed(c, seed):
     """CREATE EXTERNAL TABLE and find out SUM(trip_distance) GROUP_BY payment_type"""
     sql = f"""
-CREATE EXTERNAL TABLE nyctaxi2019{month} STORED AS PARQUET
-LOCATION 's3://{core.bucket_name(c)}/nyc-taxi/2019/{month}/';
-SELECT payment_type, SUM(trip_distance) FROM nyctaxi2019{month}
+CREATE EXTERNAL TABLE nyctaxi2019 STORED AS PARQUET
+LOCATION 's3://{core.bucket_name(c)}/nyc-taxi/2019/';
+SELECT payment_type, SUM(trip_distance) FROM nyctaxi2019
 GROUP BY payment_type;"""
     bucket_name = core.bucket_name(c)
     lambda_name = terraform_output(c, "ballista", "distributed_lambda_name")
@@ -108,11 +108,22 @@ GROUP BY payment_type;"""
         scheduler_fut = ex.submit(
             run_scheduler, lambda_name, bucket_name, seed, "172.28.0.1", sql
         )
-        time.sleep(0.5)
-        executor_fut = ex.submit(
-            run_executor, lambda_name, bucket_name, seed, "172.28.0.2", "172.28.0.1"
-        )
+        executor_count = 6
+        executor_futs = []
+        for i in range(executor_count):
+            executor_futs.append(
+                ex.submit(
+                    run_executor,
+                    lambda_name,
+                    bucket_name,
+                    seed,
+                    f"172.28.0.{i+2}",
+                    "172.28.0.1",
+                )
+            )
+
         scheduler_res, scheduler_duration = scheduler_fut.result()
         print(format_lambda_result("SCHEDULER", scheduler_duration, scheduler_res))
-        executor_res, executor_duration = executor_fut.result()
-        print(format_lambda_result("EXECUTOR", executor_duration, executor_res))
+        for i in range(executor_count):
+            executor_res, executor_duration = executor_futs[i].result()
+            # print(format_lambda_result(f"EXECUTOR{i}", executor_duration, executor_res))

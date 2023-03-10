@@ -5,8 +5,9 @@ import socket
 import subprocess
 import sys
 import time
+import traceback
+from typing import Any
 from contextlib import closing
-from typing import List
 
 logging.getLogger().setLevel(logging.INFO)
 
@@ -19,13 +20,24 @@ class Perforator:
             ["/opt/ballista/chappy-perforator"],
             stderr=subprocess.PIPE,
         )
+        self.logs = ""
         time.sleep(0.01)
 
-    def logs(self):
-        if not self.proc is None:
+    def _load_logs(self):
+        if self.logs == "":
             self.proc.terminate()
             assert self.proc.stderr is not None
-            return self.proc.stderr.read().decode()
+            self.logs = self.proc.stderr.read().decode().strip()
+
+    def get_logs(self) -> str:
+        self._load_logs()
+        return self.logs
+
+    def log(self, log=logging.info):
+        perf_logs_prefixed = "\n".join(
+            [f"[PERFORATOR] {line}" for line in self.get_logs().split("\n")]
+        )
+        log(f"=> PERFORATOR LOGS:\n{perf_logs_prefixed}")
 
 
 def wait_for_socket(process_name: str, port: int):
@@ -45,7 +57,7 @@ def wait_for_socket(process_name: str, port: int):
         time.sleep(0.02)
 
 
-def start_server(name: str, cmd: List[str], port: int):
+def start_server(name: str, cmd: list[str], port: int):
     subprocess.Popen(
         cmd,
         stderr=sys.stderr,
@@ -81,6 +93,8 @@ def init_executor(scheduler_ip: str):
         scheduler_ip,
         "--scheduler-port",
         "50050",
+        "--concurrent-tasks",
+        "1",
     ]
     start_server("executor", cmd, 50051)
 
@@ -109,7 +123,7 @@ def run_cli(sql: str, timeout: float) -> tuple[str, str]:
     return stdout.decode(), stderr.decode()
 
 
-def handle_event(event):
+def handle_event(event) -> dict[str, Any]:
     start = time.time()
     global IS_COLD_START
     is_cold_start = IS_COLD_START
@@ -130,8 +144,6 @@ def handle_event(event):
 
     result = {}
     if event["role"] == "scheduler":
-        # wait for executors to connect
-        time.sleep(5)
         query_start = time.time()
         src_command = base64.b64decode(event["query"]).decode("utf-8")
         resp, logs = run_cli(src_command, timeout_sec)
@@ -167,10 +179,8 @@ def handler(event, context):
     perforator = Perforator()
     try:
         result = handle_event(event)
-    except Exception as e:
-        logging.error(f"perf_logs\n{perforator.logs()}")
-        raise e
-    perf_logs = perforator.logs()
-    logging.info(f"perf_logs\n{perf_logs}")
-    result["perf_logs"] = perf_logs
+    except Exception:
+        result = {"exception": traceback.format_exc()}
+    perforator.log()
+    result["perforator_logs"] = perforator.get_logs()
     return result

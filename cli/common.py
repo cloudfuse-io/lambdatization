@@ -164,13 +164,11 @@ def AWS_REGION() -> str:
 
 
 # type: ignore
-def aws(service=None) -> Any:
+def aws(service) -> Any:
     # timeout set to 1000 to be larger than lambda max duration
-    if service is None:
-        return boto3.Session()
-    else:
-        config = botocore.client.Config(retries={"max_attempts": 0}, read_timeout=1000)
-        return boto3.client(service, region_name=AWS_REGION(), config=config)
+    config = botocore.client.Config(retries={"max_attempts": 0}, read_timeout=1000)
+    # create new session to avoid threading issues
+    return boto3.Session().client(service, region_name=AWS_REGION(), config=config)
 
 
 def clean_modules(mod_dir):
