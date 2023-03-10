@@ -7,20 +7,20 @@ message Address {
     int32 port = 2;
 }
 
-message ClientPunchRequest {
+message ClientBindingRequest {
     string cluster_id = 1;
-    Address target_virtual_addr = 2;
-    Address source_virtual_addr = 3;
+    string target_virtual_ip = 2;
+    string source_virtual_ip = 3;
 }
 
-message ClientPunchResponse {
+message ClientBindingResponse {
     Address target_nated_addr = 1;
     bytes server_certificate = 2;
 }
 
-message RegisterRequest {
+message ServerBindingRequest {
     string cluster_id = 1;
-    Address virtual_addr = 2;
+    string virtual_ip = 2;
     bytes server_certificate = 3;
 }
 
@@ -29,6 +29,6 @@ message ServerPunchRequest {
 }
 
 service Seed {
-    rpc Punch(ClientPunchRequest) returns (ClientPunchResponse) {}
-    rpc Register(RegisterRequest) returns (stream ServerPunchRequest) {}
+    rpc BindClient(ClientBindingRequest) returns (ClientBindingResponse) {}
+    rpc BindServer(ServerBindingRequest) returns (stream ServerPunchRequest) {}
 }

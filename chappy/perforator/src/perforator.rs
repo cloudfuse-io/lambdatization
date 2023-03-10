@@ -1,12 +1,11 @@
-use crate::{forwarder::Forwarder, seed_client, udp_utils};
+use crate::{binding_service::BindingService, forwarder::Forwarder, udp_utils};
 use chappy_seed::Address;
 
 use futures::StreamExt;
 use log::debug;
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tokio::net::TcpStream;
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -32,13 +31,15 @@ pub struct Perforator {
     port_mappings: PortMappings,
     address_mappings: AddressMappings,
     forwarder: Arc<Forwarder>,
+    binding_service: Arc<BindingService>,
 }
 
 impl Perforator {
-    pub fn new(forwarder: Forwarder) -> Self {
+    pub fn new(forwarder: Forwarder, binding_service: BindingService) -> Self {
         Self {
             port_mappings: Arc::new(Mutex::new(HashMap::new())),
             address_mappings: Arc::new(Mutex::new(HashMap::new())),
+            binding_service: Arc::new(binding_service),
             forwarder: Arc::new(forwarder),
         }
     }
@@ -65,14 +66,11 @@ impl Perforator {
             }
         }
         let address_mappings = Arc::clone(&self.address_mappings);
-        let client_p2p_port = self.forwarder.client_p2p_port();
+        let binding_service = Arc::clone(&self.binding_service);
         tokio::spawn(async move {
-            let punch_resp = seed_client::request_punch(
-                client_p2p_port,
-                target_virtual_ip.to_string(),
-                target_port,
-            )
-            .await;
+            let punch_resp = binding_service
+                .bind_client(target_virtual_ip.to_string())
+                .await;
             address_mappings.lock().unwrap().insert(
                 virtual_addr,
                 TargetResolvedAddress {
@@ -120,15 +118,16 @@ impl Perforator {
             .await;
     }
 
-    pub fn register_server(&self, registered_port: u16) {
-        debug!("Registering server port {}", registered_port);
+    pub fn register_server(&self) {
+        debug!("Registering server...");
         let server_p2p_port = self.forwarder.server_p2p_port();
         let server_certificate = self.forwarder.server_certificate().to_owned();
+        let binding_service = Arc::clone(&self.binding_service);
         tokio::spawn(async move {
-            let stream =
-                seed_client::register(server_p2p_port, registered_port, server_certificate).await;
+            let stream = binding_service.bind_server(server_certificate).await;
             // For each incoming server punch request, send a random packet to punch
             // a hole in the NAT
+            debug!("Subscribe to hole punching requests");
             stream
                 .map(|punch_req| async {
                     let client_natted_addr = punch_req.unwrap().client_nated_addr.unwrap();
@@ -142,7 +141,8 @@ impl Perforator {
                 })
                 .buffer_unordered(usize::MAX)
                 .for_each(|_| async {})
-                .await
+                .await;
+            debug!("Subscription to hole punching requests closed");
         });
     }
 }

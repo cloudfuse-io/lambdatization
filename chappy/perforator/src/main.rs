@@ -1,4 +1,7 @@
-use chappy_perforator::{forwarder::Forwarder, perforator::Perforator, protocol::ParsedTcpStream};
+use chappy_perforator::{
+    binding_service::BindingService, forwarder::Forwarder, perforator::Perforator,
+    protocol::ParsedTcpStream,
+};
 
 use log::debug;
 
@@ -12,7 +15,8 @@ async fn main() {
         .init();
     let listener = TcpListener::bind("127.0.0.1:5000").await.unwrap();
     let forwarder = Forwarder::new(5001, 5002);
-    let perforator = Arc::new(Perforator::new(forwarder));
+    let binding_service = BindingService::new(5001, 5002);
+    let perforator = Arc::new(Perforator::new(forwarder, binding_service));
     loop {
         let (stream, _) = listener.accept().await.unwrap();
         debug!(
@@ -29,9 +33,7 @@ async fn main() {
                     target_virtual_ip,
                     target_port,
                 } => perforator.register_client(source_port, target_virtual_ip, target_port),
-                ParsedTcpStream::ServerRegistration { registered_port } => {
-                    perforator.register_server(registered_port)
-                }
+                ParsedTcpStream::ServerRegistration => perforator.register_server(),
                 ParsedTcpStream::Raw(stream) => perforator.forward_client(stream).await,
             }
         });
