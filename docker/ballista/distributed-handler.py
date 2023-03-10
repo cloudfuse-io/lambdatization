@@ -6,8 +6,8 @@ import subprocess
 import sys
 import time
 import traceback
-from typing import Any
 from contextlib import closing
+from typing import Any
 
 logging.getLogger().setLevel(logging.INFO)
 
