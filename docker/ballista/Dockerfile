@@ -1,5 +1,5 @@
 
-ARG BALLISTA_VERSION=0.9.0
+ARG BALLISTA_VERSION=0.11.0
 ARG RELEASE_FLAG=release
 ARG FUNCTION_DIR="/function"
 
@@ -38,7 +38,7 @@ COPY lambda-handler.py ${FUNCTION_DIR}
 # Install the runtime interface client and lambda requirements
 RUN pip3 install \
     --target ${FUNCTION_DIR} \
-    awslambdaric pexpect
+    awslambdaric
 
 
 FROM python:3.10-slim-bullseye
