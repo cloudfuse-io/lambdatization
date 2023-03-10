@@ -29,7 +29,8 @@ terraform {
 }
 
 inputs = {
-  region_name    = local.region_name
-  ballista_image = "dummy_overriden_by_before_hook"
-  bucket_arn     = dependency.core.outputs.bucket_arn
+  region_name                = local.region_name
+  ballista_image             = "dummy_overriden_by_before_hook"
+  ballista_distributed_image = "dummy_overriden_by_before_hook"
+  bucket_arn                 = dependency.core.outputs.bucket_arn
 }

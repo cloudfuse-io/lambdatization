@@ -192,7 +192,7 @@ def invoke_lambda(
 
 
 @task
-def run_lambda(c, seed=None, release=False):
+def run_lambda(c, seed=None, release=False, client="example-client"):
     """Run the Chappy binaries on Lambda using the provided seed public IP"""
     bucket_name = core.bucket_name(c)
     lambda_name = terraform_output(c, "chappy", "dev_lambda_name")
@@ -207,7 +207,7 @@ def run_lambda(c, seed=None, release=False):
                 aws s3 cp - s3://{bucket_name}/{to_s3_key(output_dir, file)} --region {AWS_REGION()}"
         )
         lib_up_fut = executor.submit(upload, "libchappy.so")
-        client_up_fut = executor.submit(upload, "example-client")
+        client_up_fut = executor.submit(upload, client)
         server_up_fut = executor.submit(upload, "example-server")
         perforator_up_fut = executor.submit(upload, "chappy-perforator")
         lambda_version = redeploy_fut.result()
@@ -218,6 +218,7 @@ def run_lambda(c, seed=None, release=False):
 
         common_env = {
             "CHAPPY_SEED_HOSTNAME": seed,
+            "CHAPPY_SEED_PORT": 8000,
             "CHAPPY_VIRTUAL_SUBNET": "172.28.0.0/16",
             "RUST_LOG": "debug,h2=error,quinn=info",
             "RUST_BACKTRACE": "1",
@@ -236,7 +237,7 @@ def run_lambda(c, seed=None, release=False):
         )
 
         time.sleep(0.5)
-        mb_sent = 500
+        mb_sent = 50
 
         client_fut = executor.submit(
             invoke_lambda,
@@ -244,7 +245,7 @@ def run_lambda(c, seed=None, release=False):
             bucket_name,
             lambda_version,
             19,
-            to_s3_key(output_dir, "example-client"),
+            to_s3_key(output_dir, client),
             to_s3_key(output_dir, "chappy-perforator"),
             to_s3_key(output_dir, "libchappy.so"),
             {
@@ -262,7 +263,9 @@ def run_lambda(c, seed=None, release=False):
         print(format_lambda_result("SERVER", server_duration, server_result))
         # show bandwidth
         client_payload = json.loads(client_result["Payload"])
-        if (
+        if client_payload.get("returncode", None) != 0:
+            print(f'Client failed with code {client_payload.get("returncode", None)}')
+        elif (
             "context" in client_payload
             and "subproc_duration_sec" in client_payload["context"]
         ):

@@ -2,6 +2,8 @@ variable "region_name" {}
 
 variable "ballista_image" {}
 
+variable "ballista_distributed_image" {}
+
 variable "bucket_arn" {}
 
 module "env" {
@@ -53,6 +55,26 @@ module "engine" {
 
 }
 
+module "distributed_engine" {
+  source = "../../common/lambda"
+
+  function_base_name = "ballista-distributed"
+  region_name        = var.region_name
+  docker_image       = var.ballista_distributed_image
+  memory_size        = 2048
+  timeout            = 300
+
+  additional_policies = [aws_iam_policy.s3_access.arn]
+  environment = {
+    CHAPPY_VIRTUAL_SUBNET : "172.28.0.0/16",
+  }
+
+}
+
 output "lambda_name" {
   value = module.engine.lambda_name
+}
+
+output "distributed_lambda_name" {
+  value = module.distributed_engine.lambda_name
 }
