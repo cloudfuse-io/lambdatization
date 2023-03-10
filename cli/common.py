@@ -6,10 +6,11 @@ import time
 from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
-from typing import List, Set
+from typing import Any, List, Set
 
 import aiohttp
 import boto3
+import boto3.session
 import botocore.client
 import dynaconf
 from botocore.auth import SigV4Auth
@@ -81,7 +82,7 @@ def conf(validators=[]) -> dict:
     assert isinstance(
         validators, list
     ), "validators should be a list of dynaconf.Validator"
-    dc = dynaconf.Dynaconf(
+    dc: Any = dynaconf.Dynaconf(
         # dotenv file is loaded by l12n-shell
         load_dotenv=False,
         envvar_prefix=False,
@@ -162,7 +163,8 @@ def AWS_REGION() -> str:
     return conf([AWS_REGION_VALIDATOR])["L12N_AWS_REGION"]
 
 
-def aws(service=None):
+# type: ignore
+def aws(service=None) -> Any:
     # timeout set to 1000 to be larger than lambda max duration
     if service is None:
         return boto3.Session()
@@ -307,6 +309,8 @@ class FargateService:
         nb_vast_tasks = len(task_res["taskArns"])
         if nb_vast_tasks == 1:
             task_status = self._task_desc(task_res["taskArns"][0])["lastStatus"]
+        else:
+            task_status = "UNDEFINED"
         # describe service
         srv_res = aws("ecs").describe_services(
             cluster=self.cluster, services=[self.service_name]
