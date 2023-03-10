@@ -15,9 +15,9 @@ IS_COLD_START = True
 
 
 class Perforator:
-    def __init__(self):
+    def __init__(self, bin_path):
         self.proc = subprocess.Popen(
-            ["/opt/ballista/chappy-perforator"],
+            [bin_path],
             stderr=subprocess.PIPE,
         )
         self.logs = ""
@@ -176,7 +176,7 @@ def handler(event, context):
         logging.info(f"{key}={value}")
         os.environ[key] = str(value)
 
-    perforator = Perforator()
+    perforator = Perforator("/opt/ballista/chappy-perforator")
     try:
         result = handle_event(event)
     except Exception:
