@@ -48,9 +48,9 @@ pub(crate) fn request_punch(sockfd: c_int, addr_in: SockaddrIn) -> SockaddrIn {
 pub(crate) fn register(addr_in: SockaddrIn) -> SockaddrIn {
     let registered_port = addr_in.port();
     RUNTIME.block_on(async move {
-        chappy_perforator::protocol::register_server(PERFORATOR_ADDRESS, registered_port).await;
+        chappy_perforator::protocol::register_server(PERFORATOR_ADDRESS).await;
         debug!(
-            "Perforator call for registering server on port {} completed",
+            "Perforator call for registering server (port {}) completed",
             registered_port,
         )
     });

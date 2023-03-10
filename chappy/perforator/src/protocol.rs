@@ -13,9 +13,7 @@ pub enum ParsedTcpStream {
         target_virtual_ip: Ipv4Addr,
         target_port: u16,
     },
-    ServerRegistration {
-        registered_port: u16,
-    },
+    ServerRegistration,
     Raw(TcpStream),
 }
 
@@ -35,8 +33,7 @@ impl ParsedTcpStream {
             }
         } else if buff == REGISTER_SERVER_HEADER_BYTES {
             stream.read_exact(&mut buff).await.unwrap();
-            let registered_port = stream.read_u16().await.unwrap();
-            Self::ServerRegistration { registered_port }
+            Self::ServerRegistration
         } else {
             Self::Raw(stream)
         }
@@ -58,16 +55,21 @@ pub async fn register_client(
     stream.write_u32(target_virtual_ip.into()).await.unwrap();
     stream.write_u16(target_port).await.unwrap();
     stream.flush().await.unwrap();
-    stream.read_u8().await.unwrap_err();
+    stream
+        .read_u8()
+        .await
+        .expect_err("Connection should have been closed by peer");
 }
 
-pub async fn register_server(perforator_address: &str, registered_port: u16) {
+pub async fn register_server(perforator_address: &str) {
     let mut stream = TcpStream::connect(perforator_address).await.unwrap();
     stream
         .write_all(&REGISTER_SERVER_HEADER_BYTES)
         .await
         .unwrap();
-    stream.write_u16(registered_port).await.unwrap();
     stream.flush().await.unwrap();
-    stream.read_u8().await.unwrap_err();
+    stream
+        .read_u8()
+        .await
+        .expect_err("Connection should have been closed by peer");
 }

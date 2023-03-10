@@ -1,6 +1,5 @@
 use crate::{debug_fmt, utils, LIBC_LOADED};
 use env_logger;
-use log::debug;
 use nix::{
     libc::{c_int, sockaddr, socklen_t},
     sys::socket::SockaddrLike,
@@ -23,7 +22,7 @@ type ConnectSymbol<'a> =
 pub unsafe extern "C" fn connect(sockfd: c_int, addr: *const sockaddr, len: socklen_t) -> c_int {
     init_logger();
     let libc_connect: ConnectSymbol = LIBC_LOADED.get(b"connect").unwrap();
-    debug!("Entering interception connect({})", sockfd);
+    // debug!("Entering interception connect({})", sockfd);
     let code = match parse_virtual(addr, len) {
         Some(addr_in) => {
             let new_addr = request_punch(sockfd, addr_in);
@@ -47,7 +46,7 @@ type BindSymbol<'a> =
 #[no_mangle]
 pub unsafe extern "C" fn bind(sockfd: c_int, addr: *const sockaddr, len: socklen_t) -> c_int {
     init_logger();
-    debug!("Entering interception bind({})", sockfd);
+    // debug!("Entering interception bind({})", sockfd);
     let libc_bind: BindSymbol = LIBC_LOADED.get(b"bind").unwrap();
 
     let code = match parse_virtual(addr, len) {
