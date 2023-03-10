@@ -8,11 +8,8 @@ import time
 from contextlib import closing
 from typing import List
 
-from pexpect import popen_spawn
-
 logging.getLogger().setLevel(logging.INFO)
 
-process_cli = None
 IS_COLD_START = True
 
 
@@ -43,10 +40,11 @@ def start_server(name: str, cmd: List[str], port: int):
     wait_for_socket(name, port)
 
 
-def start_cli():
-    global process_cli
+def run_cli(sql: str) -> tuple[str, str]:
     logging.info("cli starts")
-    process_cli = popen_spawn.PopenSpawn(
+    with open("/tmp/sql_query.tmp", "w") as tmp_sql:
+        tmp_sql.write(sql)
+    process_cli = subprocess.Popen(
         [
             "/opt/ballista/ballista-cli",
             "--host",
@@ -55,10 +53,15 @@ def start_cli():
             "50050",
             "--format",
             "csv",
-        ]
+            "--file",
+            "/tmp/sql_query.tmp",
+        ],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
     )
-    process_cli.expect(b"Ballista CLI v[0-9.]*")
-    logging.debug(process_cli.before)
+    stdout, stderr = process_cli.communicate(input=sql.encode())
+    return stdout.decode(), stderr.decode()
 
 
 def init():
@@ -69,27 +72,6 @@ def init():
     ]
     start_server("scheduler", sched_cmd, 50050)
     start_server("executor", ["/opt/ballista/ballista-executor"], 50051)
-    start_cli()
-
-
-def query(sql: str) -> str:
-    logging.info(f"Running {sql}")
-    process_cli.sendline(sql)
-    look_for = [
-        b"Query took ([0-9]*[.])?[0-9]+ seconds.\\\n",
-        b"DataFusionError\(",
-        b"Invalid statement",
-    ]
-    i = process_cli.expect(look_for, timeout=200)
-
-    cli_output = process_cli.before.decode("utf-8")
-    if i == 0:
-        logging.info(f"Result: {cli_output}")
-        return cli_output
-    else:
-        process_cli.expect([b"\n"], timeout=1)
-        cli_err = f"{cli_output}{look_for[i]}{process_cli.before.decode()}"
-        raise Exception(f"Query failed: {cli_err}")
 
 
 def handler(event, context):
@@ -103,19 +85,12 @@ def handler(event, context):
     src_command = base64.b64decode(event["query"]).decode("utf-8")
     init_duration = time.time() - start
 
-    resp = ""
-    parsed_queries = []
-    for sql in src_command.split(";"):
-        sql = sql.strip() + ";"
-        if sql == ";":
-            continue
-        parsed_queries.append(sql)
-        resp = query(sql)
+    resp, logs = run_cli(src_command)
 
     result = {
         "resp": resp,
-        "logs": "",
-        "parsed_queries": parsed_queries,
+        "logs": logs,
+        "parsed_queries": [src_command],
         "context": {
             "cold_start": is_cold_start,
             "handler_duration_sec": time.time() - start,

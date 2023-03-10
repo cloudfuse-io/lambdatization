@@ -52,7 +52,7 @@ def login(c):
     c.run("gcloud auth application-default login --no-launch-browser")
 
 
-@task(help={"clean": clean_modules.__doc__})
+@task(help={"clean": str(clean_modules.__doc__)})
 def init(c, clean=False, flags=""):
     """Init the monitoring modules"""
     if clean:

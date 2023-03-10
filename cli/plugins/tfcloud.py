@@ -1,6 +1,6 @@
 """Configure the Terraform Cloud account used as Terraform state backend"""
 
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Optional, Set
 
 import dynaconf
 import requests
@@ -109,7 +109,7 @@ class Client:
         return updted_ws_list
 
     @print_error_resp
-    def get_varset(self, name: str) -> dict:
+    def get_varset(self, name: str) -> Optional[dict]:
         "Find a varset from its name, None if doesn't exist"
         res = requests.get(f"{self.org_url}/varsets", headers=self.headers)
         res.raise_for_status()
@@ -161,7 +161,7 @@ class Client:
         print("DONE")
 
     @print_error_resp
-    def get_variable(self, varset_id: str, key: str) -> dict:
+    def get_variable(self, varset_id: str, key: str) -> Optional[dict]:
         "Find a variable in a varset by its key, None if doesn't exist"
         res = requests.get(
             f"{self.url}/varsets/{varset_id}/relationships/vars",
