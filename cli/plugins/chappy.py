@@ -325,6 +325,13 @@ def run_lambda_cluster(c, seed=None, release=False, binary="example-n-to-n", nod
             )
             node_futs.append(node_fut)
         print("nodes scheduled")
+        returncodes = []
+        durations = []
         for node_fut in node_futs:
             (node_result, node_duration) = node_fut.result()
+            payload = json.loads(node_result.get("Payload", "{}"))
+            returncodes.append(payload.get("returncode", None))
+            durations.append(node_duration)
             print(format_lambda_result("NODE", node_duration, node_result))
+        print(f"returncodes: {returncodes}")
+        print(f"external durations: {durations}")
