@@ -12,6 +12,10 @@ name = "example-multi-clients"
 path = "multi_clients.rs"
 
 [[bin]]
+name = "example-n-to-n"
+path = "n_to_n.rs"
+
+[[bin]]
 name = "example-server"
 path = "server.rs"
 

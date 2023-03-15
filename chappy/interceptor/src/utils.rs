@@ -1,4 +1,4 @@
-use crate::{RUNTIME, VIRTUAL_NET};
+use crate::{CHAPPY_CONF, RUNTIME, VIRTUAL_NET};
 use log::debug;
 use nix::libc::{c_int, sockaddr, socklen_t};
 use nix::sys::socket::{self, SockaddrIn, SockaddrLike, SockaddrStorage};
@@ -57,23 +57,33 @@ pub(crate) fn register(addr_in: SockaddrIn) -> SockaddrIn {
     SockaddrIn::new(127, 0, 0, 1, registered_port)
 }
 
-pub(crate) unsafe fn parse_virtual(addr: *const sockaddr, len: socklen_t) -> Option<SockaddrIn> {
+pub(crate) enum ParsedAddress {
+    RemoteVirtual(SockaddrIn),
+    LocalVirtual(SockaddrIn),
+    NotVirtual,
+}
+
+pub(crate) unsafe fn parse_virtual(addr: *const sockaddr, len: socklen_t) -> ParsedAddress {
     let addr_stor = SockaddrStorage::from_raw(addr, Some(len)).unwrap();
     match addr_stor.as_sockaddr_in() {
-        Some(addr_in) if VIRTUAL_NET.contains(&Ipv4Addr::from(addr_in.ip())) => {
-            Some(addr_in.clone())
-        }
         Some(addr_in) => {
-            debug!(
-                "{} not in virtual network {}",
-                Ipv4Addr::from(addr_in.ip()).to_string(),
-                VIRTUAL_NET.to_string()
-            );
-            None
+            let ip = Ipv4Addr::from(addr_in.ip());
+            if ip.to_string() == CHAPPY_CONF.virtual_ip {
+                ParsedAddress::LocalVirtual(addr_in.clone())
+            } else if VIRTUAL_NET.contains(&ip) {
+                ParsedAddress::RemoteVirtual(addr_in.clone())
+            } else {
+                debug!(
+                    "{} not in virtual network {}",
+                    Ipv4Addr::from(addr_in.ip()).to_string(),
+                    VIRTUAL_NET.to_string()
+                );
+                ParsedAddress::NotVirtual
+            }
         }
         None => {
             debug!("Not an IPv4 addr");
-            None
+            ParsedAddress::NotVirtual
         }
     }
 }

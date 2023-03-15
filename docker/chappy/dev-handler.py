@@ -4,7 +4,6 @@ import stat
 import subprocess
 import sys
 import time
-from io import BytesIO
 
 import boto3
 
@@ -47,38 +46,30 @@ def setup_binaries(
     return (local_app_location, local_perforator_location)
 
 
-def run_perforator(local_perforator_location: str):
-    if local_perforator_location == "":
-        return (BytesIO(b""), BytesIO(b""))
-    perf_proc = subprocess.Popen(
-        [local_perforator_location],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    return (perf_proc.stdout, perf_proc.stderr)
-
-
 class Perforator:
-    def __init__(self, local_perforator_location: str):
-        if local_perforator_location == "":
-            self.proc = None
-        else:
-            self.proc = subprocess.Popen(
-                [local_perforator_location],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            time.sleep(0.01)
+    def __init__(self, bin_path):
+        self.proc = subprocess.Popen(
+            [bin_path],
+            stderr=subprocess.PIPE,
+        )
+        self.logs = ""
+        time.sleep(0.01)
 
-    def stdout(self):
-        if not self.proc is None:
+    def _load_logs(self):
+        if self.logs == "":
             self.proc.terminate()
-            return self.proc.stdout.read().decode()
+            assert self.proc.stderr is not None
+            self.logs = self.proc.stderr.read().decode().strip()
 
-    def stderr(self):
-        if not self.proc is None:
-            self.proc.terminate()
-            return self.proc.stderr.read().decode()
+    def get_logs(self) -> str:
+        self._load_logs()
+        return self.logs
+
+    def log(self, log=logging.info):
+        perf_logs_prefixed = "\n".join(
+            [f"[PERFORATOR] {line}" for line in self.get_logs().split("\n")]
+        )
+        log(f"=> PERFORATOR LOGS:\n{perf_logs_prefixed}")
 
 
 def handler(event: dict, context):
@@ -124,8 +115,7 @@ def handler(event: dict, context):
     result = {
         "stdout": stdout,
         "stderr": stderr,
-        "perf_stdout": perforator.stdout(),
-        "perf_stderr": perforator.stderr(),
+        "perforator_logs": perforator.get_logs(),
         "returncode": returncode,
         "context": {
             "handler_duration_sec": time.time() - handler_start,

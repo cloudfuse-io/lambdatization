@@ -1,8 +1,16 @@
-use crate::{debug_fmt, utils, LIBC_LOADED};
+use crate::{
+    debug_fmt,
+    utils::{
+        self,
+        ParsedAddress::{LocalVirtual, NotVirtual, RemoteVirtual},
+    },
+    LIBC_LOADED,
+};
 use env_logger;
+use log::error;
 use nix::{
-    libc::{c_int, sockaddr, socklen_t},
-    sys::socket::SockaddrLike,
+    libc::{__errno_location, c_int, sockaddr, socklen_t, EADDRNOTAVAIL},
+    sys::socket::{SockaddrIn, SockaddrLike},
 };
 use std::ptr;
 
@@ -24,14 +32,17 @@ pub unsafe extern "C" fn connect(sockfd: c_int, addr: *const sockaddr, len: sock
     let libc_connect: ConnectSymbol = LIBC_LOADED.get(b"connect").unwrap();
     // debug!("Entering interception connect({})", sockfd);
     let code = match parse_virtual(addr, len) {
-        Some(addr_in) => {
+        RemoteVirtual(addr_in) => {
             let new_addr = request_punch(sockfd, addr_in);
             debug_fmt::dst_rewrite("connect", sockfd, &new_addr, &addr_in);
-            let code = libc_connect(sockfd, ptr::addr_of!(new_addr).cast(), new_addr.len());
-
-            return code;
+            libc_connect(sockfd, ptr::addr_of!(new_addr).cast(), new_addr.len())
         }
-        None => {
+        LocalVirtual(addr_in) => {
+            let local = SockaddrIn::new(127, 0, 0, 1, addr_in.port());
+            debug_fmt::dst_rewrite("connect", sockfd, &local, &addr_in);
+            libc_connect(sockfd, ptr::addr_of!(local).cast(), local.len())
+        }
+        NotVirtual => {
             debug_fmt::dst("connect", sockfd, addr, len);
             libc_connect(sockfd, addr, len)
         }
@@ -50,12 +61,17 @@ pub unsafe extern "C" fn bind(sockfd: c_int, addr: *const sockaddr, len: socklen
     let libc_bind: BindSymbol = LIBC_LOADED.get(b"bind").unwrap();
 
     let code = match parse_virtual(addr, len) {
-        Some(addr_in) => {
+        LocalVirtual(addr_in) => {
             let new_addr = register(addr_in);
             debug_fmt::dst_rewrite("bind", sockfd, &new_addr, &addr_in);
             libc_bind(sockfd, ptr::addr_of!(new_addr).cast(), new_addr.len())
         }
-        None => {
+        RemoteVirtual(_) => {
+            error!("Binding to remote virtual address");
+            *__errno_location() = EADDRNOTAVAIL;
+            -1
+        }
+        NotVirtual => {
             debug_fmt::dst("bind", sockfd, addr, len);
             libc_bind(sockfd, addr, len)
         }

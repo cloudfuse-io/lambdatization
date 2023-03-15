@@ -192,7 +192,7 @@ def invoke_lambda(
 
 
 @task
-def run_lambda(c, seed=None, release=False, client="example-client"):
+def run_lambda_pair(c, seed=None, release=False, client="example-client"):
     """Run the Chappy binaries on Lambda using the provided seed public IP"""
     bucket_name = core.bucket_name(c)
     lambda_name = terraform_output(c, "chappy", "dev_lambda_name")
@@ -274,3 +274,64 @@ def run_lambda(c, seed=None, release=False, client="example-client"):
             print(
                 f'=> BANDWIDTH={mb_sent*8*2/client_payload["context"]["subproc_duration_sec"]} Mbit/s'
             )
+
+
+@task
+def run_lambda_cluster(c, seed=None, release=False, binary="example-n-to-n", nodes=5):
+    """Run the Chappy binaries on Lambda using the provided seed public IP"""
+    bucket_name = core.bucket_name(c)
+    lambda_name = terraform_output(c, "chappy", "dev_lambda_name")
+    if seed is None:
+        seed = seed_ip(c)
+
+    with ThreadPoolExecutor() as executor:
+        redeploy_fut = executor.submit(redeploy, lambda_name)
+        build_image, output_dir = build_chappy(c, release)
+        upload = lambda file: c.run(
+            f"docker run --rm --entrypoint cat {build_image} {output_dir}/{file} | \
+                aws s3 cp - s3://{bucket_name}/{to_s3_key(output_dir, file)} --region {AWS_REGION()}"
+        )
+        lib_up_fut = executor.submit(upload, "libchappy.so")
+        binary_up_fut = executor.submit(upload, binary)
+        perforator_up_fut = executor.submit(upload, "chappy-perforator")
+
+        lambda_version = redeploy_fut.result()
+        lib_up_fut.result()
+        binary_up_fut.result()
+        perforator_up_fut.result()
+
+        common_env = {
+            "CHAPPY_SEED_HOSTNAME": seed,
+            "CHAPPY_SEED_PORT": 8000,
+            "CHAPPY_VIRTUAL_SUBNET": "172.28.0.0/16",
+            "CLUSTER_IPS": ",".join([f"172.28.0.{i+1}" for i in range(nodes)]),
+            "BATCH_SIZE": 32,
+            "BYTES_SENT": 128,
+            "RUST_LOG": "debug,h2=error,quinn=info,tower=info,rustls=info",
+            "RUST_BACKTRACE": "1",
+        }
+        node_futs = []
+        for i in range(nodes):
+            node_fut = executor.submit(
+                invoke_lambda,
+                lambda_name,
+                bucket_name,
+                lambda_version,
+                20,
+                to_s3_key(output_dir, binary),
+                to_s3_key(output_dir, "chappy-perforator"),
+                to_s3_key(output_dir, "libchappy.so"),
+                {**common_env, "CHAPPY_VIRTUAL_IP": f"172.28.0.{i+1}"},
+            )
+            node_futs.append(node_fut)
+        print("nodes scheduled")
+        returncodes = []
+        durations = []
+        for node_fut in node_futs:
+            (node_result, node_duration) = node_fut.result()
+            payload = json.loads(node_result.get("Payload", "{}"))
+            returncodes.append(payload.get("returncode", None))
+            durations.append(node_duration)
+            print(format_lambda_result("NODE", node_duration, node_result))
+        print(f"returncodes: {returncodes}")
+        print(f"external durations: {durations}")
