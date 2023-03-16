@@ -21,13 +21,18 @@ class Perforator:
             stderr=subprocess.PIPE,
         )
         self.logs = ""
-        time.sleep(0.01)
 
     def _load_logs(self):
         if self.logs == "":
             self.proc.terminate()
-            assert self.proc.stderr is not None
-            self.logs = self.proc.stderr.read().decode().strip()
+            try:
+                _, stderr = self.proc.communicate(timeout=5)
+                logging.info("Perforator successfully terminated")
+            except subprocess.TimeoutExpired:
+                logging.error("Perforator could not terminate properly")
+                self.proc.kill()
+                _, stderr = self.proc.communicate()
+            self.logs = stderr.decode().strip()
 
     def get_logs(self) -> str:
         self._load_logs()

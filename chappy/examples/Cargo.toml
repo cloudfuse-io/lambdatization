@@ -24,6 +24,6 @@ name = "helpers"
 path = "helpers.rs"
 
 [dependencies]
-env_logger = { workspace = true }
-log = { workspace = true }
-rand = { workspace = true }
+env_logger = "0.10.0"
+log = "0.4.17"
+rand = "0.8.5"

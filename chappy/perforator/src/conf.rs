@@ -1,6 +1,6 @@
 use std::env::var;
 
-pub(crate) struct ChappyConf {
+pub struct ChappyConf {
     pub seed_hostname: String,
     pub seed_port: String,
     pub virtual_ip: String,

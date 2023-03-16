@@ -1,9 +1,9 @@
 use crate::{CHAPPY_CONF, RUNTIME, VIRTUAL_NET};
-use log::debug;
 use nix::libc::{c_int, sockaddr, socklen_t};
 use nix::sys::socket::{self, SockaddrIn, SockaddrLike, SockaddrStorage};
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::str::FromStr;
+use tracing::debug;
 
 const PERFORATOR_ADDRESS: &str = "127.0.0.1:5000";
 

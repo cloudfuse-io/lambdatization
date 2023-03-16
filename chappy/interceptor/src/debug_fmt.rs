@@ -1,9 +1,9 @@
-use log::debug;
 use nix::{
     libc::{c_int, sockaddr, socklen_t},
     sys::socket::{SockaddrIn, SockaddrLike},
 };
 use std::net::Ipv4Addr;
+use tracing::debug;
 
 pub(crate) fn dst_rewrite(func: &str, fd: c_int, new_addr: &SockaddrIn, old_addr: &SockaddrIn) {
     debug!(

@@ -5,13 +5,14 @@ edition = "2021"
 build = "build.rs"
 
 [dependencies]
-env_logger = { workspace = true }
+chappy-util = { path = "../util" }
 futures = { workspace = true }
-log = { workspace = true }
 prost = { workspace = true }
 tokio = { workspace = true, features = ["rt"] }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 
 
 [build-dependencies]

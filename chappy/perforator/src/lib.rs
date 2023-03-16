@@ -10,5 +10,5 @@ pub mod udp_utils;
 extern crate lazy_static;
 
 lazy_static! {
-    pub(crate) static ref CHAPPY_CONF: conf::ChappyConf = conf::ChappyConf::load();
+    pub static ref CHAPPY_CONF: conf::ChappyConf = conf::ChappyConf::load();
 }
