@@ -220,7 +220,7 @@ def run_lambda_pair(c, seed=None, release=False, client="example-client"):
             "CHAPPY_SEED_HOSTNAME": seed,
             "CHAPPY_SEED_PORT": 8000,
             "CHAPPY_VIRTUAL_SUBNET": "172.28.0.0/16",
-            "RUST_LOG": "debug,h2=error,quinn=info",
+            "RUST_LOG": "debug,h2=error,quinn=info,tower=info,rustls=info",
             "RUST_BACKTRACE": "1",
         }
 

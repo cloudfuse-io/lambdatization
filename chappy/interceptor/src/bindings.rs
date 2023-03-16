@@ -6,19 +6,23 @@ use crate::{
     },
     LIBC_LOADED,
 };
-use env_logger;
-use log::error;
+use chappy_util::CustomTime;
 use nix::{
     libc::{__errno_location, c_int, sockaddr, socklen_t, EADDRNOTAVAIL},
     sys::socket::{SockaddrIn, SockaddrLike},
 };
 use std::ptr;
+use tracing::{debug_span, error};
+use tracing_subscriber::EnvFilter;
 
 use utils::{parse_virtual, register, request_punch};
 
 fn init_logger() {
-    env_logger::Builder::from_default_env()
-        .format_timestamp_millis()
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .with_writer(std::io::stderr)
+        .with_target(false)
+        .with_timer(CustomTime)
         .try_init()
         .ok();
 }
@@ -29,8 +33,9 @@ type ConnectSymbol<'a> =
 #[no_mangle]
 pub unsafe extern "C" fn connect(sockfd: c_int, addr: *const sockaddr, len: socklen_t) -> c_int {
     init_logger();
+    let span = debug_span!("connect", sock = sockfd);
+    let _entered = span.enter();
     let libc_connect: ConnectSymbol = LIBC_LOADED.get(b"connect").unwrap();
-    // debug!("Entering interception connect({})", sockfd);
     let code = match parse_virtual(addr, len) {
         RemoteVirtual(addr_in) => {
             let new_addr = request_punch(sockfd, addr_in);
@@ -57,9 +62,9 @@ type BindSymbol<'a> =
 #[no_mangle]
 pub unsafe extern "C" fn bind(sockfd: c_int, addr: *const sockaddr, len: socklen_t) -> c_int {
     init_logger();
-    // debug!("Entering interception bind({})", sockfd);
+    let span = debug_span!("connect", sock = sockfd);
+    let _entered = span.enter();
     let libc_bind: BindSymbol = LIBC_LOADED.get(b"bind").unwrap();
-
     let code = match parse_virtual(addr, len) {
         LocalVirtual(addr_in) => {
             let new_addr = register(addr_in);
