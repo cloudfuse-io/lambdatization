@@ -6,33 +6,22 @@ use crate::{
     },
     LIBC_LOADED,
 };
-use chappy_util::CustomTime;
+use chappy_util::init_tracing_shared_lib;
 use nix::{
     libc::{__errno_location, c_int, sockaddr, socklen_t, EADDRNOTAVAIL},
     sys::socket::{SockaddrIn, SockaddrLike},
 };
 use std::ptr;
 use tracing::{debug_span, error};
-use tracing_subscriber::EnvFilter;
 
 use utils::{parse_virtual, register, request_punch};
-
-fn init_logger() {
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .with_writer(std::io::stderr)
-        .with_target(false)
-        .with_timer(CustomTime)
-        .try_init()
-        .ok();
-}
 
 type ConnectSymbol<'a> =
     libloading::Symbol<'a, unsafe extern "C" fn(c_int, *const sockaddr, socklen_t) -> c_int>;
 
 #[no_mangle]
 pub unsafe extern "C" fn connect(sockfd: c_int, addr: *const sockaddr, len: socklen_t) -> c_int {
-    init_logger();
+    init_tracing_shared_lib();
     let span = debug_span!("connect", sock = sockfd);
     let _entered = span.enter();
     let libc_connect: ConnectSymbol = LIBC_LOADED.get(b"connect").unwrap();
@@ -61,7 +50,7 @@ type BindSymbol<'a> =
 
 #[no_mangle]
 pub unsafe extern "C" fn bind(sockfd: c_int, addr: *const sockaddr, len: socklen_t) -> c_int {
-    init_logger();
+    init_tracing_shared_lib();
     let span = debug_span!("connect", sock = sockfd);
     let _entered = span.enter();
     let libc_bind: BindSymbol = LIBC_LOADED.get(b"bind").unwrap();
