@@ -1,4 +1,6 @@
-use crate::{binding_service::BindingService, forwarder::Forwarder, udp_utils};
+use crate::{
+    binding_service::BindingService, forwarder::Forwarder, shutdown::ShutdownGuard, udp_utils,
+};
 use chappy_seed::Address;
 
 use futures::StreamExt;
@@ -80,8 +82,8 @@ impl Perforator {
     }
 
     /// Forward a TCP stream from a registered port
-    #[instrument(name = "fwd_conn", skip_all, fields())]
-    pub async fn forward_conn(&self, stream: TcpStream) {
+    #[instrument(name = "fwd_conn", skip_all)]
+    pub async fn forward_conn(&self, stream: TcpStream, _shdn: ShutdownGuard) {
         debug!("starting...");
         let src_port = stream.peer_addr().unwrap().port();
         let target_virtual_address = self

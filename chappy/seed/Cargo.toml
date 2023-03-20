@@ -12,7 +12,6 @@ tokio = { workspace = true, features = ["rt"] }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
 
 
 [build-dependencies]
