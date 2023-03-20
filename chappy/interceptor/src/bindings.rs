@@ -2,7 +2,7 @@ use crate::{
     debug_fmt,
     utils::{
         self,
-        ParsedAddress::{LocalVirtual, NotVirtual, RemoteVirtual},
+        ParsedAddress::{LocalVirtual, NotVirtual, RemoteVirtual, Unknown},
     },
     LIBC_LOADED,
 };
@@ -36,7 +36,7 @@ pub unsafe extern "C" fn connect(sockfd: c_int, addr: *const sockaddr, len: sock
             debug_fmt::dst_rewrite("connect", sockfd, &local, &addr_in);
             libc_connect(sockfd, ptr::addr_of!(local).cast(), local.len())
         }
-        NotVirtual => {
+        NotVirtual | Unknown => {
             debug_fmt::dst("connect", sockfd, addr, len);
             libc_connect(sockfd, addr, len)
         }
@@ -65,7 +65,7 @@ pub unsafe extern "C" fn bind(sockfd: c_int, addr: *const sockaddr, len: socklen
             *__errno_location() = EADDRNOTAVAIL;
             -1
         }
-        NotVirtual => {
+        NotVirtual | Unknown => {
             debug_fmt::dst("bind", sockfd, addr, len);
             libc_bind(sockfd, addr, len)
         }

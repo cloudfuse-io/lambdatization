@@ -1,15 +1,11 @@
 use std::env::var;
 
-pub(crate) struct ChappyConf {
-    pub virtual_subnet: String,
-    pub virtual_ip: String,
+pub(crate) fn virtual_subnet() -> Option<ipnet::Ipv4Net> {
+    var("CHAPPY_VIRTUAL_SUBNET")
+        .map(|v| v.parse().unwrap())
+        .ok()
 }
 
-impl ChappyConf {
-    pub(crate) fn load() -> Self {
-        Self {
-            virtual_subnet: var("CHAPPY_VIRTUAL_SUBNET").unwrap(),
-            virtual_ip: var("CHAPPY_VIRTUAL_IP").unwrap(),
-        }
-    }
+pub(crate) fn virtual_ip() -> Option<String> {
+    var("CHAPPY_VIRTUAL_IP").ok()
 }

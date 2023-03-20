@@ -15,8 +15,6 @@ lazy_static! {
             .enable_all()
             .build()
             .unwrap();
-    pub(crate) static ref CHAPPY_CONF: conf::ChappyConf = conf::ChappyConf::load();
-    pub(crate) static ref VIRTUAL_NET: ipnet::Ipv4Net = CHAPPY_CONF.virtual_subnet.parse().unwrap();
     pub(crate) static ref LIBC_LOADED: libloading::Library =
         unsafe { libloading::Library::new("/lib/x86_64-linux-gnu/libc.so.6").unwrap() };
 }

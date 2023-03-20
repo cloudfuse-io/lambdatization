@@ -186,6 +186,5 @@ def handler(event, context):
         result = handle_event(event)
     except Exception:
         result = {"exception": traceback.format_exc()}
-    perforator.log()
     result["perforator_logs"] = perforator.get_logs()
     return result

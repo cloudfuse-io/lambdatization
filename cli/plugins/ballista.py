@@ -126,4 +126,4 @@ GROUP BY payment_type;"""
         print(format_lambda_result("SCHEDULER", scheduler_duration, scheduler_res))
         for i in range(executor_count):
             executor_res, executor_duration = executor_futs[i].result()
-            # print(format_lambda_result(f"EXECUTOR{i}", executor_duration, executor_res))
+            print(format_lambda_result(f"EXECUTOR{i}", executor_duration, executor_res))
