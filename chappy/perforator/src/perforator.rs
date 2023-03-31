@@ -58,10 +58,12 @@ impl Perforator {
             let already_registered = guard.values().any(|val| *val == virtual_addr);
             guard.insert(src_port, virtual_addr.clone());
             if already_registered {
-                debug!("source port mapping already registered");
+                debug!("target virtual IP already registered");
                 return;
             }
         }
+        // if the client being registered is the first to use this target
+        // virtual IP, emit a binding request to the Seed
         let address_mappings = Arc::clone(&self.address_mappings);
         let binding_service = Arc::clone(&self.binding_service);
         tokio::spawn(

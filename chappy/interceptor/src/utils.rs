@@ -1,4 +1,4 @@
-use crate::{CHAPPY_CONF, RUNTIME, VIRTUAL_NET};
+use crate::{conf, RUNTIME};
 use nix::libc::{c_int, sockaddr, socklen_t};
 use nix::sys::socket::{self, SockaddrIn, SockaddrLike, SockaddrStorage};
 use std::net::{Ipv4Addr, SocketAddrV4};
@@ -61,22 +61,30 @@ pub(crate) enum ParsedAddress {
     RemoteVirtual(SockaddrIn),
     LocalVirtual(SockaddrIn),
     NotVirtual,
+    Unknown,
 }
 
 pub(crate) unsafe fn parse_virtual(addr: *const sockaddr, len: socklen_t) -> ParsedAddress {
     let addr_stor = SockaddrStorage::from_raw(addr, Some(len)).unwrap();
+    let (virt_ip, virt_range) = match (conf::virtual_ip(), conf::virtual_subnet()) {
+        (Some(ip), Some(range)) => (ip, range),
+        _ => {
+            debug!("virtual IP or range not defined");
+            return ParsedAddress::Unknown;
+        }
+    };
     match addr_stor.as_sockaddr_in() {
         Some(addr_in) => {
             let ip = Ipv4Addr::from(addr_in.ip());
-            if ip.to_string() == CHAPPY_CONF.virtual_ip {
+            if ip.to_string() == virt_ip {
                 ParsedAddress::LocalVirtual(addr_in.clone())
-            } else if VIRTUAL_NET.contains(&ip) {
+            } else if virt_range.contains(&ip) {
                 ParsedAddress::RemoteVirtual(addr_in.clone())
             } else {
                 debug!(
                     "{} not in virtual network {}",
                     Ipv4Addr::from(addr_in.ip()).to_string(),
-                    VIRTUAL_NET.to_string()
+                    virt_range
                 );
                 ParsedAddress::NotVirtual
             }
