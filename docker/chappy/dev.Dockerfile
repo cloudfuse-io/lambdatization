@@ -1,15 +1,13 @@
 
 ARG FUNCTION_DIR="/function"
 
-FROM ubuntu:22.04
+FROM python:3.10-bullseye
 RUN apt-get update && \
     apt-get install -y \
         g++ \
         make \
         cmake \
         unzip \
-        python3 \
-        python3-pip \
         apt-transport-https \
         ca-certificates \
         libcurl4-openssl-dev && \

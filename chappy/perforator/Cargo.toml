@@ -12,7 +12,7 @@ quinn = { workspace = true }
 rcgen = { workspace = true }
 rustls = { workspace = true, features = ["quic"] }
 socket2 = { workspace = true, features = ["all"] }
-tokio = { workspace = true, features = ["rt", "rt-multi-thread", "signal"] }
+tokio = { workspace = true, features = ["rt", "signal"] }
 tonic = { workspace = true }
 tower = { workspace = true }
 tracing = { workspace = true }

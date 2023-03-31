@@ -31,7 +31,6 @@ RUN apt-get update && \
     make \
     cmake \
     unzip \
-    netcat \
     libcurl4-openssl-dev
 
 # Include global arg in this stage of the build
