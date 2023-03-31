@@ -6,16 +6,17 @@ use chappy_perforator::{
     shutdown::{gracefull, GracefullyRunnable, Shutdown},
     CHAPPY_CONF,
 };
-use chappy_util::init_tracing;
+use chappy_util::{close_tracing, init_tracing};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tonic::async_trait;
-use tracing::{debug_span, info, Instrument};
+use tracing::{debug_span, info, instrument, Instrument};
 
 struct SrvRunnable;
 
 #[async_trait]
 impl GracefullyRunnable for SrvRunnable {
+    #[instrument(skip_all)]
     async fn run(&self, shutdown: &Shutdown) {
         let tcp_port = 5000;
         let seed_addr = format!("{}:{}", CHAPPY_CONF.seed_hostname, CHAPPY_CONF.seed_port);
@@ -62,6 +63,7 @@ impl GracefullyRunnable for SrvRunnable {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
-    init_tracing();
+    init_tracing("chappy_perforator");
     gracefull(SrvRunnable).await;
+    close_tracing();
 }

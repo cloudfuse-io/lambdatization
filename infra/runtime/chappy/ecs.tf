@@ -110,8 +110,8 @@ resource "aws_ecs_task_definition" "chappydev_seed" {
   task_role_arn            = aws_iam_role.ecs_task_role.arn
   execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
   network_mode             = "awsvpc"
-  cpu                      = "256"
-  memory                   = "512"
+  cpu                      = "512"
+  memory                   = "1024"
   requires_compatibilities = ["FARGATE"]
   container_definitions    = <<DEFINITION
 [
@@ -137,6 +137,19 @@ resource "aws_ecs_task_definition" "chappydev_seed" {
         "vallue": "1"
     }],
     "entrypoint": ["sleep", "infinity"]
+  },
+  {
+    "image": "openzipkin/zipkin:2.24",
+    "name": "opentelemetry",
+    "logConfiguration": {
+      "logDriver": "awslogs",
+      "options": {
+        "awslogs-region" : "${var.region_name}",
+        "awslogs-group" : "${aws_cloudwatch_log_group.seed.name}",
+        "awslogs-stream-prefix" : "ecs"
+      }
+    },          
+    "environment": []
   }
 ]
 DEFINITION
@@ -154,10 +167,11 @@ resource "aws_security_group" "seed_all" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  egress {
-    protocol    = "-1"
-    from_port   = 0
-    to_port     = 0
+  # ZIPKIN
+  ingress {
+    protocol    = "tcp"
+    from_port   = 9411
+    to_port     = 9411
     cidr_blocks = ["0.0.0.0/0"]
   }
 }

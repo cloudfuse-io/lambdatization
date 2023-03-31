@@ -8,17 +8,23 @@ from collections import namedtuple
 from concurrent.futures import ThreadPoolExecutor
 
 import core
+import dynaconf
 from common import (
     AWS_REGION,
     DOCKERDIR,
     REPOROOT,
     FargateService,
     aws,
+    conf,
     format_lambda_output,
     terraform_output,
     wait_deployment,
 )
 from invoke import Context, Exit, task
+
+VALIDATORS = [
+    dynaconf.Validator("L12N_CHAPPY_OPENTELEMETRY_APIKEY", must_exist=True, ne=""),
+]
 
 ## FARGATE COMPONENTS ##
 
@@ -102,6 +108,7 @@ def seed_exec(c, cmd="/bin/bash", pty=True):
         f"""aws ecs execute-command \
 		--cluster {cluster} \
 		--task {task_id} \
+        --container server \
 		--interactive \
 		--command "{cmd}" \
         --region {AWS_REGION()}""",
@@ -222,6 +229,10 @@ def run_lambda_pair(c, seed=None, release=False, client="example-client"):
             "CHAPPY_VIRTUAL_SUBNET": "172.28.0.0/16",
             "RUST_LOG": "debug,h2=error,quinn=info,tower=info,rustls=info",
             "RUST_BACKTRACE": "1",
+            # "CHAPPY_OPENTELEMETRY_HOSTNAME": seed,
+            "CHAPPY_OPENTELEMETRY_APIKEY": conf(VALIDATORS)[
+                "L12N_CHAPPY_OPENTELEMETRY_APIKEY"
+            ],
         }
 
         server_fut = executor.submit(
@@ -309,6 +320,10 @@ def run_lambda_cluster(c, seed=None, release=False, binary="example-n-to-n", nod
             "BYTES_SENT": 128,
             "RUST_LOG": "debug,h2=error,quinn=info,tower=info,rustls=info",
             "RUST_BACKTRACE": "1",
+            "CHAPPY_OPENTELEMETRY_HOSTNAME": seed,
+            # "CHAPPY_OPENTELEMETRY_APIKEY": conf(VALIDATORS)[
+            #     "L12N_CHAPPY_OPENTELEMETRY_APIKEY"
+            # ],
         }
         node_futs = []
         for i in range(nodes):
