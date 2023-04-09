@@ -98,7 +98,7 @@ impl Forwarder {
                         debug!("closing bi");
                     }
                 }
-                .instrument(debug_span!("quic_srv", src_nat = %remote_addr)),
+                .instrument(debug_span!("quic_conn", src_nat = %remote_addr)),
             );
         }
     }
@@ -127,7 +127,7 @@ impl Forwarder {
             server_p2p_port,
             private_key_der,
             server_certificate_der.clone(),
-        ));
+        ).instrument(debug_span!("quic_serv")));
 
         Self {
             src_quic_endpoint: Self::create_quic_client(client_p2p_port),

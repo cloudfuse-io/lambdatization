@@ -1,4 +1,4 @@
-FROM rust:buster as build
+FROM rust:bullseye as build
 ARG BUILD_FLAG=""
 
 RUN apt update && apt install -y protobuf-compiler
