@@ -40,7 +40,7 @@ pub fn init_tracing(service_name: &'static str) {
             .with_trace_config(opentelemetry::sdk::trace::config().with_resource(
                 opentelemetry::sdk::Resource::new(vec![opentelemetry::KeyValue::new(
                     "service.name",
-                    service_name.to_owned(),
+                    service_name,
                 )]),
             ))
             .install_batch(opentelemetry::runtime::TokioCurrentThread)
