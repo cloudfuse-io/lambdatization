@@ -73,7 +73,7 @@ impl Forwarder {
                         // pipe holepunch connection to forwarding connection
                         let (mut fwd_read, mut fwd_write) = fwd_stream.into_split();
                         let span = debug_span!("target", port = target_port);
-                        let out_handle = tokio::spawn(
+                        let out_fut = 
                             async move {
                                 debug!("Outbound forwarding started");
                                 let bytes_copied = tokio::io::copy(&mut quic_recv, &mut fwd_write)
@@ -81,9 +81,8 @@ impl Forwarder {
                                     .unwrap();
                                 debug!("Outbound forwarding of {} bytes completed", bytes_copied);
                             }
-                            .instrument(span.clone()),
-                        );
-                        let in_handle = tokio::spawn(
+                            .instrument(span.clone());
+                        let in_fut =
                             async move {
                                 debug!("Inbound forwarding started");
                                 let bytes_copied = tokio::io::copy(&mut fwd_read, &mut quic_send)
@@ -91,10 +90,8 @@ impl Forwarder {
                                     .unwrap();
                                 debug!("Inbound forwarding of {} bytes completed", bytes_copied);
                             }
-                            .instrument(span),
-                        );
-                        out_handle.await.unwrap();
-                        in_handle.await.unwrap();
+                            .instrument(span);
+                        tokio::join!(out_fut, in_fut);
                         debug!("closing bi");
                     }
                 }
@@ -174,7 +171,7 @@ impl Forwarder {
         debug!("new bi opened");
         let (mut tcp_read, mut tcp_write) = tcp_stream.into_split();
         quic_send.write_u16(target_port).await.unwrap();
-        let out_handle = tokio::spawn(
+        let out_fut = 
             async move {
                 debug!("Outbound forwarding started");
                 let bytes_copied = tokio::io::copy(&mut tcp_read, &mut quic_send)
@@ -182,9 +179,8 @@ impl Forwarder {
                     .unwrap();
                 debug!("Outbound forwarding of {} bytes completed", bytes_copied);
             }
-            .instrument(tracing::Span::current()),
-        );
-        let in_handle = tokio::spawn(
+            .instrument(tracing::Span::current());
+        let in_fut = 
             async move {
                 debug!("Inbound forwarding started");
                 let bytes_copied = tokio::io::copy(&mut quic_recv, &mut tcp_write)
@@ -192,10 +188,8 @@ impl Forwarder {
                     .unwrap();
                 debug!("Inbound forwarding of {} bytes completed", bytes_copied);
             }
-            .instrument(tracing::Span::current()),
-        );
-        out_handle.await.unwrap();
-        in_handle.await.unwrap();
+            .instrument(tracing::Span::current());
+        tokio::join!(out_fut, in_fut);
         debug!("closing bi");
     }
 
