@@ -4,11 +4,10 @@ use crate::{
 };
 use chappy_seed::Address;
 
-use futures::{StreamExt, TryStreamExt};
+use futures::StreamExt;
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 use tokio::net::{TcpListener, TcpStream};
 use tracing::{debug, debug_span, instrument, Instrument};
 
@@ -127,20 +126,21 @@ impl Perforator {
             tgt_port = target_address.tgt_port,
             "target addr resolved"
         );
-        self.forwarder
-            .forward(
-                stream,
-                target_address.natted_address,
-                target_address.tgt_port,
-                target_address.certificate_der,
-                shdn,
-            )
-            .await;
+        let fwd_fut = self.forwarder.forward(
+            stream,
+            target_address.natted_address,
+            target_address.tgt_port,
+            target_address.certificate_der,
+        );
+        tokio::select! {
+            _ = fwd_fut => {}
+            _ = shdn.wait_shutdown() => {}
+        }
         debug!("completed");
     }
 
     #[instrument(name = "reg_srv", skip_all)]
-    fn register_server(&self, mut shdn: ShutdownGuard) {
+    fn register_server(&self, shdn: ShutdownGuard) {
         debug!("starting...");
         let p2p_port = self.forwarder.port();
         let server_certificate = self.forwarder.server_certificate().to_owned();
@@ -151,7 +151,7 @@ impl Perforator {
                 // For each incoming server punch request, send a random packet to punch
                 // a hole in the NAT
                 debug!("subscribe to hole punching requests");
-                let punch_stream = stream
+                stream
                     .map(|punch_req| {
                         let client_natted_addr = punch_req.unwrap().client_nated_addr.unwrap();
                         let client_natted_str =
@@ -164,20 +164,9 @@ impl Perforator {
                         .instrument(debug_span!("punch hole", tgt_nat = client_natted_str))
                     })
                     .buffer_unordered(usize::MAX)
-                    .map(|_| Ok(()));
-                // TODO: Find a better notification mechanism to detect shutdown
-                let interval = tokio::time::interval(Duration::from_millis(100));
-                let ticker = tokio_stream::wrappers::IntervalStream::new(interval).map(|_| {
-                    if shdn.is_shutting_down() {
-                        Err(())
-                    } else {
-                        Ok(())
-                    }
-                });
-                futures::stream::select(punch_stream, ticker)
-                    .try_for_each(|_| async { Ok(()) })
-                    .await
-                    .ok();
+                    .take_until(shdn.wait_shutdown())
+                    .for_each(|_| async { () })
+                    .await;
                 debug!("subscription to hole punching requests closed");
             }
             .instrument(tracing::Span::current()),

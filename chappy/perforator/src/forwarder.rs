@@ -1,11 +1,11 @@
-use crate::{quic_utils, shutdown::ShutdownGuard};
+use crate::quic_utils;
 use chappy_seed::Address;
 use quinn::Endpoint;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tracing::{debug, debug_span, info, instrument, warn, Instrument};
+use tracing::{debug, debug_span, info, instrument, Instrument};
 
 const SERVER_NAME: &str = "chappy";
 
@@ -146,7 +146,6 @@ impl Forwarder {
         nated_addr: Address,
         target_port: u16,
         target_server_certificate_der: Vec<u8>,
-        mut shdn: ShutdownGuard,
     ) {
         let cli_conf = quic_utils::configure_client(target_server_certificate_der);
         let quic_con;
@@ -162,9 +161,6 @@ impl Forwarder {
             if let Ok(endpoint_res) = timed_endpoint_fut.await {
                 quic_con = endpoint_res.unwrap();
                 break;
-            } else if shdn.is_shutting_down() {
-                warn!("forwarding cancelled");
-                return;
             } else {
                 debug!("timeout, retrying...")
             }
