@@ -6,8 +6,13 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 import core
-from common import aws, format_lambda_output, terraform_output
+import dynaconf
+from common import aws, conf, format_lambda_output, terraform_output
 from invoke import Exit, task
+
+VALIDATORS = [
+    dynaconf.Validator("L12N_CHAPPY_OPENTELEMETRY_APIKEY", ne=""),
+]
 
 
 @task(autoprint=True)
@@ -42,6 +47,17 @@ def run_executor(
     lambda_name: str, bucket_name: str, seed_ip: str, virtual_ip: str, scheduler_ip: str
 ):
     start_time = time.time()
+    env = {
+        "CHAPPY_SEED_HOSTNAME": seed_ip,
+        "CHAPPY_SEED_PORT": 8000,
+        "CHAPPY_VIRTUAL_IP": virtual_ip,
+        "RUST_LOG": "info,chappy_perforator=debug,chappy=debug",
+        "RUST_BACKTRACE": "1",
+    }
+    if "L12N_CHAPPY_OPENTELEMETRY_APIKEY" in conf(VALIDATORS):
+        env["CHAPPY_OPENTELEMETRY_APIKEY"] = conf(VALIDATORS)[
+            "L12N_CHAPPY_OPENTELEMETRY_APIKEY"
+        ]
     lambda_res = aws("lambda").invoke(
         FunctionName=lambda_name,
         Payload=json.dumps(
@@ -50,13 +66,7 @@ def run_executor(
                 "bucket_name": bucket_name,
                 "timeout_sec": 40,
                 "scheduler_ip": scheduler_ip,
-                "env": {
-                    "CHAPPY_SEED_HOSTNAME": seed_ip,
-                    "CHAPPY_SEED_PORT": 8000,
-                    "CHAPPY_VIRTUAL_IP": virtual_ip,
-                    "RUST_LOG": "debug,h2=info,quinn=info,rustls=info,datafusion_optimizer=info,sqlparser=info,tower=info,hyper=info",
-                    "RUST_BACKTRACE": "1",
-                },
+                "env": env,
             }
         ).encode(),
         InvocationType="RequestResponse",
@@ -70,6 +80,17 @@ def run_scheduler(
     lambda_name: str, bucket_name: str, seed_ip: str, virtual_ip: str, query: str
 ):
     start_time = time.time()
+    env = {
+        "CHAPPY_SEED_HOSTNAME": seed_ip,
+        "CHAPPY_SEED_PORT": 8000,
+        "CHAPPY_VIRTUAL_IP": virtual_ip,
+        "RUST_LOG": "info,chappy_perforator=debug,chappy=debug",
+        "RUST_BACKTRACE": "1",
+    }
+    if "L12N_CHAPPY_OPENTELEMETRY_APIKEY" in conf(VALIDATORS):
+        env["CHAPPY_OPENTELEMETRY_APIKEY"] = conf(VALIDATORS)[
+            "L12N_CHAPPY_OPENTELEMETRY_APIKEY"
+        ]
     lambda_res = aws("lambda").invoke(
         FunctionName=lambda_name,
         Payload=json.dumps(
@@ -78,13 +99,7 @@ def run_scheduler(
                 "bucket_name": bucket_name,
                 "timeout_sec": 38,
                 "query": base64.b64encode(query.encode()).decode(),
-                "env": {
-                    "CHAPPY_SEED_HOSTNAME": seed_ip,
-                    "CHAPPY_SEED_PORT": 8000,
-                    "CHAPPY_VIRTUAL_IP": virtual_ip,
-                    "RUST_LOG": "debug,h2=info,quinn=info,rustls=info,datafusion_optimizer=info,sqlparser=info,tower=info,hyper=info",
-                    "RUST_BACKTRACE": "1",
-                },
+                "env": env,
             }
         ).encode(),
         InvocationType="RequestResponse",
@@ -95,20 +110,22 @@ def run_scheduler(
 
 
 @task
-def distributed(c, seed):
+def distributed(c, seed, executor_count=6):
     """CREATE EXTERNAL TABLE and find out SUM(trip_distance) GROUP_BY payment_type"""
     sql = f"""
 CREATE EXTERNAL TABLE nyctaxi2019 STORED AS PARQUET
-LOCATION 's3://{core.bucket_name(c)}/nyc-taxi/2019/';
+LOCATION 's3://{core.bucket_name(c)}/nyc-taxi/2019/01/';
 SELECT payment_type, SUM(trip_distance) FROM nyctaxi2019
 GROUP BY payment_type;"""
+    assert (
+        executor_count <= 6
+    ), "max 6 executor nodes supported (number of demo parquet files)"
     bucket_name = core.bucket_name(c)
     lambda_name = terraform_output(c, "ballista", "distributed_lambda_name")
     with ThreadPoolExecutor() as ex:
         scheduler_fut = ex.submit(
             run_scheduler, lambda_name, bucket_name, seed, "172.28.0.1", sql
         )
-        executor_count = 6
         executor_futs = []
         for i in range(executor_count):
             executor_futs.append(
