@@ -1,21 +1,19 @@
 [workspace]
-members = [
-    "examples",
-    "interceptor",
-    "perforator",
-    "seed",
-    "util",
-]
+members = ["examples", "interceptor", "perforator", "seed", "util"]
 
 [workspace.dependencies]
-chrono ="0.4"
+chrono = "0.4"
 futures = "0.3.25"
 ipnet = "2.7.1"
 lazy_static = "1.4.0"
-libloading = "0.7.4"
+libloading = "0.8.0"
 nix = "0.26.1"
 opentelemetry = "0.18.0"
-opentelemetry-otlp =  { version = "0.11.0", features = ["reqwest-client", "reqwest-rustls", "http-proto"] }
+opentelemetry-otlp = { version = "0.11.0", features = [
+    "reqwest-client",
+    "reqwest-rustls",
+    "http-proto",
+] }
 prost = "0.11.7"
 quinn = "0.9.3"
 rcgen = "0.10.0"
@@ -23,7 +21,7 @@ rustls = "0.20.8"
 socket2 = "0.5.1"
 tokio = { version = "1.24.2", features = ["macros"] }
 tokio-stream = "0.1.11"
-tonic = "0.8.3"
+tonic = "0.9.1"
 tower = "0.4.13"
 tracing = "0.1.37"
 tracing-opentelemetry = "0.18.0"
