@@ -14,20 +14,15 @@ use tower::service_fn;
 use tracing::{debug, instrument};
 
 pub struct BindingService {
-    client_p2p_port: u16,
-    server_p2p_port: u16,
-    client_side: OnceCell<SeedClient<Channel>>,
-    server_side: OnceCell<SeedClient<Channel>>,
+    p2p_port: u16,
+    client_cell: OnceCell<SeedClient<Channel>>,
 }
 
 impl BindingService {
-    pub fn new(client_p2p_port: u16, server_p2p_port: u16) -> Self {
-        assert_ne!(client_p2p_port, server_p2p_port);
+    pub fn new(p2p_port: u16) -> Self {
         Self {
-            client_p2p_port,
-            server_p2p_port,
-            client_side: OnceCell::new(),
-            server_side: OnceCell::new(),
+            p2p_port,
+            client_cell: OnceCell::new(),
         }
     }
 
@@ -66,12 +61,17 @@ impl BindingService {
         return SeedClient::new(channel);
     }
 
-    pub async fn bind_client(&self, target_virtual_ip: String) -> ClientBindingResponse {
-        debug!(virt = CHAPPY_CONF.virtual_ip, "call seed to bind client");
-        self.client_side
-            .get_or_init(|| Self::connect_seed(self.client_p2p_port))
+    async fn client(&self) -> SeedClient<Channel> {
+        self.client_cell
+            .get_or_init(|| Self::connect_seed(self.p2p_port))
             .await
             .clone()
+    }
+
+    pub async fn bind_client(&self, target_virtual_ip: String) -> ClientBindingResponse {
+        debug!("call seed to bind client");
+        self.client()
+            .await
             .bind_client(ClientBindingRequest {
                 cluster_id: String::from("test"),
                 source_virtual_ip: CHAPPY_CONF.virtual_ip.clone(),
@@ -83,11 +83,9 @@ impl BindingService {
     }
 
     pub async fn bind_server(&self, server_certificate: Vec<u8>) -> Streaming<ServerPunchRequest> {
-        debug!(virt = CHAPPY_CONF.virtual_ip, "call seed to bind server");
-        self.server_side
-            .get_or_init(|| Self::connect_seed(self.server_p2p_port))
+        debug!("call seed to bind server");
+        self.client()
             .await
-            .clone()
             .bind_server(ServerBindingRequest {
                 cluster_id: String::from("test"),
                 virtual_ip: CHAPPY_CONF.virtual_ip.clone(),

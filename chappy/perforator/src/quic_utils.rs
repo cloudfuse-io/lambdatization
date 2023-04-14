@@ -1,16 +1,12 @@
 use quinn::{ClientConfig, ServerConfig, TransportConfig};
-use std::{error::Error, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
-/// Returns default server configuration along with its certificate.
-#[allow(clippy::field_reassign_with_default)] // https://github.com/rust-lang/rust-clippy/issues/6527
-pub fn configure_server(
-    certificate_der: Vec<u8>,
-    private_key_der: Vec<u8>,
-) -> Result<ServerConfig, Box<dyn Error>> {
+/// Returns default server configuration.
+pub fn configure_server(certificate_der: Vec<u8>, private_key_der: Vec<u8>) -> ServerConfig {
     let priv_key = rustls::PrivateKey(private_key_der);
     let cert_chain = vec![rustls::Certificate(certificate_der)];
 
-    let mut server_config = ServerConfig::with_single_cert(cert_chain, priv_key)?;
+    let mut server_config = ServerConfig::with_single_cert(cert_chain, priv_key).unwrap();
     Arc::get_mut(&mut server_config.transport)
         .unwrap()
         .max_concurrent_uni_streams(0_u8.into())
@@ -18,7 +14,7 @@ pub fn configure_server(
         // NOTE: removing this timeout might leave lingering connections around
         .max_idle_timeout(None);
 
-    Ok(server_config)
+    server_config
 }
 
 /// Builds quinn client config and trusts given certificates.

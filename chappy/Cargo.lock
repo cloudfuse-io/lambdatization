@@ -189,6 +189,7 @@ dependencies = [
  "rustls",
  "socket2 0.5.1",
  "tokio",
+ "tokio-stream",
  "tonic",
  "tower",
  "tracing",
