@@ -46,7 +46,7 @@ impl BindingService {
                 .unwrap()
                 .as_str()
                 .to_socket_addrs()
-                .expect(&format!("Error solving {}:", uri))
+                .unwrap_or_else(|_| panic!("Error solving {}:", uri))
                 .next()
                 .unwrap();
             debug!(
@@ -58,7 +58,7 @@ impl BindingService {
         }))
         .await
         .unwrap();
-        return SeedClient::new(channel);
+        SeedClient::new(channel)
     }
 
     async fn client(&self) -> SeedClient<Channel> {
@@ -75,7 +75,7 @@ impl BindingService {
             .bind_client(ClientBindingRequest {
                 cluster_id: String::from("test"),
                 source_virtual_ip: CHAPPY_CONF.virtual_ip.clone(),
-                target_virtual_ip: target_virtual_ip,
+                target_virtual_ip,
             })
             .await
             .unwrap()

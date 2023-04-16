@@ -48,8 +48,8 @@ impl Perforator {
         Self {
             port_mappings: Arc::new(Mutex::new(HashMap::new())),
             address_mappings: Arc::new(Mutex::new(HashMap::new())),
-            binding_service: binding_service,
-            forwarder: forwarder,
+            binding_service,
+            forwarder,
             tcp_port,
         }
     }
@@ -102,7 +102,7 @@ impl Perforator {
             .lock()
             .unwrap()
             .get(&src_port)
-            .expect(&format!("Source port {} was not registered", src_port))
+            .unwrap_or_else(|| panic!("Source port {} was not registered", src_port))
             .clone();
         let target_address: TargetResolvedAddress;
         loop {
@@ -132,7 +132,7 @@ impl Perforator {
             target_address.tgt_port,
             target_address.certificate_der,
         );
-        if let Ok(_) = shdn.run_cancellable(fwd_fut).await {
+        if shdn.run_cancellable(fwd_fut).await.is_ok() {
             debug!("completed");
         }
     }
@@ -163,7 +163,7 @@ impl Perforator {
                     })
                     .buffer_unordered(usize::MAX)
                     .take_until(shdn.wait_shutdown())
-                    .for_each(|_| async { () })
+                    .for_each(|_| async {})
                     .await;
                 debug!("subscription to hole punching requests closed");
             }

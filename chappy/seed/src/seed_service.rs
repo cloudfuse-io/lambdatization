@@ -29,6 +29,7 @@ pub struct SeedService {
     registered_endpoints: RegisteredEndpoints,
 }
 
+#[allow(clippy::new_without_default)]
 impl SeedService {
     pub fn new() -> Self {
         Self {

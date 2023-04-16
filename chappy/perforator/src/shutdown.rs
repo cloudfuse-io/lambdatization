@@ -38,6 +38,7 @@ pub struct Shutdown {
     guard: watch::Receiver<bool>,
 }
 
+#[allow(clippy::new_without_default)]
 impl Shutdown {
     pub fn new() -> Self {
         let (waiter, guard) = watch::channel(false);
