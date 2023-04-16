@@ -134,6 +134,7 @@ impl Forwarder {
                 shdwn_guard.run_cancellable(
                     Self::handle_srv_conn(conn)
                         .instrument(debug_span!("srv_quic_conn", src_nat = %remote_addr)),
+                    Duration::from_millis(50),
                 ),
             );
         }

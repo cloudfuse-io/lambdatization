@@ -1,9 +1,9 @@
-use futures::Future;
+use futures::{Future, FutureExt};
 use std::fmt;
 use std::time::Duration;
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::watch;
-use tokio::time::timeout;
+use tokio::time::{sleep, timeout};
 use tonic::async_trait;
 use tracing::{info, warn};
 
@@ -21,13 +21,23 @@ impl ShutdownGuard {
         }
     }
 
-    /// Run the provided future until completion or a shutdown notification is received
-    pub async fn run_cancellable<T>(self, fut: impl Future<Output = T>) -> Result<T, Interrupted> {
+    /// Run the provided future until completion or a shutdown notification is
+    /// received
+    ///
+    /// # Arguments
+    ///
+    /// * `fut` - A future that should be cancelled upon shutdown
+    /// * `grace_period` - A grace period to let the future complete
+    pub async fn run_cancellable<T>(
+        self,
+        fut: impl Future<Output = T>,
+        grace_period: Duration,
+    ) -> Result<T, Cancelled> {
         tokio::select! {
             res = fut => Ok(res),
-            _ = self.wait_shutdown() => {
-                warn!("interrupted by shutdown");
-                Err(Interrupted)
+            _ = self.wait_shutdown().then(|_| sleep(grace_period)) => {
+                warn!("cancelled by shutdown");
+                Err(Cancelled)
             },
         }
     }
@@ -91,12 +101,12 @@ pub async fn gracefull(runnable: impl GracefullyRunnable) {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Interrupted;
+pub struct Cancelled;
 
-impl std::error::Error for Interrupted {}
+impl std::error::Error for Cancelled {}
 
-impl fmt::Display for Interrupted {
+impl fmt::Display for Cancelled {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        "interrupted by shutdown".fmt(fmt)
+        "Cancelled by shutdown".fmt(fmt)
     }
 }

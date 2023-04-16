@@ -8,6 +8,7 @@ use futures::StreamExt;
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tokio::net::{TcpListener, TcpStream};
 use tracing::{debug, debug_span, instrument, warn, Instrument};
 
@@ -132,9 +133,10 @@ impl Perforator {
             target_address.tgt_port,
             target_address.certificate_der,
         );
-        if shdn.run_cancellable(fwd_fut).await.is_ok() {
-            debug!("completed");
-        }
+        shdn.run_cancellable(fwd_fut, Duration::from_millis(50))
+            .await
+            .map(|_| debug!("completed"))
+            .ok();
     }
 
     #[instrument(name = "reg_srv", skip_all)]
