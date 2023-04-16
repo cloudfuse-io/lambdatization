@@ -32,12 +32,8 @@ impl GracefullyRunnable for SrvRunnable {
             tcp_port,
         ));
         tokio::join!(
-            perforator
-                .run_tcp_server(shutdown)
-                .instrument(info_span!("tcp_srv")),
-            forwarder
-                .run_quic_server()
-                .instrument(info_span!("quic_srv")),
+            perforator.run_tcp_server(shutdown),
+            forwarder.run_quic_server(shutdown),
         );
     }
 }

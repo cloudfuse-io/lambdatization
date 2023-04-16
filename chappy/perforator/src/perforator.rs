@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::net::Ipv4Addr;
 use std::sync::{Arc, Mutex};
 use tokio::net::{TcpListener, TcpStream};
-use tracing::{debug, debug_span, instrument, Instrument};
+use tracing::{debug, debug_span, instrument, warn, Instrument};
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct TargetVirtualAddress {
@@ -132,11 +132,9 @@ impl Perforator {
             target_address.tgt_port,
             target_address.certificate_der,
         );
-        tokio::select! {
-            _ = fwd_fut => {}
-            _ = shdn.wait_shutdown() => {}
+        if let Ok(_) = shdn.run_cancellable(fwd_fut).await {
+            debug!("completed");
         }
-        debug!("completed");
     }
 
     #[instrument(name = "reg_srv", skip_all)]
@@ -174,6 +172,7 @@ impl Perforator {
         debug!("completed");
     }
 
+    #[instrument(name = "tcp_srv", skip_all)]
     pub async fn run_tcp_server(&self, shutdown: &Shutdown) {
         let listener = TcpListener::bind(format!("127.0.0.1:{}", self.tcp_port))
             .await
