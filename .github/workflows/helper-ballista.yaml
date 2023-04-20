@@ -31,13 +31,12 @@ jobs:
             protobuf-compiler \
             curl \
             unzip
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-      - uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --features "flight-sql s3" --release --bin ballista-scheduler --bin ballista-executor --bin ballista-cli
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+      - name: Cargo build
+        run: cargo build --features "flight-sql s3" --release --bin ballista-scheduler --bin ballista-executor --bin ballista-cli
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
