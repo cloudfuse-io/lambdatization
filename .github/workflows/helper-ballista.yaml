@@ -2,6 +2,9 @@ name: Ballista
 on:
   workflow_dispatch:
     inputs:
+      fork:
+        required: true
+        description: The for of arrow-ballista to use (e.g. apache or cloudfuse-io)
       ballista-ref:
         required: true
         description: Branch, tag or SHA to checkout (e.g. 0.9.0)
@@ -14,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          repository: 'apache/arrow-ballista'
+          repository: '${{ github.event.inputs.fork }}/arrow-ballista'
           ref: ${{ github.event.inputs.ballista-ref }}
       - name: Dependencies
         run: |
@@ -38,7 +41,7 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ballista-${{ github.event.inputs.ballista-ref }}
+          tag_name: ${{ github.event.inputs.fork }}-ballista-${{ github.event.inputs.ballista-ref }}
           body: Plain build of the ${{ github.event.inputs.ballista-ref }} ref of Ballista
           files: |
             target/release/ballista-scheduler
