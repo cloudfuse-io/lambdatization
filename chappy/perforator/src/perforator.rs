@@ -140,7 +140,7 @@ impl Perforator {
     }
 
     #[instrument(name = "reg_srv", skip_all)]
-    fn register_server(&self, shdn: ShutdownGuard) {
+    fn register_server(&self, mut shdn: ShutdownGuard) {
         debug!("starting...");
         let p2p_port = self.forwarder.port();
         let server_certificate = self.forwarder.server_certificate().to_owned();

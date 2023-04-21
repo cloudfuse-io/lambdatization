@@ -1,9 +1,9 @@
-use crate::{quic_utils, shutdown::Shutdown};
+use crate::{quic_utils, shutdown::Shutdown, CHAPPY_CONF};
 use chappy_seed::Address;
 use quinn::{Connection, Endpoint};
 use std::io::ErrorKind::NotConnected;
 use std::net::{Ipv4Addr, SocketAddrV4};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tracing::{debug, debug_span, info, instrument, warn, Instrument};
@@ -27,20 +27,57 @@ pub struct Forwarder {
     server_certificate_der: Vec<u8>,
 }
 
-/// Async copy and silently catch disconnections
-async fn copy<'a, R, W>(reader: &'a mut R, writer: &'a mut W)
+/// Async copy then shutdown writer. Silently catch disconnections.
+async fn copy<R, W>(mut reader: R, mut writer: W)
 where
-    R: AsyncRead + Unpin + ?Sized,
-    W: AsyncWrite + Unpin + ?Sized,
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
 {
-    let copy_res = tokio::io::copy(reader, writer).await;
-    match copy_res {
-        Ok(bytes_copied) => debug!(bytes_copied, "completed"),
+    let mut buf = vec![0u8; 4096].into_boxed_slice();
+    let mut bytes_read = 0;
+    let mut nb_read = 0;
+    // Note: Using tokio::io::copy here was not flushing the stream eagerly
+    // enough, which was leaving some application low data volumetry
+    // connections hanging.
+    let result = loop {
+        let read_res = reader.read(&mut buf).await;
+        match read_res {
+            Ok(0) => {
+                break Ok(());
+            }
+            Ok(b) => match writer.write_all(&buf[0..b]).await {
+                Ok(()) => {
+                    bytes_read += b;
+                    nb_read += 1;
+                    // TODO: this systematic flushing might be inefficient, but
+                    // is required to ensure proper forwarding of streams with
+                    // small data exchanges. Maybe an improved heuristic could
+                    // be applied.
+                    if let Err(err) = writer.flush().await {
+                        break Err(err);
+                    }
+                }
+                Err(err) => {
+                    break Err(err);
+                }
+            },
+            Err(err) => {
+                break Err(err);
+            }
+        };
+    };
+    match result {
+        Ok(()) => match writer.shutdown().await {
+            Ok(()) => debug!(bytes_read, nb_read, "completed"),
+            Err(err) => {
+                warn!(bytes_read, nb_read, %err, "completed but writer shutdown failed")
+            }
+        },
         Err(err) if err.kind() == NotConnected => {
-            warn!("disconnected")
+            warn!(%err, "disconnected");
         }
         Err(err) => Err(err).unwrap(),
-    };
+    }
 }
 
 impl Forwarder {
@@ -81,33 +118,38 @@ impl Forwarder {
         }
     }
 
+    /// Accept one bi QUIC stream, decode the target_port and forward the rest
+    /// of the stream to localhost:target_port
+    ///
+    /// Panic if receives a second bi on the connection
     async fn handle_srv_conn(conn: Connection) {
-        loop {
-            let (mut quic_send, mut quic_recv) = match conn.accept_bi().await {
-                Ok(streams) => {
-                    debug!("new bi accepted");
-                    streams
-                }
-                Err(e) => {
-                    info!("connection ended: {}", e);
-                    break;
-                }
-            };
-            let target_port = quic_recv.read_u16().await.unwrap();
+        let (quic_send, mut quic_recv) = match conn.accept_bi().await {
+            Ok(streams) => {
+                debug!("new bi accepted");
+                streams
+            }
+            Err(e) => {
+                info!("connection ended: {}", e);
+                return;
+            }
+        };
+        let target_port = quic_recv.read_u16().await.unwrap();
 
-            // forwarding connection
-            let localhost_url = format!("localhost:{}", target_port);
-            let fwd_stream = TcpStream::connect(localhost_url).await.unwrap();
+        // forwarding connection
+        let localhost_url = format!("localhost:{}", target_port);
+        let fwd_stream = TcpStream::connect(localhost_url).await.unwrap();
 
-            // pipe holepunch connection to forwarding connection
-            let (mut fwd_read, mut fwd_write) = fwd_stream.into_split();
-            let out_fut = copy(&mut quic_recv, &mut fwd_write)
-                .instrument(debug_span!("cp_out", port = target_port));
-            let in_fut = copy(&mut fwd_read, &mut quic_send)
-                .instrument(debug_span!("cp_in", port = target_port));
-            tokio::join!(out_fut, in_fut);
-            debug!("closing bi");
-        }
+        // pipe holepunch connection to forwarding connection
+        let (fwd_read, fwd_write) = fwd_stream.into_split();
+        let out_fut =
+            copy(quic_recv, fwd_write).instrument(debug_span!("cp_out", port = target_port));
+        let in_fut = copy(fwd_read, quic_send).instrument(debug_span!("cp_in", port = target_port));
+        tokio::join!(out_fut, in_fut);
+        debug!("closing bi");
+        // expect the connection to be closed by caller
+        conn.accept_bi()
+            .await
+            .expect_err("Unexpected second bi on connection");
     }
 
     /// Run the forwarder p2p server
@@ -131,11 +173,9 @@ impl Forwarder {
             };
             let shdwn_guard = shutdown.create_guard();
             tokio::spawn(
-                shdwn_guard.run_cancellable(
-                    Self::handle_srv_conn(conn)
-                        .instrument(debug_span!("srv_quic_conn", src_nat = %remote_addr)),
-                    Duration::from_millis(50),
-                ),
+                shdwn_guard
+                    .run_cancellable(Self::handle_srv_conn(conn), Duration::from_millis(50))
+                    .instrument(debug_span!("srv_quic_conn", src_nat = %remote_addr)),
             );
         }
     }
@@ -162,7 +202,10 @@ impl Forwarder {
         target_server_certificate_der: Vec<u8>,
     ) {
         let cli_conf = quic_utils::configure_client(target_server_certificate_der);
+        let start = Instant::now();
         let quic_con;
+        // TODO: investigate whether this retry is necessary or whether
+        // QUIC/Quinn is handling retries itnernally
         loop {
             let remote_addr = format!("{}:{}", nated_addr.ip, nated_addr.port)
                 .parse()
@@ -175,18 +218,20 @@ impl Forwarder {
             if let Ok(endpoint_res) = timed_endpoint_fut.await {
                 quic_con = endpoint_res.unwrap();
                 break;
+            } else if start.elapsed() > Duration::from_millis(CHAPPY_CONF.connection_timeout_ms) {
+                return;
             } else {
                 debug!("timeout, retrying...")
             }
         }
-        let (mut quic_send, mut quic_recv) = quic_con.open_bi().await.unwrap();
+        let (mut quic_send, quic_recv) = quic_con.open_bi().await.unwrap();
         debug!("new bi opened");
-        let (mut tcp_read, mut tcp_write) = tcp_stream.into_split();
+        let (tcp_read, tcp_write) = tcp_stream.into_split();
         quic_send.write_u16(target_port).await.unwrap();
-        let out_fut = copy(&mut tcp_read, &mut quic_send)
-            .instrument(debug_span!("cp_out", port = target_port));
-        let in_fut = copy(&mut quic_recv, &mut tcp_write)
-            .instrument(debug_span!("cp_in", port = target_port));
+        let out_fut =
+            copy(tcp_read, quic_send).instrument(debug_span!("cp_out", port = target_port));
+        let in_fut =
+            copy(quic_recv, tcp_write).instrument(debug_span!("cp_in", port = target_port));
         tokio::join!(out_fut, in_fut);
         debug!("closing bi");
     }

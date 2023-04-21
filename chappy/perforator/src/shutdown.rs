@@ -12,8 +12,8 @@ pub struct ShutdownGuard {
 }
 
 impl ShutdownGuard {
-    /// Wait for the shutdown signal then drop the guard
-    pub async fn wait_shutdown(mut self) {
+    /// Wait for the shutdown signal
+    pub async fn wait_shutdown(&mut self) {
         while self.is_shutdown.changed().await.is_ok() {
             if *self.is_shutdown.borrow() {
                 break;
@@ -29,7 +29,7 @@ impl ShutdownGuard {
     /// * `fut` - A future that should be cancelled upon shutdown
     /// * `grace_period` - A grace period to let the future complete
     pub async fn run_cancellable<T>(
-        self,
+        mut self,
         fut: impl Future<Output = T>,
         grace_period: Duration,
     ) -> Result<T, Cancelled> {
@@ -80,10 +80,15 @@ pub trait GracefullyRunnable {
     async fn run(&self, shutdown: &Shutdown);
 }
 
-pub async fn gracefull(runnable: impl GracefullyRunnable) {
+/// Listen for termination signals and abort the provided runnable
+///
+/// The future returned by GracefullyRunnable.run is cancelled right away, and
+/// we await the shutdown guards to be dropped for the provided grace period.
+pub async fn gracefull(runnable: impl GracefullyRunnable, grace_period: Duration) {
     let shutdown = Shutdown::new();
     let mut sigterm = signal(SignalKind::terminate()).unwrap();
     let mut sigint = signal(SignalKind::interrupt()).unwrap();
+    // Abort GracefullyRunnable.run right away
     tokio::select! {
         _ = runnable.run(&shutdown) => {}
         _ = sigint.recv()=> {
@@ -93,8 +98,8 @@ pub async fn gracefull(runnable: impl GracefullyRunnable) {
             info!("SIGTERM received, exiting gracefully...")
         }
     }
-
-    match timeout(Duration::from_secs(1), shutdown.wait()).await {
+    // Wait for the spawned tasks to release the shutdown guards
+    match timeout(grace_period, shutdown.wait()).await {
         Ok(_) => info!("Gracefull shutdown completed"),
         Err(_) => warn!("Grace period elapsed, forcefully shutting down"),
     }
@@ -108,5 +113,75 @@ impl std::error::Error for Cancelled {}
 impl fmt::Display for Cancelled {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         "Cancelled by shutdown".fmt(fmt)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{
+        atomic::{AtomicBool, Ordering::SeqCst},
+        Arc,
+    };
+
+    #[tokio::test]
+    async fn wait_shutdown() {
+        let shutdown = Shutdown::new();
+        let completed = Arc::new(AtomicBool::new(false));
+        let mut guard = shutdown.create_guard();
+        let completed_ref = Arc::clone(&completed);
+        tokio::spawn(async move {
+            guard.wait_shutdown().await;
+            completed_ref.store(true, SeqCst)
+        });
+        tokio::time::sleep(Duration::from_millis(5)).await;
+        assert!(!completed.load(SeqCst));
+        shutdown.wait().await;
+        tokio::time::sleep(Duration::from_millis(5)).await;
+        assert!(completed.load(SeqCst));
+    }
+
+    #[tokio::test]
+    async fn run_cancellable_gracefull() {
+        let shutdown = Shutdown::new();
+        let completed = Arc::new(AtomicBool::new(false));
+        let guard = shutdown.create_guard();
+        let completed_ref = Arc::clone(&completed);
+        let handle = tokio::spawn(guard.run_cancellable(
+            async move {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+                completed_ref.store(true, SeqCst)
+            },
+            Duration::from_millis(10),
+        ));
+        assert!(!completed.load(SeqCst));
+        shutdown.wait().await;
+        assert!(completed.load(SeqCst));
+        handle
+            .await
+            .unwrap()
+            .expect("task expected to complete within grace period");
+    }
+
+    #[tokio::test]
+    async fn run_cancellable_cancelled() {
+        let shutdown = Shutdown::new();
+        let completed = Arc::new(AtomicBool::new(false));
+        let guard = shutdown.create_guard();
+        let completed_ref = Arc::clone(&completed);
+        let handle = tokio::spawn(guard.run_cancellable(
+            async move {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+                completed_ref.store(true, SeqCst)
+            },
+            Duration::ZERO,
+        ));
+        assert!(!completed.load(SeqCst));
+        shutdown.wait().await;
+        assert!(!completed.load(SeqCst));
+        handle
+            .await
+            .unwrap()
+            .expect_err("task not expected to complete within grace period");
     }
 }

@@ -114,7 +114,7 @@ def distributed(c, seed, executor_count=6):
     """CREATE EXTERNAL TABLE and find out SUM(trip_distance) GROUP_BY payment_type"""
     sql = f"""
 CREATE EXTERNAL TABLE nyctaxi2019 STORED AS PARQUET
-LOCATION 's3://{core.bucket_name(c)}/nyc-taxi/2019/01/';
+LOCATION 's3://{core.bucket_name(c)}/nyc-taxi/2019/';
 SELECT payment_type, SUM(trip_distance) FROM nyctaxi2019
 GROUP BY payment_type;"""
     assert (
@@ -141,6 +141,6 @@ GROUP BY payment_type;"""
 
         scheduler_res, scheduler_duration = scheduler_fut.result()
         print(format_lambda_result("SCHEDULER", scheduler_duration, scheduler_res))
-        for i in range(executor_count):
-            executor_res, executor_duration = executor_futs[i].result()
-            print(format_lambda_result(f"EXECUTOR{i}", executor_duration, executor_res))
+        # for i in range(executor_count):
+        #     executor_res, executor_duration = executor_futs[i].result()
+        #     print(format_lambda_result(f"EXECUTOR{i}", executor_duration, executor_res))

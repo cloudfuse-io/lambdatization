@@ -81,6 +81,8 @@ def init_scheduler():
         os.environ["CHAPPY_VIRTUAL_IP"],
         "--bind-port",
         "50050",
+        "--log-level-setting",
+        "DEBUG",
     ]
     start_server("scheduler", cmd, 50050)
 
@@ -100,6 +102,8 @@ def init_executor(scheduler_ip: str):
         "50050",
         "--concurrent-tasks",
         "1",
+        "--log-level-setting",
+        "DEBUG",
     ]
     start_server("executor", cmd, 50051)
 
