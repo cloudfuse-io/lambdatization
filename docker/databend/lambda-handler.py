@@ -6,16 +6,17 @@ import sys
 import time
 
 import requests
+import requests.auth
 
 logging.getLogger().setLevel(logging.INFO)
 
 
 IS_COLD_START = True
 SESSION_CREDENTIALS = f"""
-    aws_key_id='{os.getenv("AWS_ACCESS_KEY_ID")}' 
-    aws_secret_key='{os.getenv("AWS_SECRET_ACCESS_KEY")}' 
-    aws_token='{os.getenv("AWS_SESSION_TOKEN")}'
-  """
+ACCESS_KEY_ID ='{os.getenv("AWS_ACCESS_KEY_ID")}' 
+SECRET_ACCESS_KEY ='{os.getenv("AWS_SECRET_ACCESS_KEY")}' 
+SESSION_TOKEN ='{os.getenv("AWS_SESSION_TOKEN")}'
+"""
 
 
 def init():
