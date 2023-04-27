@@ -1,5 +1,5 @@
 
-ARG DATABEND_VERSION=v0.8.70-nightly
+ARG DATABEND_VERSION=v1.1.14-nightly
 ARG FUNCTION_DIR="/function"
 
 
