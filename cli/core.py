@@ -6,6 +6,7 @@ import time
 import boto3
 from botocore.exceptions import ClientError
 from common import (
+    AWS_REGION,
     AWS_REGION_VALIDATOR,
     DOCKERDIR,
     RUNTIME_TFDIR,
@@ -297,3 +298,42 @@ def dockerized(c, engine):
     c.run(f"{compose} down -v")
     c.run(f"{compose} build")
     c.run(f"DATA_BUCKET_NAME={bucket_name(c)} {compose} run --rm {engine}")
+
+
+COMMON_CRAWL_PREFIXES = {
+    1: "crawl=CC-MAIN-2023-14/subset=warc/part-00001",
+    10: "crawl=CC-MAIN-2023-14/subset=warc/part-0001",
+    100: "crawl=CC-MAIN-2023-14/subset=warc/part-001",
+    300: "crawl=CC-MAIN-2023-14/subset=warc/",
+}
+
+
+@task(
+    help={
+        "dataset": f"A specific subset of the Crawl index, one of {COMMON_CRAWL_PREFIXES.keys()}",
+        "clean": "If provided, delete the dataset instead of copying it",
+    }
+)
+def load_commoncrawl_index(c, dataset=10, clean=False):
+    """Sync Common Crawl data
+
+    Terms of use: https://commoncrawl.org/terms-of-use/"""
+    assert (
+        dataset in COMMON_CRAWL_PREFIXES.keys()
+    ), f"dataset must be one of {COMMON_CRAWL_PREFIXES.keys()}"
+    target = (
+        f"s3://{bucket_name(c)}/commoncrawl/index/n{dataset}/ --region {AWS_REGION()}"
+    )
+    if clean:
+        c.run(f"aws s3 rm {target} --recursive")
+    else:
+        print(f"sync Common Crawl index dataset {dataset}...")
+        c.run(f"aws configure set s3.max_concurrent_requests 50")
+        c.run(
+            f"""aws s3 sync s3://commoncrawl-eu-west-1/cc-index/table/cc-main/warc/ {target} \
+            --request-payer requester \
+            --exclude "*" \
+            --include "{COMMON_CRAWL_PREFIXES[dataset]}*"
+            """
+        )
+        c.run(f"aws configure set s3.max_concurrent_requests 10")

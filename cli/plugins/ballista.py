@@ -110,17 +110,18 @@ def run_scheduler(
 
 
 @task
-def distributed(c, seed, executor_count=6):
-    """CREATE EXTERNAL TABLE and find out SUM(trip_distance) GROUP_BY payment_type"""
-    sql = f"""
-CREATE EXTERNAL TABLE nyctaxi2019 STORED AS PARQUET
-LOCATION 's3://{core.bucket_name(c)}/nyc-taxi/2019/';
-SELECT payment_type, SUM(trip_distance) FROM nyctaxi2019
-GROUP BY payment_type;"""
-    assert (
-        executor_count <= 6
-    ), "max 6 executor nodes supported (number of demo parquet files)"
+def distributed(c, seed, dataset=10):
+    """CREATE EXTERNAL TABLE and find out stored page data by url_host_registered_domain"""
+    core.load_commoncrawl_index(c, dataset)
     bucket_name = core.bucket_name(c)
+    sql = f"""
+CREATE EXTERNAL TABLE commoncrawl STORED AS PARQUET
+LOCATION 's3://{bucket_name}/commoncrawl/index/n{dataset}/';
+SELECT url_host_registered_domain, SUM(warc_record_length) AS stored_bytes FROM commoncrawl
+GROUP BY url_host_registered_domain
+ORDER BY SUM(warc_record_length) DESC
+LIMIT 10;"""
+    executor_count = dataset
     lambda_name = terraform_output(c, "ballista", "distributed_lambda_name")
     with ThreadPoolExecutor() as ex:
         scheduler_fut = ex.submit(
