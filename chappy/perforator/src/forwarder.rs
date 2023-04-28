@@ -1,12 +1,11 @@
 use crate::{quic_utils, shutdown::Shutdown, CHAPPY_CONF};
 use chappy_seed::Address;
 use quinn::{Connection, Endpoint};
-use std::io::ErrorKind::NotConnected;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tracing::{debug, debug_span, info, instrument, warn, Instrument};
+use tracing::{debug, debug_span, error, info, instrument, warn, Instrument};
 
 const SERVER_NAME: &str = "chappy";
 
@@ -28,7 +27,7 @@ pub struct Forwarder {
 }
 
 /// Async copy then shutdown writer. Silently catch disconnections.
-async fn copy<R, W>(mut reader: R, mut writer: W)
+async fn copy<R, W>(mut reader: R, mut writer: W) -> std::io::Result<()>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
@@ -39,10 +38,16 @@ where
     // Note: Using tokio::io::copy here was not flushing the stream eagerly
     // enough, which was leaving some application low data volumetry
     // connections hanging.
-    let result = loop {
+    loop {
         let read_res = reader.read(&mut buf).await;
         match read_res {
             Ok(0) => {
+                match writer.shutdown().await {
+                    Ok(()) => debug!(bytes_read, nb_read, "completed"),
+                    Err(err) => {
+                        warn!(bytes_read, nb_read, %err, "completed but writer shutdown failed");
+                    }
+                }
                 break Ok(());
             }
             Ok(b) => match writer.write_all(&buf[0..b]).await {
@@ -54,29 +59,23 @@ where
                     // small data exchanges. Maybe an improved heuristic could
                     // be applied.
                     if let Err(err) = writer.flush().await {
+                        error!(%err, "flush failure");
                         break Err(err);
                     }
                 }
                 Err(err) => {
+                    error!(%err, "write failure");
                     break Err(err);
                 }
             },
             Err(err) => {
+                error!(%err, "read failure");
+                if let Err(err) = writer.shutdown().await {
+                    warn!(%err, "writer shutdown failed also failed");
+                }
                 break Err(err);
             }
         };
-    };
-    match result {
-        Ok(()) => match writer.shutdown().await {
-            Ok(()) => debug!(bytes_read, nb_read, "completed"),
-            Err(err) => {
-                warn!(bytes_read, nb_read, %err, "completed but writer shutdown failed")
-            }
-        },
-        Err(err) if err.kind() == NotConnected => {
-            warn!(%err, "disconnected");
-        }
-        Err(err) => Err(err).unwrap(),
     }
 }
 
@@ -142,9 +141,10 @@ impl Forwarder {
         // pipe holepunch connection to forwarding connection
         let (fwd_read, fwd_write) = fwd_stream.into_split();
         let out_fut =
-            copy(quic_recv, fwd_write).instrument(debug_span!("cp_out", port = target_port));
-        let in_fut = copy(fwd_read, quic_send).instrument(debug_span!("cp_in", port = target_port));
-        tokio::join!(out_fut, in_fut);
+            copy(quic_recv, fwd_write).instrument(debug_span!("cp_quic_tcp", port = target_port));
+        let in_fut =
+            copy(fwd_read, quic_send).instrument(debug_span!("cp_tcp_quic", port = target_port));
+        tokio::try_join!(out_fut, in_fut).ok();
         debug!("closing bi");
         // expect the connection to be closed by caller
         conn.accept_bi()
@@ -214,14 +214,15 @@ impl Forwarder {
                 .quic_endpoint
                 .connect_with(cli_conf.clone(), remote_addr, SERVER_NAME)
                 .unwrap();
-            let timed_endpoint_fut = tokio::time::timeout(Duration::from_millis(500), endpoint_fut);
+            let timed_endpoint_fut = tokio::time::timeout(Duration::from_millis(200), endpoint_fut);
             if let Ok(endpoint_res) = timed_endpoint_fut.await {
                 quic_con = endpoint_res.unwrap();
                 break;
             } else if start.elapsed() > Duration::from_millis(CHAPPY_CONF.connection_timeout_ms) {
+                error!("timeout elapsed, dropping src stream");
                 return;
             } else {
-                debug!("timeout, retrying...")
+                warn!("timeout, retrying...")
             }
         }
         let (mut quic_send, quic_recv) = quic_con.open_bi().await.unwrap();
@@ -229,10 +230,10 @@ impl Forwarder {
         let (tcp_read, tcp_write) = tcp_stream.into_split();
         quic_send.write_u16(target_port).await.unwrap();
         let out_fut =
-            copy(tcp_read, quic_send).instrument(debug_span!("cp_out", port = target_port));
+            copy(tcp_read, quic_send).instrument(debug_span!("cp_tcp_quic", port = target_port));
         let in_fut =
-            copy(quic_recv, tcp_write).instrument(debug_span!("cp_in", port = target_port));
-        tokio::join!(out_fut, in_fut);
+            copy(quic_recv, tcp_write).instrument(debug_span!("cp_quic_tcp", port = target_port));
+        tokio::try_join!(out_fut, in_fut).ok();
         debug!("closing bi");
     }
 
