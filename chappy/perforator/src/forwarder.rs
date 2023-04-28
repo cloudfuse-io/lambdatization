@@ -42,11 +42,11 @@ where
         let read_res = reader.read(&mut buf).await;
         match read_res {
             Ok(0) => {
-                match writer.shutdown().await {
-                    Ok(()) => debug!(bytes_read, nb_read, "completed"),
-                    Err(err) => {
-                        warn!(bytes_read, nb_read, %err, "completed but writer shutdown failed");
-                    }
+                debug!(bytes_read, nb_read, "completed");
+                if let Err(err) = writer.shutdown().await {
+                    warn!(%err, "writer shutdown failed");
+                } else {
+                    debug!("writer shut down");
                 }
                 break Ok(());
             }
@@ -71,7 +71,9 @@ where
             Err(err) => {
                 error!(%err, "read failure");
                 if let Err(err) = writer.shutdown().await {
-                    warn!(%err, "writer shutdown failed also failed");
+                    warn!(%err, "writer shutdown also failed");
+                } else {
+                    debug!("writer shut down");
                 }
                 break Err(err);
             }
@@ -122,7 +124,7 @@ impl Forwarder {
     ///
     /// Panic if receives a second bi on the connection
     async fn handle_srv_conn(conn: Connection) {
-        let (quic_send, mut quic_recv) = match conn.accept_bi().await {
+        let (mut quic_send, mut quic_recv) = match conn.accept_bi().await {
             Ok(streams) => {
                 debug!("new bi accepted");
                 streams
@@ -135,8 +137,15 @@ impl Forwarder {
         let target_port = quic_recv.read_u16().await.unwrap();
 
         // forwarding connection
-        let localhost_url = format!("localhost:{}", target_port);
-        let fwd_stream = TcpStream::connect(localhost_url).await.unwrap();
+        let fwd_stream = match TcpStream::connect((Ipv4Addr::LOCALHOST, target_port)).await {
+            Ok(stream) => stream,
+            Err(err) => {
+                error!(err=%err, "connection to target failed");
+                // TODO encode different kinds of failure into QUIC reset code?
+                quic_send.reset(1u8.into()).unwrap();
+                return;
+            }
+        };
 
         // pipe holepunch connection to forwarding connection
         let (fwd_read, fwd_write) = fwd_stream.into_split();
