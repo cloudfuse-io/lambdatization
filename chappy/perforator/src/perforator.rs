@@ -3,6 +3,7 @@ use crate::{
     shutdown::Shutdown, shutdown::ShutdownGuard, udp_utils,
 };
 use chappy_seed::Address;
+use chappy_util::awaitable_map::AwaitableMap;
 
 use futures::StreamExt;
 use std::collections::HashMap;
@@ -29,7 +30,7 @@ struct TargetResolvedAddress {
 type PortMappings = Arc<Mutex<HashMap<u16, TargetVirtualAddress>>>;
 
 /// Map virtual addresses to resolved ones
-type AddressMappings = Arc<Mutex<HashMap<TargetVirtualAddress, TargetResolvedAddress>>>;
+type AddressMappings = Arc<AwaitableMap<TargetVirtualAddress, TargetResolvedAddress>>;
 
 #[derive(Clone)]
 pub struct Perforator {
@@ -48,7 +49,7 @@ impl Perforator {
     ) -> Self {
         Self {
             port_mappings: Arc::new(Mutex::new(HashMap::new())),
-            address_mappings: Arc::new(Mutex::new(HashMap::new())),
+            address_mappings: Arc::new(AwaitableMap::new()),
             binding_service,
             forwarder,
             tcp_port,
@@ -78,7 +79,7 @@ impl Perforator {
         tokio::spawn(
             async move {
                 let punch_resp = binding_service.bind_client(tgt_virt.to_string()).await;
-                address_mappings.lock().unwrap().insert(
+                address_mappings.insert(
                     virtual_addr,
                     TargetResolvedAddress {
                         natted_address: punch_resp.target_nated_addr.unwrap(),
@@ -105,20 +106,11 @@ impl Perforator {
             .get(&src_port)
             .unwrap_or_else(|| panic!("Source port {} was not registered", src_port))
             .clone();
-        let target_address: TargetResolvedAddress;
-        loop {
-            // TODO: add timeout and replace polling with notification mechanism
-            if let Some(addr) = self
-                .address_mappings
-                .lock()
-                .unwrap()
-                .get(&target_virtual_address)
-            {
-                target_address = addr.clone();
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        }
+        // TODO add timeout
+        let target_address = self
+            .address_mappings
+            .get(target_virtual_address, |_| false)
+            .await;
         debug!(
             tgt_nat = format!(
                 "{}:{}",

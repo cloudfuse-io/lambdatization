@@ -16,7 +16,7 @@ impl FormatTime for CustomTime {
 }
 
 /// Configure and init tracing for executables
-pub fn init_tracing(service_name: &'static str) {
+pub fn init_tracing(service_name: &str) {
     let mut fmt_layer = tracing_subscriber::fmt::layer()
         .with_writer(std::io::stderr)
         .with_timer(CustomTime);
@@ -41,7 +41,7 @@ pub fn init_tracing(service_name: &'static str) {
             .with_trace_config(opentelemetry::sdk::trace::config().with_resource(
                 opentelemetry::sdk::Resource::new(vec![opentelemetry::KeyValue::new(
                     "service.name",
-                    service_name,
+                    service_name.to_owned(),
                 )]),
             ))
             .install_batch(opentelemetry::runtime::TokioCurrentThread)
@@ -72,3 +72,5 @@ pub fn init_tracing_shared_lib() {
 pub fn close_tracing() {
     opentelemetry::global::shutdown_tracer_provider();
 }
+
+pub mod awaitable_map;
