@@ -19,6 +19,9 @@ use utils::{parse_virtual, register, request_punch};
 type ConnectSymbol<'a> =
     libloading::Symbol<'a, unsafe extern "C" fn(c_int, *const sockaddr, socklen_t) -> c_int>;
 
+/// # Safety
+///
+/// This function can be called the same way the libc `connect` function is called
 #[no_mangle]
 pub unsafe extern "C" fn connect(sockfd: c_int, addr: *const sockaddr, len: socklen_t) -> c_int {
     init_tracing_shared_lib();
@@ -48,6 +51,9 @@ pub unsafe extern "C" fn connect(sockfd: c_int, addr: *const sockaddr, len: sock
 type BindSymbol<'a> =
     libloading::Symbol<'a, unsafe extern "C" fn(c_int, *const sockaddr, socklen_t) -> c_int>;
 
+/// # Safety
+///
+/// This function can be called the same way the libc `bind` function is called
 #[no_mangle]
 pub unsafe extern "C" fn bind(sockfd: c_int, addr: *const sockaddr, len: socklen_t) -> c_int {
     init_tracing_shared_lib();

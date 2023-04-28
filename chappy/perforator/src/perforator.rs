@@ -1,5 +1,6 @@
 use crate::{
-    binding_service::BindingService, forwarder::Forwarder, shutdown::ShutdownGuard, udp_utils,
+    binding_service::BindingService, forwarder::Forwarder, protocol::ParsedTcpStream,
+    shutdown::Shutdown, shutdown::ShutdownGuard, udp_utils,
 };
 use chappy_seed::Address;
 
@@ -7,8 +8,9 @@ use futures::StreamExt;
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
 use std::sync::{Arc, Mutex};
-use tokio::net::TcpStream;
-use tracing::{debug, instrument, Instrument};
+use std::time::Duration;
+use tokio::net::{TcpListener, TcpStream};
+use tracing::{debug, debug_span, instrument, warn, Instrument};
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct TargetVirtualAddress {
@@ -29,26 +31,33 @@ type PortMappings = Arc<Mutex<HashMap<u16, TargetVirtualAddress>>>;
 /// Map virtual addresses to resolved ones
 type AddressMappings = Arc<Mutex<HashMap<TargetVirtualAddress, TargetResolvedAddress>>>;
 
+#[derive(Clone)]
 pub struct Perforator {
     port_mappings: PortMappings,
     address_mappings: AddressMappings,
     forwarder: Arc<Forwarder>,
     binding_service: Arc<BindingService>,
+    tcp_port: u16,
 }
 
 impl Perforator {
-    pub fn new(forwarder: Forwarder, binding_service: BindingService) -> Self {
+    pub fn new(
+        forwarder: Arc<Forwarder>,
+        binding_service: Arc<BindingService>,
+        tcp_port: u16,
+    ) -> Self {
         Self {
             port_mappings: Arc::new(Mutex::new(HashMap::new())),
             address_mappings: Arc::new(Mutex::new(HashMap::new())),
-            binding_service: Arc::new(binding_service),
-            forwarder: Arc::new(forwarder),
+            binding_service,
+            forwarder,
+            tcp_port,
         }
     }
 
     #[instrument(name = "reg_cli", skip(self))]
-    pub fn register_client(&self, src_port: u16, tgt_virt: Ipv4Addr, tgt_port: u16) {
-        debug!("new request");
+    fn register_client(&self, src_port: u16, tgt_virt: Ipv4Addr, tgt_port: u16) {
+        debug!("starting...");
         let virtual_addr = TargetVirtualAddress {
             ip: tgt_virt,
             port: tgt_port,
@@ -77,15 +86,16 @@ impl Perforator {
                         certificate_der: punch_resp.server_certificate,
                     },
                 );
-                debug!("QUIC connection registered")
+                debug!("client registration completed")
             }
             .instrument(tracing::Span::current()),
         );
+        debug!("completed");
     }
 
     /// Forward a TCP stream from a registered port
     #[instrument(name = "fwd_conn", skip_all)]
-    pub async fn forward_conn(&self, stream: TcpStream, _shdn: ShutdownGuard) {
+    async fn forward_conn(&self, stream: TcpStream, shdn: ShutdownGuard) {
         debug!("starting...");
         let src_port = stream.peer_addr().unwrap().port();
         let target_virtual_address = self
@@ -93,7 +103,7 @@ impl Perforator {
             .lock()
             .unwrap()
             .get(&src_port)
-            .expect(&format!("Source port {} was not registered", src_port))
+            .unwrap_or_else(|| panic!("Source port {} was not registered", src_port))
             .clone();
         let target_address: TargetResolvedAddress;
         loop {
@@ -109,21 +119,30 @@ impl Perforator {
             }
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         }
-        self.forwarder
-            .forward(
-                stream,
-                target_address.natted_address,
-                target_address.tgt_port,
-                target_address.certificate_der,
-            )
-            .await;
-        debug!("completed");
+        debug!(
+            tgt_nat = format!(
+                "{}:{}",
+                target_address.natted_address.ip, target_address.natted_address.port
+            ),
+            tgt_port = target_address.tgt_port,
+            "target addr resolved"
+        );
+        let fwd_fut = self.forwarder.forward(
+            stream,
+            target_address.natted_address,
+            target_address.tgt_port,
+            target_address.certificate_der,
+        );
+        shdn.run_cancellable(fwd_fut, Duration::from_millis(50))
+            .await
+            .map(|_| debug!("completed"))
+            .ok();
     }
 
     #[instrument(name = "reg_srv", skip_all)]
-    pub fn register_server(&self) {
-        debug!("new request");
-        let server_p2p_port = self.forwarder.server_p2p_port();
+    fn register_server(&self, mut shdn: ShutdownGuard) {
+        debug!("starting...");
+        let p2p_port = self.forwarder.port();
         let server_certificate = self.forwarder.server_certificate().to_owned();
         let binding_service = Arc::clone(&self.binding_service);
         tokio::spawn(
@@ -134,25 +153,59 @@ impl Perforator {
                 debug!("subscribe to hole punching requests");
                 stream
                     .map(|punch_req| {
-                        async {
-                            let client_natted_addr = punch_req.unwrap().client_nated_addr.unwrap();
-                            let client_natted_str =
-                                format!("{}:{}", client_natted_addr.ip, client_natted_addr.port);
-                            udp_utils::send_from_reusable_port(
-                                server_p2p_port,
-                                &[1, 2, 3, 4],
-                                &client_natted_str,
-                            );
-                            debug!("hole punching to {} performed!", client_natted_str);
-                        }
-                        .instrument(tracing::Span::current())
+                        let client_natted_addr = punch_req.unwrap().client_nated_addr.unwrap();
+                        let client_natted_str =
+                            format!("{}:{}", client_natted_addr.ip, client_natted_addr.port);
+                        udp_utils::send_from_reusable_port(
+                            p2p_port,
+                            &[1, 2, 3, 4],
+                            client_natted_str.clone(),
+                        )
+                        .instrument(debug_span!("punch hole", tgt_nat = client_natted_str))
                     })
                     .buffer_unordered(usize::MAX)
+                    .take_until(shdn.wait_shutdown())
                     .for_each(|_| async {})
                     .await;
                 debug!("subscription to hole punching requests closed");
             }
             .instrument(tracing::Span::current()),
         );
+        debug!("completed");
+    }
+
+    #[instrument(name = "tcp_srv", skip_all)]
+    pub async fn run_tcp_server(&self, shutdown: &Shutdown) {
+        let listener = TcpListener::bind(format!("127.0.0.1:{}", self.tcp_port))
+            .await
+            .unwrap();
+        loop {
+            let (stream, _) = listener.accept().await.unwrap();
+            let src_port = stream.peer_addr().unwrap().port();
+            let perforator = self.clone();
+            let fwd_conn_shdwn_guard = shutdown.create_guard();
+            let holepunch_shdwn_guard = shutdown.create_guard();
+            tokio::spawn(
+                async move {
+                    let parsed_stream = ParsedTcpStream::from(stream).await;
+                    match parsed_stream {
+                        ParsedTcpStream::ClientRegistration {
+                            source_port,
+                            target_virtual_ip,
+                            target_port,
+                        } => {
+                            perforator.register_client(source_port, target_virtual_ip, target_port)
+                        }
+                        ParsedTcpStream::ServerRegistration => {
+                            perforator.register_server(holepunch_shdwn_guard)
+                        }
+                        ParsedTcpStream::Raw(stream) => {
+                            perforator.forward_conn(stream, fwd_conn_shdwn_guard).await
+                        }
+                    }
+                }
+                .instrument(debug_span!("tcp_conn", src_port)),
+            );
+        }
     }
 }

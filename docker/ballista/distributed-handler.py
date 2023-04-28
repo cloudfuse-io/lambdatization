@@ -62,17 +62,19 @@ def wait_for_socket(process_name: str, port: int):
         time.sleep(0.02)
 
 
-def start_server(name: str, cmd: list[str], port: int):
-    subprocess.Popen(
+def start_server(name: str, cmd: list[str], port: int) -> subprocess.Popen[bytes]:
+    srv_proc = subprocess.Popen(
         cmd,
-        stderr=sys.stderr,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         bufsize=0,
     )
     logging.info(f"{name} starting...")
     wait_for_socket(name, port)
+    return srv_proc
 
 
-def init_scheduler():
+def init_scheduler() -> subprocess.Popen[bytes]:
     cmd = [
         "/opt/ballista/ballista-scheduler",
         "--sled-dir",
@@ -81,11 +83,13 @@ def init_scheduler():
         os.environ["CHAPPY_VIRTUAL_IP"],
         "--bind-port",
         "50050",
+        "--log-level-setting",
+        "DEBUG",
     ]
-    start_server("scheduler", cmd, 50050)
+    return start_server("scheduler", cmd, 50050)
 
 
-def init_executor(scheduler_ip: str):
+def init_executor(scheduler_ip: str) -> subprocess.Popen[bytes]:
     cmd = [
         "/opt/ballista/ballista-executor",
         "--external-host",
@@ -100,8 +104,10 @@ def init_executor(scheduler_ip: str):
         "50050",
         "--concurrent-tasks",
         "1",
+        "--log-level-setting",
+        "DEBUG",
     ]
-    start_server("executor", cmd, 50051)
+    return start_server("executor", cmd, 50051)
 
 
 def run_cli(sql: str, timeout: float) -> tuple[str, str]:
@@ -124,8 +130,20 @@ def run_cli(sql: str, timeout: float) -> tuple[str, str]:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-    stdout, stderr = process_cli.communicate(input=sql.encode(), timeout=timeout)
+    try:
+        stdout, stderr = process_cli.communicate(input=sql.encode(), timeout=timeout)
+    except subprocess.TimeoutExpired as e:
+        stdout = e.stdout
+        stderr = e.stderr
     return stdout.decode(), stderr.decode()
+
+
+def stop_server(proc: subprocess.Popen[bytes]) -> tuple[str, str]:
+    if proc.poll() is None:
+        proc.kill()
+    assert proc.stdout is not None
+    assert proc.stderr is not None
+    return (proc.stdout.read().decode(), proc.stderr.read().decode())
 
 
 def handle_event(event) -> dict[str, Any]:
@@ -139,11 +157,13 @@ def handle_event(event) -> dict[str, Any]:
 
     if is_cold_start:
         if event["role"] == "scheduler":
-            init_scheduler()
+            srv_proc = init_scheduler()
         elif event["role"] == "executor":
-            init_executor(event["scheduler_ip"])
+            srv_proc = init_executor(event["scheduler_ip"])
         else:
             raise Exception(f'Unknown role {event["role"]}')
+    else:
+        raise Exception(f"Only cold starts supported")
 
     init_duration = time.time() - start
 
@@ -152,12 +172,19 @@ def handle_event(event) -> dict[str, Any]:
         query_start = time.time()
         src_command = base64.b64decode(event["query"]).decode("utf-8")
         resp, logs = run_cli(src_command, timeout_sec)
-        result["resp"] = resp
-        result["logs"] = logs
+        (srv_stdout, srv_stderr) = stop_server(srv_proc)
+        result["cli_resp"] = resp
+        result["cli_logs"] = logs
         result["parsed_queries"] = [src_command]
         result["query_duration_sec"] = time.time() - query_start
     elif event["role"] == "executor":
         time.sleep(timeout_sec)
+        (srv_stdout, srv_stderr) = stop_server(srv_proc)
+    else:
+        raise Exception(f'Unknown role {event["role"]}')
+
+    result["srv_stdout"] = srv_stdout
+    result["srv_stderr"] = srv_stderr
 
     result["context"] = {
         "cold_start": is_cold_start,

@@ -29,6 +29,7 @@ pub struct SeedService {
     registered_endpoints: RegisteredEndpoints,
 }
 
+#[allow(clippy::new_without_default)]
 impl SeedService {
     pub fn new() -> Self {
         Self {
@@ -47,7 +48,7 @@ impl Seed for SeedService {
         target = "",
         skip_all,
         fields(
-            src_virt=%req.get_ref().source_virtual_ip, 
+            src_virt=%req.get_ref().source_virtual_ip,
             src_nat=%req.remote_addr().unwrap(),
             tgt_virt=%req.get_ref().target_virtual_ip
         )

@@ -77,9 +77,9 @@ pub(crate) unsafe fn parse_virtual(addr: *const sockaddr, len: socklen_t) -> Par
         Some(addr_in) => {
             let ip = Ipv4Addr::from(addr_in.ip());
             if ip.to_string() == virt_ip {
-                ParsedAddress::LocalVirtual(addr_in.clone())
+                ParsedAddress::LocalVirtual(*addr_in)
             } else if virt_range.contains(&ip) {
-                ParsedAddress::RemoteVirtual(addr_in.clone())
+                ParsedAddress::RemoteVirtual(*addr_in)
             } else {
                 debug!(
                     "{} not in virtual network {}",
@@ -93,39 +93,5 @@ pub(crate) unsafe fn parse_virtual(addr: *const sockaddr, len: socklen_t) -> Par
             debug!("Not an IPv4 addr");
             ParsedAddress::NotVirtual
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_double_free() {
-        // tests of SockaddrIn memory ownership
-        // from_raw actually uses std::ptr::read which does a memory copy
-
-        let addr = SockaddrIn::new(0, 0, 0, 0, 80);
-        let addr_ptr: *const sockaddr = Box::into_raw(Box::new(addr)).cast();
-
-        let parsed_addr_1 = unsafe { SockaddrIn::from_raw(addr_ptr, None).unwrap() };
-        let parsed_addr_2 = unsafe { SockaddrIn::from_raw(addr_ptr, None).unwrap() };
-
-        println!("parsed_addr_1.port(): {:?}", parsed_addr_1.port());
-        println!("parsed_addr_2.port(): {:?}", parsed_addr_2.port());
-
-        drop(parsed_addr_1);
-
-        println!("parsed_addr_2.port(): {:?}", parsed_addr_2.port());
-
-        let parsed_addr_3 = unsafe { SockaddrIn::from_raw(addr_ptr, None).unwrap() };
-        println!("parsed_addr_3.port(): {:?}", parsed_addr_3.port());
-
-        drop(addr);
-
-        println!("parsed_addr_2.port(): {:?}", parsed_addr_2.port());
-
-        let parsed_addr_4 = unsafe { SockaddrIn::from_raw(addr_ptr, None).unwrap() };
-        println!("parsed_addr_4.port(): {:?}", parsed_addr_4.port());
     }
 }

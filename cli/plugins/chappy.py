@@ -227,7 +227,7 @@ def run_lambda_pair(c, seed=None, release=False, client="example-client"):
             "CHAPPY_SEED_HOSTNAME": seed,
             "CHAPPY_SEED_PORT": 8000,
             "CHAPPY_VIRTUAL_SUBNET": "172.28.0.0/16",
-            "RUST_LOG": "debug,h2=error,quinn=info,tower=info,rustls=info",
+            "RUST_LOG": "info,chappy_perforator=debug,chappy=debug",
             "RUST_BACKTRACE": "1",
         }
 
@@ -319,7 +319,7 @@ def run_lambda_cluster(c, seed=None, release=False, binary="example-n-to-n", nod
             "CLUSTER_IPS": ",".join([f"172.28.0.{i+1}" for i in range(nodes)]),
             "BATCH_SIZE": 32,
             "BYTES_SENT": 128,
-            "RUST_LOG": "debug,h2=error,quinn=info,tower=info,rustls=info",
+            "RUST_LOG": "info,chappy_perforator=debug,chappy=debug",
             "RUST_BACKTRACE": "1",
         }
         if "L12N_CHAPPY_OPENTELEMETRY_APIKEY" in conf(VALIDATORS):

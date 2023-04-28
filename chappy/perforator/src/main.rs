@@ -2,15 +2,13 @@ use chappy_perforator::{
     binding_service::BindingService,
     forwarder::Forwarder,
     perforator::Perforator,
-    protocol::ParsedTcpStream,
     shutdown::{gracefull, GracefullyRunnable, Shutdown},
     CHAPPY_CONF,
 };
 use chappy_util::{close_tracing, init_tracing};
-use std::sync::Arc;
-use tokio::net::TcpListener;
+use std::{sync::Arc, time::Duration};
 use tonic::async_trait;
-use tracing::{debug_span, info, info_span, Instrument};
+use tracing::{info, info_span, Instrument};
 
 struct SrvRunnable;
 
@@ -19,51 +17,31 @@ impl GracefullyRunnable for SrvRunnable {
     async fn run(&self, shutdown: &Shutdown) {
         let tcp_port = 5000;
         let seed_addr = format!("{}:{}", CHAPPY_CONF.seed_hostname, CHAPPY_CONF.seed_port);
-        let (cli_quic_port, srv_quic_port) = (5001, 5002);
+        let quic_port = 5001;
         info!(
             perforator_tcp_port = tcp_port,
-            perforator_quic_client_port = cli_quic_port,
-            perforator_quic_server_port = srv_quic_port,
+            perforator_quic_port = quic_port,
             seed_address = %seed_addr
         );
-        let listener = TcpListener::bind(format!("127.0.0.1:{}", tcp_port))
-            .await
-            .unwrap();
-        let forwarder = Forwarder::new(cli_quic_port, srv_quic_port);
-        let binding_service = BindingService::new(cli_quic_port, srv_quic_port);
-        let perforator = Arc::new(Perforator::new(forwarder, binding_service));
-        loop {
-            let (stream, _) = listener.accept().await.unwrap();
-            let src_port = stream.peer_addr().unwrap().port();
-            let perforator = Arc::clone(&perforator);
-            let shutdown_guard = shutdown.create_guard();
-            tokio::spawn(
-                async move {
-                    let parsed_stream = ParsedTcpStream::from(stream).await;
-                    match parsed_stream {
-                        ParsedTcpStream::ClientRegistration {
-                            source_port,
-                            target_virtual_ip,
-                            target_port,
-                        } => {
-                            perforator.register_client(source_port, target_virtual_ip, target_port)
-                        }
-                        ParsedTcpStream::ServerRegistration => perforator.register_server(),
-                        ParsedTcpStream::Raw(stream) => {
-                            perforator.forward_conn(stream, shutdown_guard).await
-                        }
-                    }
-                }
-                .instrument(debug_span!("tcp", src_port)),
-            );
-        }
+
+        let forwarder = Arc::new(Forwarder::new(quic_port));
+        let binding_service = Arc::new(BindingService::new(quic_port));
+        let perforator = Arc::new(Perforator::new(
+            Arc::clone(&forwarder),
+            binding_service,
+            tcp_port,
+        ));
+        tokio::join!(
+            perforator.run_tcp_server(shutdown),
+            forwarder.run_quic_server(shutdown),
+        );
     }
 }
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     init_tracing("chappy");
-    gracefull(SrvRunnable)
+    gracefull(SrvRunnable, Duration::from_secs(1))
         .instrument(info_span!("perforator", virt_ip = CHAPPY_CONF.virtual_ip))
         .await;
     close_tracing();

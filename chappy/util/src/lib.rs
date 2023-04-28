@@ -17,9 +17,10 @@ impl FormatTime for CustomTime {
 
 /// Configure and init tracing for executables
 pub fn init_tracing(service_name: &'static str) {
-    let fmt_layer = tracing_subscriber::fmt::layer()
+    let mut fmt_layer = tracing_subscriber::fmt::layer()
         .with_writer(std::io::stderr)
         .with_timer(CustomTime);
+    fmt_layer.set_ansi(false);
 
     let reg = tracing_subscriber::registry()
         .with(EnvFilter::from_default_env())
@@ -55,10 +56,11 @@ pub fn init_tracing(service_name: &'static str) {
 
 /// Configure and init tracing with some tweeks specific to shared libraries
 pub fn init_tracing_shared_lib() {
-    let fmt_layer = tracing_subscriber::fmt::layer()
+    let mut fmt_layer = tracing_subscriber::fmt::layer()
         .with_writer(std::io::stderr)
         .with_target(false)
         .with_timer(CustomTime);
+    fmt_layer.set_ansi(false);
 
     tracing_subscriber::registry()
         .with(fmt_layer)

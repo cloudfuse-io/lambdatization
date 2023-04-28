@@ -68,7 +68,7 @@ fn main() {
     thread::sleep(Duration::from_millis(100));
 
     let mut handles: Vec<(thread::JoinHandle<()>, thread::JoinHandle<()>)> = Vec::new();
-    for ip in cluster_ips.split(",") {
+    for ip in cluster_ips.split(',') {
         let srv_addr = format!("{}:{}", ip, 8080);
         let stream = TcpStream::connect(&srv_addr).unwrap();
         info!("Connection to echo server {} successful", srv_addr);
@@ -82,7 +82,7 @@ fn main() {
         read_handle.join().unwrap();
         info!("Read {} Bytes completed", BYTES_SENT);
     }
-    info!("Reads and writes completed");
-    thread::sleep(Duration::from_secs(5));
+    info!("Reads and writes completed, waiting for other clients to complete...");
+    thread::sleep(Duration::from_secs(1));
     info!("Completed!");
 }
