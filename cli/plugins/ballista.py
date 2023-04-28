@@ -33,8 +33,6 @@ def format_lambda_result(name, external_duration, lambda_res):
     result.append(f"==============================")
     result.append(f"RESULTS FOR {name}")
     result.append(f"EXTERNAL_DURATION: {external_duration}")
-    result.append("== LOGS ==")
-    result.append(base64.b64decode(lambda_res["LogResult"]).decode())
     if "FunctionError" in lambda_res:
         raise Exit(message=lambda_res["Payload"], code=1)
     result.append("== PAYLOAD ==")
@@ -51,7 +49,7 @@ def run_executor(
         "CHAPPY_SEED_HOSTNAME": seed_ip,
         "CHAPPY_SEED_PORT": 8000,
         "CHAPPY_VIRTUAL_IP": virtual_ip,
-        "RUST_LOG": "info,chappy_perforator=debug,chappy=debug",
+        "RUST_LOG": "info,chappy_perforator=debug,chappy=debug,ballista_executor=debug",
         "RUST_BACKTRACE": "1",
     }
     if "L12N_CHAPPY_OPENTELEMETRY_APIKEY" in conf(VALIDATORS):
@@ -70,7 +68,7 @@ def run_executor(
             }
         ).encode(),
         InvocationType="RequestResponse",
-        LogType="Tail",
+        LogType="None",
     )
     lambda_res["Payload"] = lambda_res["Payload"].read().decode()
     return (lambda_res, time.time() - start_time)
@@ -84,7 +82,7 @@ def run_scheduler(
         "CHAPPY_SEED_HOSTNAME": seed_ip,
         "CHAPPY_SEED_PORT": 8000,
         "CHAPPY_VIRTUAL_IP": virtual_ip,
-        "RUST_LOG": "info,chappy_perforator=debug,chappy=debug",
+        "RUST_LOG": "info,chappy_perforator=debug,chappy=debug,ballista_scheduler=debug",
         "RUST_BACKTRACE": "1",
     }
     if "L12N_CHAPPY_OPENTELEMETRY_APIKEY" in conf(VALIDATORS):
@@ -103,7 +101,7 @@ def run_scheduler(
             }
         ).encode(),
         InvocationType="RequestResponse",
-        LogType="Tail",
+        LogType="None",
     )
     lambda_res["Payload"] = lambda_res["Payload"].read().decode()
     return (lambda_res, time.time() - start_time)
@@ -142,6 +140,6 @@ LIMIT 10;"""
 
         scheduler_res, scheduler_duration = scheduler_fut.result()
         print(format_lambda_result("SCHEDULER", scheduler_duration, scheduler_res))
-        # for i in range(executor_count):
-        #     executor_res, executor_duration = executor_futs[i].result()
-        #     print(format_lambda_result(f"EXECUTOR{i}", executor_duration, executor_res))
+        for i in range(executor_count):
+            executor_res, executor_duration = executor_futs[i].result()
+            print(format_lambda_result(f"EXECUTOR{i}", executor_duration, executor_res))
