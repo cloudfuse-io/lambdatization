@@ -263,6 +263,25 @@ def wait_deployment(lambda_name):
         time.sleep(1)
 
 
+async def invoke_lambda(lambda_name: str, version: str, session: AsyncAWS, data: bytes):
+    resp = await session.aws_request(
+        method="POST",
+        path=f"/2015-03-31/functions/{lambda_name}/invocations?Qualifier={version}",
+        data=data,
+        headers={
+            "X-Amz-Invocation-Type": "RequestResponse",
+            "X-Amz-Log-Type": "None",
+        },
+    )
+    body = await resp.text()
+    if resp.status != 200:
+        raise Exception(f"Lambda Invoke failed with status {resp.status}: {body}")
+    res = json.loads(body)
+    if "errorMessage" in res:
+        raise Exception(res["errorMessage"])
+    return res
+
+
 ## Task management
 
 
