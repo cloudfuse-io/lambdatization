@@ -5,7 +5,7 @@ import json
 import random
 import time
 
-from common import AsyncAWS, aws, invoke_lambda, terraform_output, wait_deployment
+from common import AsyncAWS, aws, terraform_output, wait_deployment
 from invoke import task
 
 # Set a sleep duration to make sure every invocation is alocated to a new Lambda
@@ -36,7 +36,7 @@ async def invoke_batch(nb, lambda_name, version, memory_mb):
         # start all invocations at once
         payload_data = json.dumps({"sleep": SLEEP_DURATION}).encode()
         tasks = asyncio.as_completed(
-            [invoke_lambda(lambda_name, version, s, payload_data) for _ in range(nb)]
+            [s.invoke_lambda(lambda_name, version, payload_data) for _ in range(nb)]
         )
         # iterate through results as they are generated
         for cnt, task in enumerate(tasks, start=1):

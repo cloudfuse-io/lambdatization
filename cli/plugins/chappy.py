@@ -296,7 +296,7 @@ def run_lambda_cluster(c, seed=None, release=False, binary="example-n-to-n", nod
     if seed is None:
         seed = seed_ip(c)
 
-    with ThreadPoolExecutor() as executor:
+    with ThreadPoolExecutor(max_workers=max(4, nodes)) as executor:
         redeploy_fut = executor.submit(redeploy, lambda_name)
         build_image, output_dir = build_chappy(c, release)
         upload = lambda file: c.run(
