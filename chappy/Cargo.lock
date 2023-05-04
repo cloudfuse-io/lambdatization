@@ -185,6 +185,7 @@ dependencies = [
  "futures",
  "lazy_static",
  "quinn",
+ "rand",
  "rcgen",
  "rustls",
  "socket2 0.5.2",

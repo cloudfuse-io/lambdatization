@@ -254,3 +254,183 @@ impl Forwarder {
         &self.server_certificate_der
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chappy_util::test;
+    use futures::StreamExt;
+    use rand::seq::SliceRandom;
+    use std::sync::Arc;
+    use tokio::net::TcpListener;
+    use tokio::task::JoinHandle;
+
+    /// Create a TCP server on the specified port and connect to it, then
+    /// forward the server side stream using the provided forwarder and target
+    /// port
+    async fn proxied_connect(
+        port: u16,
+        fwd: &Arc<Forwarder>,
+        target_port: u16,
+    ) -> (TcpStream, JoinHandle<()>) {
+        let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
+        let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+
+        let accept_handle = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            (stream, listener)
+        });
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        let cli_stream = TcpStream::connect(addr).await.unwrap();
+        let (proxied_stream, listener) = accept_handle.await.unwrap();
+
+        let fwd = Arc::clone(fwd);
+        let fwd_handle = tokio::spawn(async move {
+            fwd.forward(
+                proxied_stream,
+                Address {
+                    ip: String::from("127.0.0.1"),
+                    port: fwd.port().into(),
+                },
+                target_port,
+                fwd.server_certificate().to_owned(),
+            )
+            .await;
+            debug!("dropping moved listener {}", listener.local_addr().unwrap());
+        });
+        (cli_stream, fwd_handle)
+    }
+
+    /// Start a TCP echo server that serves only one request then stops
+    async fn echo_server(port: u16) {
+        let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port))
+            .await
+            .unwrap();
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let (mut r, mut w) = socket.split();
+        tokio::io::copy(&mut r, &mut w).await.unwrap();
+        w.flush().await.unwrap();
+    }
+
+    async fn create_and_start_forwarder(port: u16) -> (Arc<Forwarder>, JoinHandle<()>) {
+        let fwd = Arc::new(Forwarder::new(port));
+
+        let srv_handle = {
+            let fwd = Arc::clone(&fwd);
+            tokio::spawn(async move {
+                fwd.run_quic_server(&Shutdown::new()).await;
+            })
+        };
+        (fwd, srv_handle)
+    }
+
+    /// Assert that the bytes written to the stream are echoed back
+    async fn assert_echo(stream: &mut TcpStream, length: usize) {
+        let bytes = &(0..length).map(|v| (v % 255) as u8).collect::<Vec<u8>>();
+        let mut read_buf = vec![0; length];
+        stream.write_all(bytes).await.unwrap();
+        stream.read_exact(&mut read_buf).await.unwrap();
+        assert_eq!(bytes, read_buf.as_slice());
+    }
+
+    #[tokio::test]
+    async fn test_single_target() {
+        let avail_ports = test::available_ports(3).await;
+        let echo_srv_port = avail_ports[0];
+        let fwd_quic_port = avail_ports[1];
+        let cli_proxy_port = avail_ports[2];
+        let echo_srv_handle = tokio::spawn(echo_server(echo_srv_port));
+        let (fwd, fwd_srv_handle) = create_and_start_forwarder(fwd_quic_port).await;
+        let (mut cli_stream, fwd_handle) =
+            proxied_connect(cli_proxy_port, &fwd, echo_srv_port).await;
+
+        // Try big and small writes to check whether bytes are properly flushed
+        // through the proxies
+        assert_echo(&mut cli_stream, 4).await;
+        assert_echo(&mut cli_stream, 10000).await;
+        assert_echo(&mut cli_stream, 4).await;
+
+        // cleanup
+        echo_srv_handle.abort();
+        fwd_srv_handle.abort();
+        fwd_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn test_multiple_targets() {
+        chappy_util::init_tracing("test");
+        let nb_target = 20;
+        let avail_ports = test::available_ports(2 * nb_target + 1).await;
+        let echo_srv_ports = &avail_ports[0..nb_target];
+        let cli_proxy_ports = &avail_ports[nb_target..2 * nb_target];
+        let fwd_quic_port = avail_ports[2 * nb_target];
+        let (fwd, fwd_srv_handle) = create_and_start_forwarder(fwd_quic_port).await;
+
+        let mut cli_streams = futures::stream::iter(0..nb_target)
+            .then(|t| {
+                let echo_srv_port = echo_srv_ports[t];
+                let cli_proxy_port = cli_proxy_ports[t];
+                let fwd = Arc::clone(&fwd);
+                async move {
+                    let echo_srv_handle = tokio::spawn(echo_server(echo_srv_port));
+                    let (cli_stream, fwd_handle) =
+                        proxied_connect(cli_proxy_port, &fwd, echo_srv_port).await;
+                    (cli_stream, echo_srv_handle, fwd_handle)
+                }
+            })
+            .collect::<Vec<_>>()
+            .await;
+
+        // Mix writes of different sizes to different targets
+        let mut targets: Vec<usize> = (1..nb_target * 3).map(|t| t % nb_target).collect();
+        targets.shuffle(&mut rand::thread_rng());
+        for target in targets {
+            let length = rand::random::<usize>() % 12000;
+            info!("writing {} bytes to target {}", length, target);
+            assert_echo(&mut cli_streams[target].0, length).await;
+        }
+
+        // cleanup
+        fwd_srv_handle.abort();
+        for i in 0..nb_target {
+            cli_streams[i].1.abort();
+            cli_streams[i].2.abort();
+        }
+    }
+
+    #[tokio::test]
+    async fn test_target_dropped() {
+        // chappy_util::init_tracing("test");
+        let avail_ports = test::available_ports(3).await;
+        let echo_srv_port = avail_ports[0];
+        let fwd_quic_port = avail_ports[1];
+        let cli_proxy_port = avail_ports[2];
+        let echo_srv_handle = tokio::spawn(echo_server(echo_srv_port));
+        let (fwd, fwd_srv_handle) = create_and_start_forwarder(fwd_quic_port).await;
+        let (mut cli_stream, fwd_handle) =
+            proxied_connect(cli_proxy_port, &fwd, echo_srv_port).await;
+
+        // Interrupt the target server in the middle of the communication
+        assert_echo(&mut cli_stream, 10).await;
+        echo_srv_handle.abort();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        let bytes = &[1u8, 2, 3, 4];
+        let mut read_buf = vec![0; bytes.len()];
+        // the first write is expected to succeed because it is aknowledged by
+        // the first proxy that cannot know yet that the target is disconnected.
+        cli_stream.write_all(bytes).await.unwrap();
+        cli_stream.flush().await.unwrap();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        // this write succeeds also, but ideally by this time the stream should
+        // know that the connection is broken
+        cli_stream.write_all(bytes).await.unwrap();
+        cli_stream
+            .read_exact(&mut read_buf)
+            .await
+            .expect_err("read from aborted target should not succeed");
+
+        // cleanup
+        fwd_srv_handle.abort();
+        fwd_handle.abort();
+    }
+}
