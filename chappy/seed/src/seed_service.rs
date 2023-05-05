@@ -4,8 +4,8 @@ use crate::{
 };
 use chappy_util::awaitable_map::AwaitableMap;
 use futures::stream::{Stream, StreamExt};
-use std::{net::SocketAddr, pin::Pin, sync::Arc};
-use tokio::sync::mpsc;
+use std::{net::SocketAddr, pin::Pin, sync::Arc, time::Duration};
+use tokio::{sync::mpsc, time::timeout};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::{Request, Response, Result, Status};
 use tracing::{debug, error, info, instrument};
@@ -67,22 +67,25 @@ impl Seed for SeedService {
             cluster_id: req.get_ref().cluster_id.clone(),
         };
 
-        // TODO add timeout
-        let resolved_target = self
-            .registered_endpoints
-            .get(virtual_target_key, |prev_tgt| {
-                if prev_tgt.punch_req_stream.is_closed() {
-                    info!(
-                        ip = tgt_ip,
-                        cluster = req.get_ref().cluster_id,
-                        "replace closed target"
-                    );
-                    true
-                } else {
-                    false
-                }
-            })
-            .await;
+        // TODO adjust timout duration
+        let resolved_target = timeout(
+            Duration::from_secs(10),
+            self.registered_endpoints
+                .get(virtual_target_key, |prev_tgt| {
+                    if prev_tgt.punch_req_stream.is_closed() {
+                        info!(
+                            ip = tgt_ip,
+                            cluster = req.get_ref().cluster_id,
+                            "replace closed target"
+                        );
+                        true
+                    } else {
+                        false
+                    }
+                }),
+        )
+        .await
+        .unwrap();
 
         debug!(tgt_nat=%resolved_target.natted_address);
         resolved_target

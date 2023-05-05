@@ -26,8 +26,6 @@ where
     /// reset. Get then waits for a new value to be inserted for that key. It
     /// should not attempt to call `insert`, otherwise it would result in a
     /// deadlock.
-    ///
-    /// TODO add timeout
     pub async fn get<F>(&self, key: K, reset_first: F) -> V
     where
         F: FnOnce(V) -> bool,

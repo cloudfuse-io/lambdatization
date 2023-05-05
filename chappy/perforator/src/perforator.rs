@@ -6,12 +6,12 @@ use chappy_seed::Address;
 use chappy_util::awaitable_map::AwaitableMap;
 
 use futures::StreamExt;
-use std::collections::HashMap;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::str::FromStr;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::{TcpListener, TcpStream};
+use tokio::time::timeout;
 use tracing::{debug, debug_span, instrument, warn, Instrument};
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -28,7 +28,7 @@ struct TargetResolvedAddress {
 }
 
 /// Map source ports to target virtual addresses
-type PortMappings = Arc<Mutex<HashMap<u16, TargetVirtualAddress>>>;
+type PortMappings = Arc<AwaitableMap<u16, TargetVirtualAddress>>;
 
 /// Map virtual addresses to resolved ones
 type AddressMappings = Arc<AwaitableMap<TargetVirtualAddress, TargetResolvedAddress>>;
@@ -49,7 +49,7 @@ impl Perforator {
         tcp_port: u16,
     ) -> Self {
         Self {
-            port_mappings: Arc::new(Mutex::new(HashMap::new())),
+            port_mappings: Arc::new(AwaitableMap::new()),
             address_mappings: Arc::new(AwaitableMap::new()),
             binding_service,
             forwarder,
@@ -64,15 +64,7 @@ impl Perforator {
             ip: tgt_virt,
             port: tgt_port,
         };
-        debug_span!("lock", src = "port_mappings.insert").in_scope(|| {
-            let mut guard = self.port_mappings.lock().unwrap();
-            let already_registered = guard.values().any(|val| *val == virtual_addr);
-            guard.insert(src_port, virtual_addr.clone());
-            if already_registered {
-                debug!("virtual target already registered");
-                return;
-            }
-        });
+        self.port_mappings.insert(src_port, virtual_addr.clone());
         // if the client being registered is the first to use this target
         // virtual IP, emit a binding request to the Seed
         let address_mappings = Arc::clone(&self.address_mappings);
@@ -99,21 +91,21 @@ impl Perforator {
     #[instrument(name = "fwd_conn", skip_all)]
     async fn forward_conn(&self, stream: TcpStream, shdn: ShutdownGuard) {
         debug!("starting...");
+        // TODO adjust timout duration
         let src_port = stream.peer_addr().unwrap().port();
-        let target_virtual_address =
-            debug_span!("lock", src = "port_mappings.get").in_scope(|| {
-                self.port_mappings
-                    .lock()
-                    .unwrap()
-                    .get(&src_port)
-                    .unwrap_or_else(|| panic!("Source port {} was not registered", src_port))
-                    .clone()
-            });
-        // TODO add timeout
-        let target_address = self
-            .address_mappings
-            .get(target_virtual_address, |_| false)
-            .await;
+        let target_virtual_address = timeout(
+            Duration::from_secs(1),
+            self.port_mappings.get(src_port, |_| false),
+        )
+        .await
+        .unwrap();
+        // TODO adjust timout duration
+        let target_address = timeout(
+            Duration::from_secs(3),
+            self.address_mappings.get(target_virtual_address, |_| false),
+        )
+        .await
+        .unwrap();
         let target_nated_addr: SocketAddr = format!(
             "{}:{}",
             target_address.natted_address.ip, target_address.natted_address.port
