@@ -1,13 +1,12 @@
-use crate::{quic_utils, shutdown::Shutdown, CHAPPY_CONF};
-use chappy_seed::Address;
-use quinn::{Connection, Endpoint};
-use std::net::{Ipv4Addr, SocketAddrV4};
-use std::time::{Duration, Instant};
+use crate::{quic_utils, shutdown::Shutdown, PUNCH_SERVER_NAME, SERVER_NAME};
+use quinn::{Connection, ConnectionError, Endpoint};
+use quinn_proto::{TransportError, TransportErrorCode};
+use rustls::AlertDescription::BadCertificate;
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tracing::{debug, debug_span, error, info, instrument, warn, Instrument};
-
-const SERVER_NAME: &str = "chappy";
 
 /// A service relays TCP streams through a QUIC tunnel
 ///
@@ -199,42 +198,30 @@ impl Forwarder {
         name = "cli_quic_conn",
         skip_all,
         fields(
-            tgt_nat = %format!("{}:{}", nated_addr.ip, nated_addr.port),
+            tgt_nat = %nated_addr,
             tgt_port = target_port
         )
     )]
     pub async fn forward(
         &self,
         tcp_stream: TcpStream,
-        nated_addr: Address,
+        nated_addr: SocketAddr,
         target_port: u16,
         target_server_certificate_der: Vec<u8>,
     ) {
-        let cli_conf = quic_utils::configure_client(target_server_certificate_der);
-        let start = Instant::now();
-        let quic_con;
-        // TODO: investigate whether this retry is necessary or whether
-        // QUIC/Quinn is handling retries itnernally
-        loop {
-            let remote_addr = format!("{}:{}", nated_addr.ip, nated_addr.port)
-                .parse()
-                .unwrap();
-            let endpoint_fut = self
-                .quic_endpoint
-                .connect_with(cli_conf.clone(), remote_addr, SERVER_NAME)
-                .unwrap();
-            let timed_endpoint_fut = tokio::time::timeout(Duration::from_millis(200), endpoint_fut);
-            if let Ok(endpoint_res) = timed_endpoint_fut.await {
-                quic_con = endpoint_res.unwrap();
-                break;
-            } else if start.elapsed() > Duration::from_millis(CHAPPY_CONF.connection_timeout_ms) {
-                error!("timeout elapsed, dropping src stream");
-                return;
-            } else {
-                warn!("timeout, retrying...")
-            }
+        let conn_result = quic_utils::connect_with_retry(
+            &self.quic_endpoint,
+            nated_addr,
+            target_server_certificate_der,
+        )
+        .await;
+        if conn_result.is_none() {
+            error!("Dropping upstream connection");
+            tcp_stream.set_linger(None).unwrap();
+            return;
         }
-        let (mut quic_send, quic_recv) = quic_con.open_bi().await.unwrap();
+        let quic_conn = conn_result.unwrap();
+        let (mut quic_send, quic_recv) = quic_conn.open_bi().await.unwrap();
         debug!("new bi opened");
         let (tcp_read, tcp_write) = tcp_stream.into_split();
         quic_send.write_u16(target_port).await.unwrap();
@@ -252,6 +239,29 @@ impl Forwarder {
 
     pub fn server_certificate(&self) -> &[u8] {
         &self.server_certificate_der
+    }
+
+    #[instrument(skip(self))]
+    pub async fn punch_hole(&self, addr: SocketAddr) {
+        let connecting = self
+            .quic_endpoint
+            .connect_with(
+                quic_utils::configure_punch_client(),
+                addr,
+                PUNCH_SERVER_NAME,
+            )
+            .unwrap();
+        // we expect the connection establishment mechanism to handle retries
+        // until the hole is actually punched
+        match connecting.await {
+            Ok(_) => warn!("Connection unexpectedly successful"),
+            Err(ConnectionError::TransportError(TransportError { code: c, .. }))
+                if c == TransportErrorCode::crypto(BadCertificate.get_u8()) =>
+            {
+                debug!("Got expected bad certificate error")
+            }
+            Err(e) => warn!("Unexpected error {:?}", e),
+        }
     }
 }
 
@@ -288,10 +298,7 @@ mod tests {
         let fwd_handle = tokio::spawn(async move {
             fwd.forward(
                 proxied_stream,
-                Address {
-                    ip: String::from("127.0.0.1"),
-                    port: fwd.port().into(),
-                },
+                SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, fwd.port().into())),
                 target_port,
                 fwd.server_certificate().to_owned(),
             )

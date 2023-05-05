@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::sync::Mutex;
 use tokio::sync::watch;
+use tracing::debug_span;
 
 /// A map where values can be asynchronously be awaited.
 pub struct AwaitableMap<K, V> {
@@ -31,7 +32,7 @@ where
     where
         F: FnOnce(V) -> bool,
     {
-        let mut rx = {
+        let mut rx = debug_span!("lock", src = "AwaitableMap.get").in_scope(|| {
             let mut guard = self.inner.lock().unwrap();
             if let Some(value_tx) = guard.get(&key) {
                 let current_val = value_tx.subscribe().borrow().clone();
@@ -46,7 +47,7 @@ where
                 guard.insert(key, tx);
                 rx
             }
-        };
+        });
 
         let value_ref = rx.wait_for(|val| val.is_some()).await.unwrap();
         value_ref.clone().unwrap()
@@ -54,14 +55,16 @@ where
 
     /// Insert the key/value pair, and returns the existing value if any
     pub fn insert(&self, key: K, value: V) -> Option<V> {
-        let mut guard = self.inner.lock().unwrap();
-        if let Some(target_tx) = guard.get(&key) {
-            target_tx.send_replace(Some(value))
-        } else {
-            let (tx, _rx) = watch::channel(Some(value));
-            guard.insert(key, tx);
-            None
-        }
+        debug_span!("lock", src = "AwaitableMap.insert").in_scope(|| {
+            let mut guard = self.inner.lock().unwrap();
+            if let Some(target_tx) = guard.get(&key) {
+                target_tx.send_replace(Some(value))
+            } else {
+                let (tx, _rx) = watch::channel(Some(value));
+                guard.insert(key, tx);
+                None
+            }
+        })
     }
 }
 

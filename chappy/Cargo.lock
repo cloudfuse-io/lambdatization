@@ -185,6 +185,7 @@ dependencies = [
  "futures",
  "lazy_static",
  "quinn",
+ "quinn-proto",
  "rand",
  "rcgen",
  "rustls",
@@ -218,6 +219,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-otlp",
  "tokio",
+ "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
 ]

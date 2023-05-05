@@ -1,5 +1,5 @@
 pub mod awaitable_map;
-mod tracing;
 pub mod test;
+mod tracing_helpers;
 
-pub use tracing::{close_tracing, init_tracing, init_tracing_shared_lib};
+pub use tracing_helpers::{close_tracing, init_tracing, init_tracing_shared_lib};
