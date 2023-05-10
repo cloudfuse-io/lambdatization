@@ -80,7 +80,11 @@ pub async fn connect_with_retry(
             quic_con = endpoint_res.unwrap();
             break;
         } else if start.elapsed() > Duration::from_millis(CHAPPY_CONF.connection_timeout_ms) {
-            error!("connection timeout elapsed");
+            error!(
+                "connection timeout elapsed: {:?}>{:?}",
+                start.elapsed(),
+                Duration::from_millis(CHAPPY_CONF.connection_timeout_ms)
+            );
             return None;
         } else {
             warn!("timeout, retrying...")

@@ -126,3 +126,13 @@ mod tests {
         task.await.unwrap();
     }
 }
+
+impl<K, V> Default for AwaitableMap<K, V>
+where
+    K: Eq + Hash,
+    V: Clone,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}

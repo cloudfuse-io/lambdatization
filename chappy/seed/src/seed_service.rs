@@ -68,7 +68,7 @@ impl Seed for SeedService {
         };
 
         // TODO adjust timout duration
-        let resolved_target = timeout(
+        let resolved_target_timeout = timeout(
             Duration::from_secs(10),
             self.registered_endpoints
                 .get(virtual_target_key, |prev_tgt| {
@@ -84,8 +84,15 @@ impl Seed for SeedService {
                     }
                 }),
         )
-        .await
-        .unwrap();
+        .await;
+
+        let resolved_target = if let Ok(target) = resolved_target_timeout {
+            target
+        } else {
+            let msg = "Target ip could not be resolved";
+            error!(msg);
+            return Err(Status::not_found(msg));
+        };
 
         debug!(tgt_nat=%resolved_target.natted_address);
         resolved_target
@@ -101,7 +108,7 @@ impl Seed for SeedService {
                 ip: resolved_target.natted_address.ip().to_string(),
                 port: resolved_target.natted_address.port().try_into().unwrap(),
             }),
-            server_certificate: resolved_target.server_certificate.clone(),
+            server_certificate: resolved_target.server_certificate,
         }))
     }
 
@@ -128,7 +135,7 @@ impl Seed for SeedService {
             server_certificate: req.get_ref().server_certificate.clone(),
         };
         let virtual_target_key = VirtualTarget {
-            ip: registered_ip.clone(),
+            ip: registered_ip,
             cluster_id: req.get_ref().cluster_id.clone(),
         };
 

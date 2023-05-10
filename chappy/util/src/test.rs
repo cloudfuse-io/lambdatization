@@ -11,6 +11,7 @@ pub async fn available_ports(number: usize) -> Vec<u16> {
 
     // Spawn as many servers as requested ports in parallel, to avoid that the
     // OS reassigns the same port multiple times.
+    #[allow(clippy::needless_collect)]
     let spawned_servers: Vec<(oneshot::Sender<()>, JoinHandle<()>)> = (0..number)
         .map(|_| {
             let tx = tx.clone();

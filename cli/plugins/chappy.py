@@ -127,7 +127,16 @@ def run_seed(c, release=False):
         f"docker run --rm --entrypoint cat {build_image} {output_dir}/{file} | \
             aws s3 cp - s3://{bucket_name}/{s3_key} --region {AWS_REGION()}"
     )
-    seed_exec(c, f"python3 dev-handler.py {bucket_name} {s3_key}", pty=False)
+    env_map = {
+        "RUST_LOG": "info,chappy_seed=debug,chappy=debug,rustls=error",
+        "RUST_BACKTRACE": "1",
+    }
+    # if "L12N_CHAPPY_OPENTELEMETRY_APIKEY" in conf(VALIDATORS):
+    #     env_map["CHAPPY_OPENTELEMETRY_APIKEY"] = conf(VALIDATORS)[
+    #         "L12N_CHAPPY_OPENTELEMETRY_APIKEY"
+    #     ]
+    env = " ".join([f"{k}={v}" for k, v in env_map.items()])
+    seed_exec(c, f"{env} python3 dev-handler.py {bucket_name} {s3_key}", pty=False)
 
 
 @task

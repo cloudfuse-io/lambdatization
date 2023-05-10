@@ -129,13 +129,7 @@ resource "aws_ecs_task_definition" "chappydev_seed" {
     "environment": [{
         "name": "PORT",
         "value": "${local.seed_port}"
-      },{
-        "name": "RUST_LOG",
-        "value": "debug,h2=error"
-      },{
-        "name": "RUST_BACKTRACE",
-        "vallue": "1"
-    }],
+      }],
     "entrypoint": ["sleep", "infinity"]
   }
 ]
