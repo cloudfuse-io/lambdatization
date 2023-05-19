@@ -42,10 +42,16 @@ def format_lambda_result(name, external_duration, lambda_res):
 
 
 def run_executor(
-    lambda_name: str, bucket_name: str, seed_ip: str, virtual_ip: str, scheduler_ip: str
+    lambda_name: str,
+    bucket_name: str,
+    seed_ip: str,
+    virtual_ip: str,
+    scheduler_ip: str,
+    nodes: int,
 ):
     start_time = time.time()
     env = {
+        "CHAPPY_CLUSTER_SIZE": nodes,
         "CHAPPY_SEED_HOSTNAME": seed_ip,
         "CHAPPY_SEED_PORT": 8000,
         "CHAPPY_VIRTUAL_IP": virtual_ip,
@@ -75,10 +81,16 @@ def run_executor(
 
 
 def run_scheduler(
-    lambda_name: str, bucket_name: str, seed_ip: str, virtual_ip: str, query: str
+    lambda_name: str,
+    bucket_name: str,
+    seed_ip: str,
+    virtual_ip: str,
+    query: str,
+    nodes: int,
 ):
     start_time = time.time()
     env = {
+        "CHAPPY_CLUSTER_SIZE": nodes,
         "CHAPPY_SEED_HOSTNAME": seed_ip,
         "CHAPPY_SEED_PORT": 8000,
         "CHAPPY_VIRTUAL_IP": virtual_ip,
@@ -123,7 +135,13 @@ LIMIT 10;"""
     lambda_name = terraform_output(c, "ballista", "distributed_lambda_name")
     with ThreadPoolExecutor() as ex:
         scheduler_fut = ex.submit(
-            run_scheduler, lambda_name, bucket_name, seed, "172.28.0.1", sql
+            run_scheduler,
+            lambda_name,
+            bucket_name,
+            seed,
+            "172.28.0.1",
+            sql,
+            executor_count + 1,
         )
         executor_futs = []
         for i in range(executor_count):
@@ -135,6 +153,7 @@ LIMIT 10;"""
                     seed,
                     f"172.28.0.{i+2}",
                     "172.28.0.1",
+                    executor_count + 1,
                 )
             )
 
