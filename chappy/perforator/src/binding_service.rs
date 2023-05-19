@@ -1,21 +1,39 @@
 use crate::CHAPPY_CONF;
+use chappy_seed::NodeBindingResponse;
 use chappy_seed::{
-    seed_client::SeedClient, ClientBindingRequest, ClientBindingResponse, ServerBindingRequest,
-    ServerPunchRequest,
+    seed_client::SeedClient, ClientBindingRequest, ClientBindingResponse, NodeBindingRequest,
+    ServerBindingRequest, ServerPunchRequest,
 };
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, ToSocketAddrs};
 use std::os::fd::AsRawFd;
 use std::time::Duration;
 use tokio::net::TcpSocket;
+use tokio::sync::mpsc;
 use tokio::sync::OnceCell;
+use tokio::task::JoinHandle;
 use tonic::transport::{Channel, Endpoint, Uri};
-use tonic::Streaming;
+use tonic::{Response, Status, Streaming};
 use tower::service_fn;
-use tracing::{debug, instrument};
+use tracing::{debug, error, instrument};
 
 pub struct BindingService {
     p2p_port: u16,
     client_cell: OnceCell<SeedClient<Channel>>,
+}
+
+pub struct NodeBindingHandle(
+    JoinHandle<Result<Response<NodeBindingResponse>, Status>>,
+    mpsc::Sender<NodeBindingRequest>,
+);
+
+impl NodeBindingHandle {
+    pub async fn close(self) {
+        let NodeBindingHandle(handle, _) = self;
+        match handle.await {
+            Ok(Ok(resp)) => debug!("{:?}", resp.get_ref()),
+            err => error!("{:?}", err),
+        }
+    }
 }
 
 impl BindingService {
@@ -68,12 +86,32 @@ impl BindingService {
             .clone()
     }
 
+    pub async fn bind_node(&self) -> NodeBindingHandle {
+        debug!("call seed to bind node");
+        let (tx, rx) = mpsc::channel::<NodeBindingRequest>(1);
+
+        let mut client = self.client().await;
+        let handle = tokio::spawn(async move {
+            client
+                .bind_node(tokio_stream::wrappers::ReceiverStream::new(rx))
+                .await
+        });
+        tx.send(NodeBindingRequest {
+            cluster_id: CHAPPY_CONF.cluster_id.clone(),
+            source_virtual_ip: CHAPPY_CONF.virtual_ip.clone(),
+            cluster_size: CHAPPY_CONF.cluster_size,
+        })
+        .await
+        .unwrap();
+        NodeBindingHandle(handle, tx)
+    }
+
     pub async fn bind_client(&self, target_virtual_ip: String) -> ClientBindingResponse {
         debug!("call seed to bind client");
         self.client()
             .await
             .bind_client(ClientBindingRequest {
-                cluster_id: String::from("test"),
+                cluster_id: CHAPPY_CONF.cluster_id.clone(),
                 source_virtual_ip: CHAPPY_CONF.virtual_ip.clone(),
                 target_virtual_ip,
             })
@@ -87,7 +125,7 @@ impl BindingService {
         self.client()
             .await
             .bind_server(ServerBindingRequest {
-                cluster_id: String::from("test"),
+                cluster_id: CHAPPY_CONF.cluster_id.clone(),
                 virtual_ip: CHAPPY_CONF.virtual_ip.clone(),
                 server_certificate,
             })

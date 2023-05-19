@@ -1,9 +1,9 @@
 use crate::{
-    binding_service::BindingService, forwarder::Forwarder, protocol::ParsedTcpStream,
-    shutdown::Shutdown, shutdown::ShutdownGuard,
+    binding_service::BindingService, forwarder::Forwarder, shutdown::Shutdown,
+    shutdown::ShutdownGuard,
 };
 use chappy_seed::Address;
-use chappy_util::awaitable_map::AwaitableMap;
+use chappy_util::{awaitable_map::AwaitableMap, protocol::ParsedTcpStream};
 
 use futures::StreamExt;
 use std::net::{Ipv4Addr, SocketAddr};

@@ -5,10 +5,9 @@ edition = "2021"
 
 [lib]
 name = "chappy"
-crate-type = ["cdylib"] 
+crate-type = ["cdylib"]
 
 [dependencies]
-chappy-perforator = { path = "../perforator" }
 chappy-util = { path = "../util" }
 futures = { workspace = true }
 ipnet = { workspace = true }

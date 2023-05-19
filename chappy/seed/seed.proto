@@ -28,7 +28,16 @@ message ServerPunchRequest {
     Address client_nated_addr = 2;
 }
 
+message NodeBindingRequest {
+    string cluster_id = 1;
+    uint32 cluster_size = 2;
+    string source_virtual_ip = 3;
+}
+
+message NodeBindingResponse {}
+
 service Seed {
     rpc BindClient(ClientBindingRequest) returns (ClientBindingResponse) {}
     rpc BindServer(ServerBindingRequest) returns (stream ServerPunchRequest) {}
+    rpc BindNode(stream NodeBindingRequest) returns (NodeBindingResponse) {}
 }

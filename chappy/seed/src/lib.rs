@@ -3,4 +3,5 @@ mod seed {
 }
 
 pub use seed::*;
+mod cluster_manager;
 pub mod seed_service;

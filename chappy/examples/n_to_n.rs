@@ -63,6 +63,11 @@ fn main() {
     let BATCH_SIZE: usize = env::var("BATCH_SIZE").unwrap().parse().unwrap();
     let BYTES_SENT: usize = env::var("BYTES_SENT").unwrap().parse().unwrap();
     let NB_BATCH: usize = BYTES_SENT / BATCH_SIZE;
+    info!("Running {} in cluster [{}]", virtual_ip, cluster_ips);
+    info!(
+        "Exchanging {} bytes in {} batches of size {} with each node",
+        BYTES_SENT, NB_BATCH, BATCH_SIZE
+    );
 
     thread::spawn(move || start_server(&virtual_ip));
     thread::sleep(Duration::from_millis(100));

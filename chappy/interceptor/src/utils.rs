@@ -1,9 +1,10 @@
 use crate::{conf, RUNTIME};
 use nix::libc::{c_int, sockaddr, socklen_t};
 use nix::sys::socket::{self, SockaddrIn, SockaddrLike, SockaddrStorage};
+use std::io::Result as IoResult;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::str::FromStr;
-use tracing::debug;
+use tracing::{debug, error};
 
 const PERFORATOR_ADDRESS: &str = "127.0.0.1:5000";
 
@@ -20,41 +21,59 @@ fn bind_random_port(sockfd: c_int) -> u16 {
     bound_socket.port()
 }
 
-pub(crate) fn request_punch(sockfd: c_int, addr_in: SockaddrIn) -> SockaddrIn {
+pub(crate) fn request_punch(sockfd: c_int, addr_in: SockaddrIn) -> IoResult<SockaddrIn> {
     let src_port = bind_random_port(sockfd);
 
     // TODO: blocking here is not ideal because it makes the connect blocking
     // event if it wasn't supposed to be. But if made none-blocking by spawning a task,
     // we have to make sure that the task is brought to completion.
     RUNTIME.block_on(async move {
-        chappy_perforator::protocol::register_client(
+        let res = chappy_util::protocol::register_client(
             PERFORATOR_ADDRESS,
             src_port,
             addr_in.ip().into(),
             addr_in.port(),
         )
         .await;
-        debug!(
-            "Perforator call for registering client port {} (socket {}) to address {}:{} completed",
-            src_port,
-            sockfd,
-            Ipv4Addr::from(addr_in.ip()),
-            addr_in.port(),
-        )
-    });
-    SockaddrIn::from_str(PERFORATOR_ADDRESS).unwrap()
+        match &res {
+            Ok(()) => debug!(
+                "Perforator call for registering client port {} (socket {}) to address {}:{} completed",
+                src_port,
+                sockfd,
+                Ipv4Addr::from(addr_in.ip()),
+                addr_in.port(),
+            ),
+            Err(err) => error!(
+                "Perforator call for registering client port {} (socket {}) to address {}:{} failed: {}",
+                src_port,
+                sockfd,
+                Ipv4Addr::from(addr_in.ip()),
+                addr_in.port(),
+                err,
+            )
+        };
+        res
+    })?;
+    Ok(SockaddrIn::from_str(PERFORATOR_ADDRESS).unwrap())
 }
 
-pub(crate) fn register(addr_in: SockaddrIn) -> SockaddrIn {
+pub(crate) fn register(addr_in: SockaddrIn) -> IoResult<SockaddrIn> {
     let registered_port = addr_in.port();
     RUNTIME.block_on(async move {
-        chappy_perforator::protocol::register_server(PERFORATOR_ADDRESS).await;
-        debug!(
-            "Perforator call for registering server (port {}) completed",
-            registered_port,
-        )
-    });
-    SockaddrIn::new(127, 0, 0, 1, registered_port)
+        let res = chappy_util::protocol::register_server(PERFORATOR_ADDRESS).await;
+        match &res {
+            Ok(()) => debug!(
+                "Perforator call for registering server (port {}) completed",
+                registered_port,
+            ),
+            Err(err) => error!(
+                "Perforator call for registering server (port {}) failed: {}",
+                registered_port, err
+            ),
+        };
+        res
+    })?;
+    Ok(SockaddrIn::new(127, 0, 0, 1, registered_port))
 }
 
 pub(crate) enum ParsedAddress {

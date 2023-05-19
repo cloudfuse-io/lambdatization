@@ -8,7 +8,7 @@ use crate::{
 };
 use chappy_util::init_tracing_shared_lib;
 use nix::{
-    libc::{__errno_location, c_int, sockaddr, socklen_t, EADDRNOTAVAIL},
+    libc::{__errno_location, c_int, sockaddr, socklen_t, EADDRNOTAVAIL, ECONNREFUSED},
     sys::socket::{SockaddrIn, SockaddrLike},
 };
 use std::ptr;
@@ -30,9 +30,13 @@ pub unsafe extern "C" fn connect(sockfd: c_int, addr: *const sockaddr, len: sock
     let libc_connect: ConnectSymbol = LIBC_LOADED.get(b"connect").unwrap();
     let code = match parse_virtual(addr, len) {
         RemoteVirtual(addr_in) => {
-            let new_addr = request_punch(sockfd, addr_in);
-            debug_fmt::dst_rewrite("connect", sockfd, &new_addr, &addr_in);
-            libc_connect(sockfd, ptr::addr_of!(new_addr).cast(), new_addr.len())
+            if let Ok(new_addr) = request_punch(sockfd, addr_in) {
+                debug_fmt::dst_rewrite("connect", sockfd, &new_addr, &addr_in);
+                libc_connect(sockfd, ptr::addr_of!(new_addr).cast(), new_addr.len())
+            } else {
+                *__errno_location() = ECONNREFUSED;
+                -1
+            }
         }
         LocalVirtual(addr_in) => {
             let local = SockaddrIn::new(127, 0, 0, 1, addr_in.port());
@@ -62,9 +66,13 @@ pub unsafe extern "C" fn bind(sockfd: c_int, addr: *const sockaddr, len: socklen
     let libc_bind: BindSymbol = LIBC_LOADED.get(b"bind").unwrap();
     let code = match parse_virtual(addr, len) {
         LocalVirtual(addr_in) => {
-            let new_addr = register(addr_in);
-            debug_fmt::dst_rewrite("bind", sockfd, &new_addr, &addr_in);
-            libc_bind(sockfd, ptr::addr_of!(new_addr).cast(), new_addr.len())
+            if let Ok(new_addr) = register(addr_in) {
+                debug_fmt::dst_rewrite("bind", sockfd, &new_addr, &addr_in);
+                libc_bind(sockfd, ptr::addr_of!(new_addr).cast(), new_addr.len())
+            } else {
+                *__errno_location() = EADDRNOTAVAIL;
+                -1
+            }
         }
         RemoteVirtual(_) => {
             error!("Binding to remote virtual address");
