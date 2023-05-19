@@ -1,15 +1,17 @@
 use crate::{
     binding_service::BindingService, forwarder::Forwarder, protocol::ParsedTcpStream,
-    shutdown::Shutdown, shutdown::ShutdownGuard, udp_utils,
+    shutdown::Shutdown, shutdown::ShutdownGuard,
 };
 use chappy_seed::Address;
+use chappy_util::awaitable_map::AwaitableMap;
 
 use futures::StreamExt;
-use std::collections::HashMap;
-use std::net::Ipv4Addr;
-use std::sync::{Arc, Mutex};
+use std::net::{Ipv4Addr, SocketAddr};
+use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::{TcpListener, TcpStream};
+use tokio::time::timeout;
 use tracing::{debug, debug_span, instrument, warn, Instrument};
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -26,10 +28,10 @@ struct TargetResolvedAddress {
 }
 
 /// Map source ports to target virtual addresses
-type PortMappings = Arc<Mutex<HashMap<u16, TargetVirtualAddress>>>;
+type PortMappings = Arc<AwaitableMap<u16, TargetVirtualAddress>>;
 
 /// Map virtual addresses to resolved ones
-type AddressMappings = Arc<Mutex<HashMap<TargetVirtualAddress, TargetResolvedAddress>>>;
+type AddressMappings = Arc<AwaitableMap<TargetVirtualAddress, TargetResolvedAddress>>;
 
 #[derive(Clone)]
 pub struct Perforator {
@@ -47,8 +49,8 @@ impl Perforator {
         tcp_port: u16,
     ) -> Self {
         Self {
-            port_mappings: Arc::new(Mutex::new(HashMap::new())),
-            address_mappings: Arc::new(Mutex::new(HashMap::new())),
+            port_mappings: Arc::new(AwaitableMap::new()),
+            address_mappings: Arc::new(AwaitableMap::new()),
             binding_service,
             forwarder,
             tcp_port,
@@ -62,15 +64,7 @@ impl Perforator {
             ip: tgt_virt,
             port: tgt_port,
         };
-        {
-            let mut guard = self.port_mappings.lock().unwrap();
-            let already_registered = guard.values().any(|val| *val == virtual_addr);
-            guard.insert(src_port, virtual_addr.clone());
-            if already_registered {
-                debug!("target virtual IP already registered");
-                return;
-            }
-        }
+        self.port_mappings.insert(src_port, virtual_addr.clone());
         // if the client being registered is the first to use this target
         // virtual IP, emit a binding request to the Seed
         let address_mappings = Arc::clone(&self.address_mappings);
@@ -78,7 +72,7 @@ impl Perforator {
         tokio::spawn(
             async move {
                 let punch_resp = binding_service.bind_client(tgt_virt.to_string()).await;
-                address_mappings.lock().unwrap().insert(
+                address_mappings.insert(
                     virtual_addr,
                     TargetResolvedAddress {
                         natted_address: punch_resp.target_nated_addr.unwrap(),
@@ -97,39 +91,35 @@ impl Perforator {
     #[instrument(name = "fwd_conn", skip_all)]
     async fn forward_conn(&self, stream: TcpStream, shdn: ShutdownGuard) {
         debug!("starting...");
+        // TODO adjust timout duration
         let src_port = stream.peer_addr().unwrap().port();
-        let target_virtual_address = self
-            .port_mappings
-            .lock()
-            .unwrap()
-            .get(&src_port)
-            .unwrap_or_else(|| panic!("Source port {} was not registered", src_port))
-            .clone();
-        let target_address: TargetResolvedAddress;
-        loop {
-            // TODO: add timeout and replace polling with notification mechanism
-            if let Some(addr) = self
-                .address_mappings
-                .lock()
-                .unwrap()
-                .get(&target_virtual_address)
-            {
-                target_address = addr.clone();
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        }
+        let target_virtual_address = timeout(
+            Duration::from_secs(1),
+            self.port_mappings.get(src_port, |_| false),
+        )
+        .await
+        .unwrap();
+        // TODO adjust timout duration
+        let target_address = timeout(
+            Duration::from_secs(3),
+            self.address_mappings.get(target_virtual_address, |_| false),
+        )
+        .await
+        .unwrap();
+        let target_nated_addr: SocketAddr = format!(
+            "{}:{}",
+            target_address.natted_address.ip, target_address.natted_address.port
+        )
+        .parse()
+        .unwrap();
         debug!(
-            tgt_nat = format!(
-                "{}:{}",
-                target_address.natted_address.ip, target_address.natted_address.port
-            ),
+            tgt_nat = %target_nated_addr,
             tgt_port = target_address.tgt_port,
             "target addr resolved"
         );
         let fwd_fut = self.forwarder.forward(
             stream,
-            target_address.natted_address,
+            target_nated_addr,
             target_address.tgt_port,
             target_address.certificate_der,
         );
@@ -142,9 +132,9 @@ impl Perforator {
     #[instrument(name = "reg_srv", skip_all)]
     fn register_server(&self, mut shdn: ShutdownGuard) {
         debug!("starting...");
-        let p2p_port = self.forwarder.port();
         let server_certificate = self.forwarder.server_certificate().to_owned();
         let binding_service = Arc::clone(&self.binding_service);
+        let fwd_ref = Arc::clone(&self.forwarder);
         tokio::spawn(
             async move {
                 let stream = binding_service.bind_server(server_certificate).await;
@@ -156,12 +146,8 @@ impl Perforator {
                         let client_natted_addr = punch_req.unwrap().client_nated_addr.unwrap();
                         let client_natted_str =
                             format!("{}:{}", client_natted_addr.ip, client_natted_addr.port);
-                        udp_utils::send_from_reusable_port(
-                            p2p_port,
-                            &[1, 2, 3, 4],
-                            client_natted_str.clone(),
-                        )
-                        .instrument(debug_span!("punch hole", tgt_nat = client_natted_str))
+                        let target_addr = SocketAddr::from_str(&client_natted_str).unwrap();
+                        fwd_ref.punch_hole(target_addr)
                     })
                     .buffer_unordered(usize::MAX)
                     .take_until(shdn.wait_shutdown())

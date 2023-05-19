@@ -9,6 +9,8 @@ chappy-util = { path = "../util" }
 futures = { workspace = true }
 lazy_static = { workspace = true }
 quinn = { workspace = true }
+quinn-proto = { workspace = true }
+rand = { workspace = true }
 rcgen = { workspace = true }
 rustls = { workspace = true, features = ["quic"] }
 socket2 = { workspace = true, features = ["all"] }

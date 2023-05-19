@@ -250,6 +250,25 @@ class AsyncAWS:
                 await resp.read()
             return resp
 
+    async def invoke_lambda(self, lambda_name: str, version: str, data: bytes) -> dict:
+        """Invoke a Lambda asynchronously and return the parsed (json) payload"""
+        resp = await self.aws_request(
+            method="POST",
+            path=f"/2015-03-31/functions/{lambda_name}/invocations?Qualifier={version}",
+            data=data,
+            headers={
+                "X-Amz-Invocation-Type": "RequestResponse",
+                "X-Amz-Log-Type": "None",
+            },
+        )
+        body = await resp.text()
+        if resp.status != 200:
+            raise Exception(f"Lambda Invoke failed with status {resp.status}: {body}")
+        res = json.loads(body)
+        if "errorMessage" in res:
+            raise Exception(res["errorMessage"])
+        return res
+
 
 def wait_deployment(lambda_name):
     """Wait for a the function to be successfully deployed"""

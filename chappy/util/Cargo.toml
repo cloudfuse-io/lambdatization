@@ -5,7 +5,9 @@ edition = "2021"
 
 [dependencies]
 chrono = { workspace = true }
-opentelemetry = { workspace = true, features = ["rt-tokio-current-thread"]}
+opentelemetry = { workspace = true, features = ["rt-tokio-current-thread"] }
 opentelemetry-otlp = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
 tracing-opentelemetry = { workspace = true }
 tracing-subscriber = { workspace = true }

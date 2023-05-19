@@ -2,14 +2,15 @@ use crate::{
     seed_server::Seed, Address, ClientBindingRequest, ClientBindingResponse, ServerBindingRequest,
     ServerPunchRequest,
 };
+use chappy_util::awaitable_map::AwaitableMap;
 use futures::stream::{Stream, StreamExt};
-use std::{collections::HashMap, net::SocketAddr, pin::Pin, sync::Arc, time::Duration};
-use tokio::sync::{mpsc, Mutex};
+use std::{net::SocketAddr, pin::Pin, sync::Arc, time::Duration};
+use tokio::{sync::mpsc, time::timeout};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::{Request, Response, Result, Status};
-use tracing::{debug, info, instrument};
+use tracing::{debug, error, info, instrument};
 
-#[derive(PartialEq, Eq, Hash, Debug)]
+#[derive(PartialEq, Eq, Hash, Clone)]
 struct VirtualTarget {
     cluster_id: String,
     ip: String,
@@ -23,7 +24,7 @@ struct ResolvedTarget {
 }
 
 /// Map virtual addresses to the NATed endpoint and punch request stream
-type RegisteredEndpoints = Arc<Mutex<HashMap<VirtualTarget, ResolvedTarget>>>;
+type RegisteredEndpoints = Arc<AwaitableMap<VirtualTarget, ResolvedTarget>>;
 
 pub struct SeedService {
     registered_endpoints: RegisteredEndpoints,
@@ -33,7 +34,7 @@ pub struct SeedService {
 impl SeedService {
     pub fn new() -> Self {
         Self {
-            registered_endpoints: Arc::new(Mutex::new(HashMap::new())),
+            registered_endpoints: Arc::new(AwaitableMap::new()),
         }
     }
 }
@@ -59,27 +60,40 @@ impl Seed for SeedService {
     ) -> Result<Response<ClientBindingResponse>, Status> {
         debug!("new request");
         let tgt_ip = &req.get_ref().target_virtual_ip;
-        let src_nated_addr = req.remote_addr().unwrap().to_string();
-        let src_nated_addr: SocketAddr = src_nated_addr.parse().unwrap();
-        let resolved_target;
-        loop {
-            // TODO: add timeout and replace polling with notification mechanism
-            let mut guard = self.registered_endpoints.lock().await;
-            let key = VirtualTarget {
-                ip: tgt_ip.clone(),
-                cluster_id: req.get_ref().cluster_id.clone(),
-            };
-            if let Some(dst) = guard.get(&key) {
-                if dst.punch_req_stream.is_closed() {
-                    info!("Cleanup closed target {:?}", key);
-                    guard.remove(&key);
-                } else {
-                    resolved_target = dst.clone();
-                    break;
-                }
-            }
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
+        let src_nated_addr = req.remote_addr().unwrap();
+
+        let virtual_target_key = VirtualTarget {
+            ip: tgt_ip.clone(),
+            cluster_id: req.get_ref().cluster_id.clone(),
+        };
+
+        // TODO adjust timout duration
+        let resolved_target_timeout = timeout(
+            Duration::from_secs(10),
+            self.registered_endpoints
+                .get(virtual_target_key, |prev_tgt| {
+                    if prev_tgt.punch_req_stream.is_closed() {
+                        info!(
+                            ip = tgt_ip,
+                            cluster = req.get_ref().cluster_id,
+                            "replace closed target"
+                        );
+                        true
+                    } else {
+                        false
+                    }
+                }),
+        )
+        .await;
+
+        let resolved_target = if let Ok(target) = resolved_target_timeout {
+            target
+        } else {
+            let msg = "Target ip could not be resolved";
+            error!(msg);
+            return Err(Status::not_found(msg));
+        };
+
         debug!(tgt_nat=%resolved_target.natted_address);
         resolved_target
             .punch_req_stream
@@ -120,14 +134,31 @@ impl Seed for SeedService {
             punch_req_stream: req_tx,
             server_certificate: req.get_ref().server_certificate.clone(),
         };
+        let virtual_target_key = VirtualTarget {
+            ip: registered_ip,
+            cluster_id: req.get_ref().cluster_id.clone(),
+        };
 
-        self.registered_endpoints.lock().await.insert(
-            VirtualTarget {
-                ip: registered_ip.clone(),
-                cluster_id: req.get_ref().cluster_id.clone(),
-            },
-            resolved_target,
-        );
+        // replace the new target in the registered endpoint map
+        if let Some(prev_tgt) = self
+            .registered_endpoints
+            .insert(virtual_target_key.clone(), resolved_target)
+        {
+            if prev_tgt.punch_req_stream.is_closed() {
+                info!(
+                    ip = virtual_target_key.ip,
+                    cluster = virtual_target_key.cluster_id,
+                    "replaced closed target"
+                );
+            } else {
+                error!(
+                    ip = virtual_target_key.ip,
+                    cluster = virtual_target_key.cluster_id,
+                    "replaced unclosed target"
+                );
+            }
+        }
+
         let span = tracing::Span::current();
         let stream = UnboundedReceiverStream::new(req_rx).map(move |addr| {
             debug!(parent: &span, tgt_nat=%format!("{}:{}", addr.ip, addr.port), "forwarding punch request");

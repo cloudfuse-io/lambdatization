@@ -127,7 +127,16 @@ def run_seed(c, release=False):
         f"docker run --rm --entrypoint cat {build_image} {output_dir}/{file} | \
             aws s3 cp - s3://{bucket_name}/{s3_key} --region {AWS_REGION()}"
     )
-    seed_exec(c, f"python3 dev-handler.py {bucket_name} {s3_key}", pty=False)
+    env_map = {
+        "RUST_LOG": "info,chappy_seed=debug,chappy=debug,rustls=error",
+        "RUST_BACKTRACE": "1",
+    }
+    # if "L12N_CHAPPY_OPENTELEMETRY_APIKEY" in conf(VALIDATORS):
+    #     env_map["CHAPPY_OPENTELEMETRY_APIKEY"] = conf(VALIDATORS)[
+    #         "L12N_CHAPPY_OPENTELEMETRY_APIKEY"
+    #     ]
+    env = " ".join([f"{k}={v}" for k, v in env_map.items()])
+    seed_exec(c, f"{env} python3 dev-handler.py {bucket_name} {s3_key}", pty=False)
 
 
 @task
@@ -227,7 +236,7 @@ def run_lambda_pair(c, seed=None, release=False, client="example-client"):
             "CHAPPY_SEED_HOSTNAME": seed,
             "CHAPPY_SEED_PORT": 8000,
             "CHAPPY_VIRTUAL_SUBNET": "172.28.0.0/16",
-            "RUST_LOG": "info,chappy_perforator=debug,chappy=debug",
+            "RUST_LOG": "info,chappy_perforator=debug,chappy=debug,rustls=error",
             "RUST_BACKTRACE": "1",
         }
 
@@ -296,7 +305,7 @@ def run_lambda_cluster(c, seed=None, release=False, binary="example-n-to-n", nod
     if seed is None:
         seed = seed_ip(c)
 
-    with ThreadPoolExecutor() as executor:
+    with ThreadPoolExecutor(max_workers=max(4, nodes)) as executor:
         redeploy_fut = executor.submit(redeploy, lambda_name)
         build_image, output_dir = build_chappy(c, release)
         upload = lambda file: c.run(
@@ -319,7 +328,7 @@ def run_lambda_cluster(c, seed=None, release=False, binary="example-n-to-n", nod
             "CLUSTER_IPS": ",".join([f"172.28.0.{i+1}" for i in range(nodes)]),
             "BATCH_SIZE": 32,
             "BYTES_SENT": 128,
-            "RUST_LOG": "info,chappy_perforator=debug,chappy=debug",
+            "RUST_LOG": "info,chappy_perforator=debug,chappy=debug,rustls=error",
             "RUST_BACKTRACE": "1",
         }
         if "L12N_CHAPPY_OPENTELEMETRY_APIKEY" in conf(VALIDATORS):
@@ -333,7 +342,7 @@ def run_lambda_cluster(c, seed=None, release=False, binary="example-n-to-n", nod
                 lambda_name,
                 bucket_name,
                 lambda_version,
-                20,
+                40,
                 to_s3_key(output_dir, binary),
                 to_s3_key(output_dir, "chappy-perforator"),
                 to_s3_key(output_dir, "libchappy.so"),

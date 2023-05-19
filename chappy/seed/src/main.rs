@@ -6,7 +6,7 @@ use tracing::debug;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    init_tracing("chappy_seed");
+    init_tracing("seed");
     let port = env::var("PORT").unwrap();
     debug!("Starting seed on port {}...", port);
     let service = SeedService::new();

@@ -16,6 +16,8 @@ opentelemetry-otlp = { version = "0.11.0", features = [
 ] }
 prost = "0.11.7"
 quinn = "0.9.3"
+quinn-proto = "0.9.3"
+rand = "0.8.5"
 rcgen = "0.10.0"
 rustls = "0.20.8"
 socket2 = "0.5.1"

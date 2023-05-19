@@ -1,13 +1,12 @@
-use crate::{quic_utils, shutdown::Shutdown, CHAPPY_CONF};
-use chappy_seed::Address;
-use quinn::{Connection, Endpoint};
-use std::net::{Ipv4Addr, SocketAddrV4};
-use std::time::{Duration, Instant};
+use crate::{quic_utils, shutdown::Shutdown, PUNCH_SERVER_NAME, SERVER_NAME};
+use quinn::{Connection, ConnectionError, Endpoint};
+use quinn_proto::{TransportError, TransportErrorCode};
+use rustls::AlertDescription::BadCertificate;
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tracing::{debug, debug_span, error, info, instrument, warn, Instrument};
-
-const SERVER_NAME: &str = "chappy";
 
 /// A service relays TCP streams through a QUIC tunnel
 ///
@@ -42,11 +41,11 @@ where
         let read_res = reader.read(&mut buf).await;
         match read_res {
             Ok(0) => {
-                match writer.shutdown().await {
-                    Ok(()) => debug!(bytes_read, nb_read, "completed"),
-                    Err(err) => {
-                        warn!(bytes_read, nb_read, %err, "completed but writer shutdown failed");
-                    }
+                debug!(bytes_read, nb_read, "completed");
+                if let Err(err) = writer.shutdown().await {
+                    warn!(%err, "writer shutdown failed");
+                } else {
+                    debug!("writer shut down");
                 }
                 break Ok(());
             }
@@ -71,7 +70,9 @@ where
             Err(err) => {
                 error!(%err, "read failure");
                 if let Err(err) = writer.shutdown().await {
-                    warn!(%err, "writer shutdown failed also failed");
+                    warn!(%err, "writer shutdown also failed");
+                } else {
+                    debug!("writer shut down");
                 }
                 break Err(err);
             }
@@ -122,7 +123,7 @@ impl Forwarder {
     ///
     /// Panic if receives a second bi on the connection
     async fn handle_srv_conn(conn: Connection) {
-        let (quic_send, mut quic_recv) = match conn.accept_bi().await {
+        let (mut quic_send, mut quic_recv) = match conn.accept_bi().await {
             Ok(streams) => {
                 debug!("new bi accepted");
                 streams
@@ -135,8 +136,15 @@ impl Forwarder {
         let target_port = quic_recv.read_u16().await.unwrap();
 
         // forwarding connection
-        let localhost_url = format!("localhost:{}", target_port);
-        let fwd_stream = TcpStream::connect(localhost_url).await.unwrap();
+        let fwd_stream = match TcpStream::connect((Ipv4Addr::LOCALHOST, target_port)).await {
+            Ok(stream) => stream,
+            Err(err) => {
+                error!(err=%err, "connection to target failed");
+                // TODO encode different kinds of failure into QUIC reset code?
+                quic_send.reset(1u8.into()).unwrap();
+                return;
+            }
+        };
 
         // pipe holepunch connection to forwarding connection
         let (fwd_read, fwd_write) = fwd_stream.into_split();
@@ -190,42 +198,30 @@ impl Forwarder {
         name = "cli_quic_conn",
         skip_all,
         fields(
-            tgt_nat = %format!("{}:{}", nated_addr.ip, nated_addr.port),
+            tgt_nat = %nated_addr,
             tgt_port = target_port
         )
     )]
     pub async fn forward(
         &self,
         tcp_stream: TcpStream,
-        nated_addr: Address,
+        nated_addr: SocketAddr,
         target_port: u16,
         target_server_certificate_der: Vec<u8>,
     ) {
-        let cli_conf = quic_utils::configure_client(target_server_certificate_der);
-        let start = Instant::now();
-        let quic_con;
-        // TODO: investigate whether this retry is necessary or whether
-        // QUIC/Quinn is handling retries itnernally
-        loop {
-            let remote_addr = format!("{}:{}", nated_addr.ip, nated_addr.port)
-                .parse()
-                .unwrap();
-            let endpoint_fut = self
-                .quic_endpoint
-                .connect_with(cli_conf.clone(), remote_addr, SERVER_NAME)
-                .unwrap();
-            let timed_endpoint_fut = tokio::time::timeout(Duration::from_millis(200), endpoint_fut);
-            if let Ok(endpoint_res) = timed_endpoint_fut.await {
-                quic_con = endpoint_res.unwrap();
-                break;
-            } else if start.elapsed() > Duration::from_millis(CHAPPY_CONF.connection_timeout_ms) {
-                error!("timeout elapsed, dropping src stream");
-                return;
-            } else {
-                warn!("timeout, retrying...")
-            }
+        let conn_result = quic_utils::connect_with_retry(
+            &self.quic_endpoint,
+            nated_addr,
+            target_server_certificate_der,
+        )
+        .await;
+        if conn_result.is_none() {
+            error!("Dropping upstream connection");
+            tcp_stream.set_linger(None).unwrap();
+            return;
         }
-        let (mut quic_send, quic_recv) = quic_con.open_bi().await.unwrap();
+        let quic_conn = conn_result.unwrap();
+        let (mut quic_send, quic_recv) = quic_conn.open_bi().await.unwrap();
         debug!("new bi opened");
         let (tcp_read, tcp_write) = tcp_stream.into_split();
         quic_send.write_u16(target_port).await.unwrap();
@@ -243,5 +239,205 @@ impl Forwarder {
 
     pub fn server_certificate(&self) -> &[u8] {
         &self.server_certificate_der
+    }
+
+    #[instrument(skip(self))]
+    pub async fn punch_hole(&self, addr: SocketAddr) {
+        let connecting = self
+            .quic_endpoint
+            .connect_with(
+                quic_utils::configure_punch_client(),
+                addr,
+                PUNCH_SERVER_NAME,
+            )
+            .unwrap();
+        // we expect the connection establishment mechanism to handle retries
+        // until the hole is actually punched
+        match connecting.await {
+            Ok(_) => warn!("Connection unexpectedly successful"),
+            Err(ConnectionError::TransportError(TransportError { code: c, .. }))
+                if c == TransportErrorCode::crypto(BadCertificate.get_u8()) =>
+            {
+                debug!("Got expected bad certificate error")
+            }
+            Err(e) => warn!("Unexpected error {:?}", e),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chappy_util::test;
+    use futures::StreamExt;
+    use rand::seq::SliceRandom;
+    use std::sync::Arc;
+    use tokio::net::TcpListener;
+    use tokio::task::JoinHandle;
+
+    /// Create a TCP server on the specified port and connect to it, then
+    /// forward the server side stream using the provided forwarder and target
+    /// port
+    async fn proxied_connect(
+        port: u16,
+        fwd: &Arc<Forwarder>,
+        target_port: u16,
+    ) -> (TcpStream, JoinHandle<()>) {
+        let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
+        let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+
+        let accept_handle = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            (stream, listener)
+        });
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        let cli_stream = TcpStream::connect(addr).await.unwrap();
+        let (proxied_stream, listener) = accept_handle.await.unwrap();
+
+        let fwd = Arc::clone(fwd);
+        let fwd_handle = tokio::spawn(async move {
+            fwd.forward(
+                proxied_stream,
+                SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, fwd.port().into())),
+                target_port,
+                fwd.server_certificate().to_owned(),
+            )
+            .await;
+            debug!("dropping moved listener {}", listener.local_addr().unwrap());
+        });
+        (cli_stream, fwd_handle)
+    }
+
+    /// Start a TCP echo server that serves only one request then stops
+    async fn echo_server(port: u16) {
+        let listener = TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port))
+            .await
+            .unwrap();
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let (mut r, mut w) = socket.split();
+        tokio::io::copy(&mut r, &mut w).await.unwrap();
+        w.flush().await.unwrap();
+    }
+
+    async fn create_and_start_forwarder(port: u16) -> (Arc<Forwarder>, JoinHandle<()>) {
+        let fwd = Arc::new(Forwarder::new(port));
+
+        let srv_handle = {
+            let fwd = Arc::clone(&fwd);
+            tokio::spawn(async move {
+                fwd.run_quic_server(&Shutdown::new()).await;
+            })
+        };
+        (fwd, srv_handle)
+    }
+
+    /// Assert that the bytes written to the stream are echoed back
+    async fn assert_echo(stream: &mut TcpStream, length: usize) {
+        let bytes = &(0..length).map(|v| (v % 255) as u8).collect::<Vec<u8>>();
+        let mut read_buf = vec![0; length];
+        stream.write_all(bytes).await.unwrap();
+        stream.read_exact(&mut read_buf).await.unwrap();
+        assert_eq!(bytes, read_buf.as_slice());
+    }
+
+    #[tokio::test]
+    async fn test_single_target() {
+        let avail_ports = test::available_ports(3).await;
+        let echo_srv_port = avail_ports[0];
+        let fwd_quic_port = avail_ports[1];
+        let cli_proxy_port = avail_ports[2];
+        let echo_srv_handle = tokio::spawn(echo_server(echo_srv_port));
+        let (fwd, fwd_srv_handle) = create_and_start_forwarder(fwd_quic_port).await;
+        let (mut cli_stream, fwd_handle) =
+            proxied_connect(cli_proxy_port, &fwd, echo_srv_port).await;
+
+        // Try big and small writes to check whether bytes are properly flushed
+        // through the proxies
+        assert_echo(&mut cli_stream, 4).await;
+        assert_echo(&mut cli_stream, 10000).await;
+        assert_echo(&mut cli_stream, 4).await;
+
+        // cleanup
+        echo_srv_handle.abort();
+        fwd_srv_handle.abort();
+        fwd_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn test_multiple_targets() {
+        chappy_util::init_tracing("test");
+        let nb_target = 20;
+        let avail_ports = test::available_ports(2 * nb_target + 1).await;
+        let echo_srv_ports = &avail_ports[0..nb_target];
+        let cli_proxy_ports = &avail_ports[nb_target..2 * nb_target];
+        let fwd_quic_port = avail_ports[2 * nb_target];
+        let (fwd, fwd_srv_handle) = create_and_start_forwarder(fwd_quic_port).await;
+
+        let mut cli_streams = futures::stream::iter(0..nb_target)
+            .then(|t| {
+                let echo_srv_port = echo_srv_ports[t];
+                let cli_proxy_port = cli_proxy_ports[t];
+                let fwd = Arc::clone(&fwd);
+                async move {
+                    let echo_srv_handle = tokio::spawn(echo_server(echo_srv_port));
+                    let (cli_stream, fwd_handle) =
+                        proxied_connect(cli_proxy_port, &fwd, echo_srv_port).await;
+                    (cli_stream, echo_srv_handle, fwd_handle)
+                }
+            })
+            .collect::<Vec<_>>()
+            .await;
+
+        // Mix writes of different sizes to different targets
+        let mut targets: Vec<usize> = (1..nb_target * 3).map(|t| t % nb_target).collect();
+        targets.shuffle(&mut rand::thread_rng());
+        for target in targets {
+            let length = rand::random::<usize>() % 12000;
+            info!("writing {} bytes to target {}", length, target);
+            assert_echo(&mut cli_streams[target].0, length).await;
+        }
+
+        // cleanup
+        fwd_srv_handle.abort();
+        for i in 0..nb_target {
+            cli_streams[i].1.abort();
+            cli_streams[i].2.abort();
+        }
+    }
+
+    #[tokio::test]
+    async fn test_target_dropped() {
+        // chappy_util::init_tracing("test");
+        let avail_ports = test::available_ports(3).await;
+        let echo_srv_port = avail_ports[0];
+        let fwd_quic_port = avail_ports[1];
+        let cli_proxy_port = avail_ports[2];
+        let echo_srv_handle = tokio::spawn(echo_server(echo_srv_port));
+        let (fwd, fwd_srv_handle) = create_and_start_forwarder(fwd_quic_port).await;
+        let (mut cli_stream, fwd_handle) =
+            proxied_connect(cli_proxy_port, &fwd, echo_srv_port).await;
+
+        // Interrupt the target server in the middle of the communication
+        assert_echo(&mut cli_stream, 10).await;
+        echo_srv_handle.abort();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        let bytes = &[1u8, 2, 3, 4];
+        let mut read_buf = vec![0; bytes.len()];
+        // the first write is expected to succeed because it is aknowledged by
+        // the first proxy that cannot know yet that the target is disconnected.
+        cli_stream.write_all(bytes).await.unwrap();
+        cli_stream.flush().await.unwrap();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        // this write succeeds also, but ideally by this time the stream should
+        // know that the connection is broken
+        cli_stream.write_all(bytes).await.unwrap();
+        cli_stream
+            .read_exact(&mut read_buf)
+            .await
+            .expect_err("read from aborted target should not succeed");
+
+        // cleanup
+        fwd_srv_handle.abort();
+        fwd_handle.abort();
     }
 }
