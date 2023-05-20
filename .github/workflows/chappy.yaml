@@ -1,14 +1,11 @@
-name: "Style Check"
+name: "Chappy"
 on: pull_request
 env:
   DEBIAN_FRONTEND: noninteractive
 jobs:
   chappy:
-    name: Chappy
+    name: Lint and tests
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./chappy
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -17,6 +14,8 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: clippy
+          args: --manifest-path chappy/Cargo.toml
       - uses: actions-rs/cargo@v1
         with:
           command: test
+          args: --manifest-path chappy/Cargo.toml
