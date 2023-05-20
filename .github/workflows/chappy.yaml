@@ -1,0 +1,22 @@
+name: "Style Check"
+on: pull_request
+env:
+  DEBIAN_FRONTEND: noninteractive
+jobs:
+  chappy:
+    name: Chappy
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./chappy
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
