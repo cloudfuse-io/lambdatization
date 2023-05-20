@@ -128,13 +128,13 @@ def run_seed(c, release=False):
             aws s3 cp - s3://{bucket_name}/{s3_key} --region {AWS_REGION()}"
     )
     env_map = {
-        "RUST_LOG": "info,chappy_seed=debug,chappy=debug,rustls=error",
+        "RUST_LOG": "info,chappy_seed=debug,chappy_util=debug",
         "RUST_BACKTRACE": "1",
     }
-    # if "L12N_CHAPPY_OPENTELEMETRY_APIKEY" in conf(VALIDATORS):
-    #     env_map["CHAPPY_OPENTELEMETRY_APIKEY"] = conf(VALIDATORS)[
-    #         "L12N_CHAPPY_OPENTELEMETRY_APIKEY"
-    #     ]
+    if "L12N_CHAPPY_OPENTELEMETRY_APIKEY" in conf(VALIDATORS):
+        env_map["CHAPPY_OPENTELEMETRY_APIKEY"] = conf(VALIDATORS)[
+            "L12N_CHAPPY_OPENTELEMETRY_APIKEY"
+        ]
     env = " ".join([f"{k}={v}" for k, v in env_map.items()])
     seed_exec(c, f"{env} python3 dev-handler.py {bucket_name} {s3_key}", pty=False)
 
@@ -235,8 +235,9 @@ def run_lambda_pair(c, seed=None, release=False, client="example-client"):
         common_env = {
             "CHAPPY_SEED_HOSTNAME": seed,
             "CHAPPY_SEED_PORT": 8000,
+            "CHAPPY_CLUSTER_SIZE": 2,
             "CHAPPY_VIRTUAL_SUBNET": "172.28.0.0/16",
-            "RUST_LOG": "info,chappy_perforator=debug,chappy=debug,rustls=error",
+            "RUST_LOG": "info,chappy_perforator=debug,chappy=debug,chappy_util=debug,rustls=error",
             "RUST_BACKTRACE": "1",
         }
 
@@ -325,10 +326,11 @@ def run_lambda_cluster(c, seed=None, release=False, binary="example-n-to-n", nod
             "CHAPPY_SEED_HOSTNAME": seed,
             "CHAPPY_SEED_PORT": 8000,
             "CHAPPY_VIRTUAL_SUBNET": "172.28.0.0/16",
+            "CHAPPY_CLUSTER_SIZE": nodes,
             "CLUSTER_IPS": ",".join([f"172.28.0.{i+1}" for i in range(nodes)]),
             "BATCH_SIZE": 32,
             "BYTES_SENT": 128,
-            "RUST_LOG": "info,chappy_perforator=debug,chappy=debug,rustls=error",
+            "RUST_LOG": "info,chappy_perforator=debug,chappy_util=debug,chappy=debug,rustls=error",
             "RUST_BACKTRACE": "1",
         }
         if "L12N_CHAPPY_OPENTELEMETRY_APIKEY" in conf(VALIDATORS):

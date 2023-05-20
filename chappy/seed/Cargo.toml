@@ -6,7 +6,9 @@ build = "build.rs"
 
 [dependencies]
 chappy-util = { path = "../util" }
+chrono = { workspace = true }
 futures = { workspace = true }
+pin-project-lite = { workspace = true }
 prost = { workspace = true }
 tokio = { workspace = true, features = ["rt"] }
 tokio-stream = { workspace = true }
@@ -15,4 +17,4 @@ tracing = { workspace = true }
 
 
 [build-dependencies]
-tonic-build = "0.8.3"
+tonic-build = "0.9.2"

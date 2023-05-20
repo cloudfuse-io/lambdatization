@@ -125,6 +125,24 @@ mod tests {
         assert!(callback_called, "callback wasn't called");
         task.await.unwrap();
     }
+
+    #[tokio::test]
+    async fn test_awaitable_map_multiple() {
+        let map = Arc::new(AwaitableMap::new());
+        // Insert the value that will be reset
+        assert_eq!(map.insert(1, "first"), None);
+        let mut callback_called = false;
+        for _ in [0..5] {
+            let get_fut = map.get(1, |v| {
+                assert_eq!(v, "first");
+                callback_called = true;
+                false
+            });
+            let timed_get_fut = tokio::time::timeout(Duration::from_millis(100), get_fut);
+            assert_eq!(timed_get_fut.await.unwrap(), "first");
+            assert!(callback_called, "callback wasn't called");
+        }
+    }
 }
 
 impl<K, V> Default for AwaitableMap<K, V>

@@ -2,7 +2,6 @@ pub mod binding_service;
 mod conf;
 pub mod forwarder;
 pub mod perforator;
-pub mod protocol;
 pub mod quic_utils;
 pub mod shutdown;
 
