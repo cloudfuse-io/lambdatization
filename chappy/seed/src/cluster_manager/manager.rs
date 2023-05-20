@@ -32,7 +32,11 @@ impl ClusterMap {
         } else if let Some(state) = self.0.get_mut(&cluster_id) {
             state.update(message);
         } else {
-            error!("Cluster not found, message forwarding failed");
+            error!(
+                cluster_id,
+                ?message,
+                "Cluster not found, message forwarding failed"
+            );
         }
     }
 }
