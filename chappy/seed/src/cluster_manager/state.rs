@@ -227,7 +227,7 @@ mod tests {
         assert!(!state.finished());
         assert_eq!(
             &format!("{:?}", state.state.interval_summary()),
-            "starts: 2023-05-12T10:15:30Z -> 2023-05-12T10:15:30Z, ends: None -> None"
+            "starts: 0 sec 0 ms, no end"
         );
         assert_eq!(
             &format!("{:?}", state.state.node_summary()),
@@ -250,7 +250,7 @@ mod tests {
         assert!(!state.finished());
         assert_eq!(
             &format!("{:?}", state.state.interval_summary()),
-            "starts: 2023-05-12T10:15:30Z -> 2023-05-12T10:15:31Z, ends: None -> None"
+            "starts: 1 sec 0 ms, no end"
         );
         assert_eq!(
             &format!("{:?}", state.state.node_summary()),
@@ -273,7 +273,7 @@ mod tests {
         assert!(!state.finished());
         assert_eq!(
             &format!("{:?}", state.state.interval_summary()),
-            "starts: 2023-05-12T10:15:30Z -> 2023-05-12T10:15:31Z, ends: Some(2023-05-12T10:15:32Z) -> Some(2023-05-12T10:15:32Z)"
+            "starts: 1 sec 0 ms, ends: 0 sec 0 ms"
         );
         assert_eq!(
             &format!("{:?}", state.state.node_summary()),
@@ -295,7 +295,7 @@ mod tests {
         assert!(state.finished());
         assert_eq!(
             &format!("{:?}", state.state.interval_summary()),
-            "starts: 2023-05-12T10:15:30Z -> 2023-05-12T10:15:31Z, ends: Some(2023-05-12T10:15:32Z) -> Some(2023-05-12T10:15:33Z)"
+            "starts: 1 sec 0 ms, ends: 1 sec 0 ms"
         );
         assert_eq!(
             &format!("{:?}", state.state.node_summary()),
