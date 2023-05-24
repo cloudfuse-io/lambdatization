@@ -33,14 +33,22 @@ impl fmt::Debug for IntervalSummary {
             } => {
                 let start_interval = last_node_start.signed_duration_since(*first_node_start);
                 if let (Some(fne), Some(lne)) = (first_node_end, last_node_end) {
+                    let end_interval = lne.signed_duration_since(*fne);
                     write!(
                         f,
-                        "starts: {:?}, ends: {:?}",
-                        start_interval,
-                        lne.signed_duration_since(*fne),
+                        "starts: {} sec {} ms, ends: {} sec {} ms",
+                        start_interval.num_seconds(),
+                        start_interval.num_milliseconds() % 1000,
+                        end_interval.num_seconds(),
+                        end_interval.num_milliseconds() % 1000,
                     )
                 } else {
-                    write!(f, "starts: {:?}, no end", start_interval)
+                    write!(
+                        f,
+                        "starts: {} sec {} ms, no end",
+                        start_interval.num_seconds(),
+                        start_interval.num_milliseconds() % 1000
+                    )
                 }
             }
             IntervalSummary::Empty => f.write_str("Empty cluster"),

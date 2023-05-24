@@ -14,7 +14,6 @@ opentelemetry-otlp = { version = "0.11.0", features = [
     "reqwest-rustls",
     "http-proto",
 ] }
-pin-project-lite = "0.2.9"
 prost = "0.11.7"
 quinn = "0.9.3"
 quinn-proto = "0.9.3"

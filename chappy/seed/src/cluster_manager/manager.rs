@@ -32,7 +32,11 @@ impl ClusterMap {
         } else if let Some(state) = self.0.get_mut(&cluster_id) {
             state.update(message);
         } else {
-            error!("Cluster not found, message forwarding failed");
+            error!(
+                cluster_id,
+                ?message,
+                "Cluster not found, message forwarding failed"
+            );
         }
     }
 }
@@ -112,7 +116,7 @@ mod tests {
         let Summary { node, interval } = manager.get_summary(cluster_id.to_owned()).await;
         assert_eq!(
             &format!("{:?}", interval),
-            "starts: 2023-05-17T16:15:30Z -> 2023-05-17T16:15:30Z, ends: Some(2023-05-17T16:15:31Z) -> Some(2023-05-17T16:15:31Z)"
+            "starts: 0 sec 0 ms, ends: 0 sec 0 ms"
         );
         assert_eq!(&format!("{:?}", node), "2 expected, 2 started, 2 ended");
 
