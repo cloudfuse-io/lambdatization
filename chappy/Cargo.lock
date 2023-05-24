@@ -203,7 +203,6 @@ dependencies = [
  "chappy-util",
  "chrono",
  "futures",
- "pin-project-lite",
  "prost",
  "tokio",
  "tokio-stream",
