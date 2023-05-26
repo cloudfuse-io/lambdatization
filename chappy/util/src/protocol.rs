@@ -8,7 +8,6 @@ use tokio::net::{TcpStream, ToSocketAddrs};
 
 const REGISTER_HEADER_LENGTH: usize = 13;
 const REGISTER_CLIENT_HEADER_BYTES: [u8; REGISTER_HEADER_LENGTH] = *b"chappy_client";
-const REGISTER_SERVER_HEADER_BYTES: [u8; REGISTER_HEADER_LENGTH] = *b"chappy_server";
 
 #[derive(Debug)]
 pub enum ParsedTcpStream {
@@ -17,7 +16,6 @@ pub enum ParsedTcpStream {
         target_virtual_ip: Ipv4Addr,
         target_port: u16,
     },
-    ServerRegistration,
     Raw(TcpStream),
 }
 
@@ -35,9 +33,6 @@ impl ParsedTcpStream {
                 target_virtual_ip,
                 target_port,
             }
-        } else if buff == REGISTER_SERVER_HEADER_BYTES {
-            stream.read_exact(&mut buff).await.unwrap();
-            Self::ServerRegistration
         } else {
             Self::Raw(stream)
         }
@@ -77,17 +72,6 @@ pub async fn register_client(
     stream.write_u16(source_port).await?;
     stream.write_u32(target_virtual_ip.into()).await?;
     stream.write_u16(target_port).await?;
-    stream.flush().await?;
-    stream
-        .read_u8()
-        .await
-        .expect_err("Connection should have been closed by peer");
-    Ok(())
-}
-
-pub async fn register_server(perforator_address: &str) -> IoResult<()> {
-    let mut stream = connect_retry(perforator_address).await?;
-    stream.write_all(&REGISTER_SERVER_HEADER_BYTES).await?;
     stream.flush().await?;
     stream
         .read_u8()

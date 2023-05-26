@@ -57,25 +57,6 @@ pub(crate) fn request_punch(sockfd: c_int, addr_in: SockaddrIn) -> IoResult<Sock
     Ok(SockaddrIn::from_str(PERFORATOR_ADDRESS).unwrap())
 }
 
-pub(crate) fn register(addr_in: SockaddrIn) -> IoResult<SockaddrIn> {
-    let registered_port = addr_in.port();
-    RUNTIME.block_on(async move {
-        let res = chappy_util::protocol::register_server(PERFORATOR_ADDRESS).await;
-        match &res {
-            Ok(()) => debug!(
-                "Perforator call for registering server (port {}) completed",
-                registered_port,
-            ),
-            Err(err) => error!(
-                "Perforator call for registering server (port {}) failed: {}",
-                registered_port, err
-            ),
-        };
-        res
-    })?;
-    Ok(SockaddrIn::new(127, 0, 0, 1, registered_port))
-}
-
 pub(crate) enum ParsedAddress {
     RemoteVirtual(SockaddrIn),
     LocalVirtual(SockaddrIn),

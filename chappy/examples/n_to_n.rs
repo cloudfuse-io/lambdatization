@@ -29,9 +29,9 @@ fn handle_client(mut stream: TcpStream) {
     }
 }
 
-fn start_server(virtual_ip: &str) {
+fn start_server() {
     info!("Starting Server");
-    let listener = TcpListener::bind(format!("{}:8080", virtual_ip)).unwrap();
+    let listener = TcpListener::bind("localhost:8080").unwrap();
 
     for stream in listener.incoming() {
         match stream {
@@ -69,7 +69,7 @@ fn main() {
         BYTES_SENT, NB_BATCH, BATCH_SIZE
     );
 
-    thread::spawn(move || start_server(&virtual_ip));
+    thread::spawn(move || start_server());
     thread::sleep(Duration::from_millis(100));
 
     let mut handles: Vec<(thread::JoinHandle<()>, thread::JoinHandle<()>)> = Vec::new();

@@ -26,12 +26,12 @@ impl GracefullyRunnable for SrvRunnable {
 
         let forwarder = Arc::new(Forwarder::new(quic_port));
         let binding_service = Arc::new(BindingService::new(quic_port));
-        let node_binding = binding_service.bind_node().await;
         let perforator = Arc::new(Perforator::new(
             Arc::clone(&forwarder),
             binding_service,
             tcp_port,
         ));
+        let node_binding = perforator.bind_node(shutdown.create_guard()).await;
         tokio::join!(
             perforator.run_tcp_server(shutdown),
             forwarder.run_quic_server(shutdown),
