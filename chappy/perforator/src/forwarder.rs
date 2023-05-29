@@ -243,6 +243,7 @@ impl Forwarder {
 
     #[instrument(skip(self))]
     pub async fn punch_hole(&self, addr: SocketAddr) {
+        debug!("make punch conn to client");
         let connecting = self
             .quic_endpoint
             .connect_with(

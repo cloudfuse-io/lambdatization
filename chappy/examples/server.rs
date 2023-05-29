@@ -1,5 +1,4 @@
 use log::{debug, error, info};
-use std::env;
 use std::io::Read;
 use std::io::Write;
 use std::net::{TcpListener, TcpStream};
@@ -28,8 +27,7 @@ fn handle_client(mut stream: TcpStream) {
 }
 
 fn run() {
-    let virtual_ip = env::var("CHAPPY_VIRTUAL_IP").unwrap();
-    let listener = TcpListener::bind(format!("{}:8080", virtual_ip)).unwrap();
+    let listener = TcpListener::bind("localhost:8080").unwrap();
 
     for stream in listener.incoming() {
         match stream {

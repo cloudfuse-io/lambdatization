@@ -6,7 +6,7 @@ mod utils;
 #[macro_use]
 extern crate lazy_static;
 
-pub use bindings::{bind, connect};
+pub use bindings::connect;
 
 lazy_static! {
     pub(crate) static ref RUNTIME: tokio::runtime::Runtime =

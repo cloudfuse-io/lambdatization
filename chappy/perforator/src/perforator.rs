@@ -1,3 +1,4 @@
+use crate::binding_service::NodeBindingHandle;
 use crate::{
     binding_service::BindingService, forwarder::Forwarder, shutdown::Shutdown,
     shutdown::ShutdownGuard,
@@ -129,12 +130,13 @@ impl Perforator {
             .ok();
     }
 
-    #[instrument(name = "reg_srv", skip_all)]
-    fn register_server(&self, mut shdn: ShutdownGuard) {
+    #[instrument(name = "reg_node", skip_all)]
+    pub async fn bind_node(&self, mut shdn: ShutdownGuard) -> NodeBindingHandle {
         debug!("starting...");
         let server_certificate = self.forwarder.server_certificate().to_owned();
         let binding_service = Arc::clone(&self.binding_service);
         let fwd_ref = Arc::clone(&self.forwarder);
+        let node_binding = binding_service.bind_node().await;
         tokio::spawn(
             async move {
                 let stream = binding_service.bind_server(server_certificate).await;
@@ -158,6 +160,7 @@ impl Perforator {
             .instrument(tracing::Span::current()),
         );
         debug!("completed");
+        node_binding
     }
 
     #[instrument(name = "tcp_srv", skip_all)]
@@ -170,7 +173,6 @@ impl Perforator {
             let src_port = stream.peer_addr().unwrap().port();
             let perforator = self.clone();
             let fwd_conn_shdwn_guard = shutdown.create_guard();
-            let holepunch_shdwn_guard = shutdown.create_guard();
             tokio::spawn(
                 async move {
                     let parsed_stream = ParsedTcpStream::from(stream).await;
@@ -181,9 +183,6 @@ impl Perforator {
                             target_port,
                         } => {
                             perforator.register_client(source_port, target_virtual_ip, target_port)
-                        }
-                        ParsedTcpStream::ServerRegistration => {
-                            perforator.register_server(holepunch_shdwn_guard)
                         }
                         ParsedTcpStream::Raw(stream) => {
                             perforator.forward_conn(stream, fwd_conn_shdwn_guard).await
