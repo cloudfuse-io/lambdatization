@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+anyhow = { workspace = true }
 chappy-seed = { path = "../seed" }
 chappy-util = { path = "../util" }
 futures = { workspace = true }
@@ -15,6 +16,7 @@ rcgen = { workspace = true }
 rustls = { workspace = true, features = ["quic"] }
 socket2 = { workspace = true, features = ["all"] }
 tokio = { workspace = true, features = ["rt", "signal"] }
+tokio-metrics = { workspace = true }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }
 tower = { workspace = true }

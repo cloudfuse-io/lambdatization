@@ -1,6 +1,7 @@
 use chappy_perforator::{
     binding_service::BindingService,
     forwarder::Forwarder,
+    metrics,
     perforator::Perforator,
     shutdown::{gracefull, GracefullyRunnable, Shutdown},
     CHAPPY_CONF,
@@ -43,8 +44,11 @@ impl GracefullyRunnable for SrvRunnable {
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     init_tracing(&format!("perf-{}", CHAPPY_CONF.virtual_ip));
-    gracefull(SrvRunnable, Duration::from_secs(1))
-        .instrument(info_span!("perforator", virt_ip = CHAPPY_CONF.virtual_ip))
-        .await;
+
+    metrics(
+        gracefull(SrvRunnable, Duration::from_secs(1))
+            .instrument(info_span!("perforator", virt_ip = CHAPPY_CONF.virtual_ip)),
+    )
+    .await;
     close_tracing();
 }

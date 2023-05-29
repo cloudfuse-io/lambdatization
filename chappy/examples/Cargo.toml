@@ -4,8 +4,16 @@ version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "example-client"
-path = "client.rs"
+name = "example-client-sync"
+path = "client_sync.rs"
+
+[[bin]]
+name = "example-client-async"
+path = "client_async.rs"
+
+[[bin]]
+name = "example-client-slow"
+path = "slow_client.rs"
 
 [[bin]]
 name = "example-multi-clients"
@@ -27,3 +35,5 @@ path = "helpers.rs"
 env_logger = "0.10.0"
 log = "0.4.17"
 rand = "0.8.5"
+tokio = { version = "1.28.1" }
+tokio-metrics = "0.2.2"

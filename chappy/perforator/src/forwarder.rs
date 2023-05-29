@@ -1,10 +1,12 @@
+use crate::fwd_protocol::{copy, InitQuery, InitResponse};
+use crate::metrics;
 use crate::{quic_utils, shutdown::Shutdown, PUNCH_SERVER_NAME, SERVER_NAME};
+use anyhow::{anyhow, Result};
 use quinn::{Connection, ConnectionError, Endpoint};
 use quinn_proto::{TransportError, TransportErrorCode};
 use rustls::AlertDescription::BadCertificate;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::time::Duration;
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tracing::{debug, debug_span, error, info, instrument, warn, Instrument};
 
@@ -23,61 +25,6 @@ pub struct Forwarder {
     quic_endpoint: Endpoint,
     port: u16,
     server_certificate_der: Vec<u8>,
-}
-
-/// Async copy then shutdown writer. Silently catch disconnections.
-async fn copy<R, W>(mut reader: R, mut writer: W) -> std::io::Result<()>
-where
-    R: AsyncRead + Unpin,
-    W: AsyncWrite + Unpin,
-{
-    let mut buf = vec![0u8; 4096].into_boxed_slice();
-    let mut bytes_read = 0;
-    let mut nb_read = 0;
-    // Note: Using tokio::io::copy here was not flushing the stream eagerly
-    // enough, which was leaving some application low data volumetry
-    // connections hanging.
-    loop {
-        let read_res = reader.read(&mut buf).await;
-        match read_res {
-            Ok(0) => {
-                debug!(bytes_read, nb_read, "completed");
-                if let Err(err) = writer.shutdown().await {
-                    warn!(%err, "writer shutdown failed");
-                } else {
-                    debug!("writer shut down");
-                }
-                break Ok(());
-            }
-            Ok(b) => match writer.write_all(&buf[0..b]).await {
-                Ok(()) => {
-                    bytes_read += b;
-                    nb_read += 1;
-                    // TODO: this systematic flushing might be inefficient, but
-                    // is required to ensure proper forwarding of streams with
-                    // small data exchanges. Maybe an improved heuristic could
-                    // be applied.
-                    if let Err(err) = writer.flush().await {
-                        error!(%err, "flush failure");
-                        break Err(err);
-                    }
-                }
-                Err(err) => {
-                    error!(%err, "write failure");
-                    break Err(err);
-                }
-            },
-            Err(err) => {
-                error!(%err, "read failure");
-                if let Err(err) = writer.shutdown().await {
-                    warn!(%err, "writer shutdown also failed");
-                } else {
-                    debug!("writer shut down");
-                }
-                break Err(err);
-            }
-        };
-    }
 }
 
 impl Forwarder {
@@ -133,25 +80,34 @@ impl Forwarder {
                 return;
             }
         };
-        let target_port = quic_recv.read_u16().await.unwrap();
+        let query = InitQuery::read(&mut quic_recv).await;
+        debug!(?query, "init query read");
 
         // forwarding connection
-        let fwd_stream = match TcpStream::connect((Ipv4Addr::LOCALHOST, target_port)).await {
-            Ok(stream) => stream,
+        let fwd_stream = match TcpStream::connect((Ipv4Addr::LOCALHOST, query.target_port)).await {
+            Ok(stream) => {
+                InitResponse { code: 0 }.write(&mut quic_send).await;
+                stream
+            }
             Err(err) => {
                 error!(err=%err, "connection to target failed");
-                // TODO encode different kinds of failure into QUIC reset code?
-                quic_send.reset(1u8.into()).unwrap();
+                InitResponse { code: 1 }.write(&mut quic_send).await;
+                quic_send.finish().await.unwrap();
                 return;
             }
         };
 
+        if query.connect_only {
+            quic_send.finish().await.unwrap();
+            return;
+        }
+
         // pipe holepunch connection to forwarding connection
         let (fwd_read, fwd_write) = fwd_stream.into_split();
-        let out_fut =
-            copy(quic_recv, fwd_write).instrument(debug_span!("cp_quic_tcp", port = target_port));
-        let in_fut =
-            copy(fwd_read, quic_send).instrument(debug_span!("cp_tcp_quic", port = target_port));
+        let out_fut = copy(quic_recv, fwd_write)
+            .instrument(debug_span!("cp_quic_tcp", port = query.target_port));
+        let in_fut = copy(fwd_read, quic_send)
+            .instrument(debug_span!("cp_tcp_quic", port = query.target_port));
         tokio::try_join!(out_fut, in_fut).ok();
         debug!("closing bi");
         // expect the connection to be closed by caller
@@ -180,11 +136,11 @@ impl Forwarder {
                 }
             };
             let shdwn_guard = shutdown.create_guard();
-            tokio::spawn(
+            tokio::spawn(metrics(
                 shdwn_guard
                     .run_cancellable(Self::handle_srv_conn(conn), Duration::from_millis(50))
                     .instrument(debug_span!("srv_quic_conn", src_nat = %remote_addr)),
-            );
+            ));
         }
     }
 
@@ -216,21 +172,78 @@ impl Forwarder {
         )
         .await;
         if conn_result.is_none() {
-            error!("Dropping upstream connection");
+            error!("QUIC conn failed, dropping upstream connection");
             tcp_stream.set_linger(None).unwrap();
             return;
         }
         let quic_conn = conn_result.unwrap();
-        let (mut quic_send, quic_recv) = quic_conn.open_bi().await.unwrap();
+        let (mut quic_send, mut quic_recv) = quic_conn.open_bi().await.unwrap();
         debug!("new bi opened");
+        let query = InitQuery {
+            target_port,
+            connect_only: false,
+        };
+        query.write(&mut quic_send).await;
+        let InitResponse { code } = InitResponse::read(&mut quic_recv).await;
+        match code {
+            0 => debug!("target conn successful"),
+            err_code => {
+                // at this point the clients already think they are connected,
+                // so we are converting a connection establishment error into a
+                // lost connection error
+                error!(err_code, "target conn failed, dropping upstream connection");
+                quic_send.finish().await.unwrap();
+                tcp_stream.set_linger(None).unwrap();
+                return;
+            }
+        }
         let (tcp_read, tcp_write) = tcp_stream.into_split();
-        quic_send.write_u16(target_port).await.unwrap();
         let out_fut =
             copy(tcp_read, quic_send).instrument(debug_span!("cp_tcp_quic", port = target_port));
         let in_fut =
             copy(quic_recv, tcp_write).instrument(debug_span!("cp_quic_tcp", port = target_port));
         tokio::try_join!(out_fut, in_fut).ok();
         debug!("closing bi");
+    }
+
+    #[instrument(
+        name = "cli_try_tgt",
+        skip_all,
+        fields(
+            tgt_nat = %nated_addr,
+            tgt_port = target_port
+        )
+    )]
+    pub async fn try_target(
+        &self,
+        nated_addr: SocketAddr,
+        target_port: u16,
+        target_server_certificate_der: Vec<u8>,
+    ) -> Result<()> {
+        let conn_result = quic_utils::connect_with_retry(
+            &self.quic_endpoint,
+            nated_addr,
+            target_server_certificate_der,
+        )
+        .await;
+        if conn_result.is_none() {
+            return Err(anyhow!("quic conn failed"));
+        }
+        let quic_conn = conn_result.unwrap();
+        let (mut quic_send, mut quic_recv) = quic_conn.open_bi().await.unwrap();
+        debug!("new bi opened");
+        let query = InitQuery {
+            target_port,
+            connect_only: true,
+        };
+        query.write(&mut quic_send).await;
+        let InitResponse { code } = InitResponse::read(&mut quic_recv).await;
+        match code {
+            0 => debug!("target conn successful"),
+            err_code => return Err(anyhow!("target conn failed with code {}", err_code)),
+        }
+        debug!("closing bi");
+        Ok(())
     }
 
     pub fn port(&self) -> u16 {
@@ -273,6 +286,7 @@ mod tests {
     use futures::StreamExt;
     use rand::seq::SliceRandom;
     use std::sync::Arc;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
     use tokio::task::JoinHandle;
 
@@ -287,16 +301,16 @@ mod tests {
         let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
         let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
 
-        let accept_handle = tokio::spawn(async move {
+        let accept_handle = tokio::spawn(metrics(async move {
             let (stream, _) = listener.accept().await.unwrap();
             (stream, listener)
-        });
+        }));
         tokio::time::sleep(Duration::from_millis(50)).await;
         let cli_stream = TcpStream::connect(addr).await.unwrap();
         let (proxied_stream, listener) = accept_handle.await.unwrap();
 
         let fwd = Arc::clone(fwd);
-        let fwd_handle = tokio::spawn(async move {
+        let fwd_handle = tokio::spawn(metrics(async move {
             fwd.forward(
                 proxied_stream,
                 SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, fwd.port().into())),
@@ -305,7 +319,7 @@ mod tests {
             )
             .await;
             debug!("dropping moved listener {}", listener.local_addr().unwrap());
-        });
+        }));
         (cli_stream, fwd_handle)
     }
 
@@ -440,5 +454,44 @@ mod tests {
         // cleanup
         fwd_srv_handle.abort();
         fwd_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn test_try_target_existing() {
+        let avail_ports = test::available_ports(2).await;
+        let echo_srv_port = avail_ports[0];
+        let fwd_quic_port = avail_ports[1];
+        let echo_srv_handle = tokio::spawn(echo_server(echo_srv_port));
+        let (fwd, fwd_srv_handle) = create_and_start_forwarder(fwd_quic_port).await;
+        let tgt_fwd_addr =
+            SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, fwd.port().into()));
+        fwd.try_target(
+            tgt_fwd_addr,
+            echo_srv_port,
+            fwd.server_certificate().to_owned(),
+        )
+        .await
+        .unwrap();
+        fwd_srv_handle.abort();
+        echo_srv_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn test_try_target_missing() {
+        let avail_ports = test::available_ports(2).await;
+        let echo_srv_port = avail_ports[0];
+        let fwd_quic_port = avail_ports[1];
+        // here the echo server is not started
+        let (fwd, fwd_srv_handle) = create_and_start_forwarder(fwd_quic_port).await;
+        let tgt_fwd_addr =
+            SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, fwd.port().into()));
+        fwd.try_target(
+            tgt_fwd_addr,
+            echo_srv_port,
+            fwd.server_certificate().to_owned(),
+        )
+        .await
+        .expect_err("should detect that target isn't running");
+        fwd_srv_handle.abort();
     }
 }

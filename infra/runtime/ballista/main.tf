@@ -61,7 +61,7 @@ module "distributed_engine" {
   function_base_name = "ballista-distributed"
   region_name        = var.region_name
   docker_image       = var.ballista_distributed_image
-  memory_size        = 2048
+  memory_size        = 4096
   timeout            = 300
 
   additional_policies = [aws_iam_policy.s3_access.arn]

@@ -69,7 +69,7 @@ fn main() {
         BYTES_SENT, NB_BATCH, BATCH_SIZE
     );
 
-    thread::spawn(move || start_server());
+    thread::spawn(start_server);
     thread::sleep(Duration::from_millis(100));
 
     let mut handles: Vec<(thread::JoinHandle<()>, thread::JoinHandle<()>)> = Vec::new();
