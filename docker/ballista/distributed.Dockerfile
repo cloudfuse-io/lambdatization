@@ -1,6 +1,5 @@
 
 ARG BALLISTA_VERSION=0.11.0
-ARG RELEASE_FLAG=release
 ARG FUNCTION_DIR="/function"
 
 FROM rust:bullseye as chappy-build
