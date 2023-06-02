@@ -16,11 +16,11 @@ pub enum ParsedTcpStream {
         target_virtual_ip: Ipv4Addr,
         target_port: u16,
     },
-    Raw(TcpStream),
+    Raw,
 }
 
 impl ParsedTcpStream {
-    pub async fn from(mut stream: TcpStream) -> Self {
+    pub async fn from(stream: &mut TcpStream) -> Self {
         let mut buff = [0; REGISTER_HEADER_LENGTH];
         stream.peek(&mut buff).await.unwrap();
         if buff == REGISTER_CLIENT_HEADER_BYTES {
@@ -34,7 +34,7 @@ impl ParsedTcpStream {
                 target_port,
             }
         } else {
-            Self::Raw(stream)
+            Self::Raw
         }
     }
 }

@@ -36,19 +36,12 @@ impl fmt::Debug for IntervalSummary {
                     let end_interval = lne.signed_duration_since(*fne);
                     write!(
                         f,
-                        "starts: {} sec {} ms, ends: {} sec {} ms",
-                        start_interval.num_seconds(),
-                        start_interval.num_milliseconds() % 1000,
-                        end_interval.num_seconds(),
-                        end_interval.num_milliseconds() % 1000,
+                        "starts: {:?}, ends: {:?}",
+                        start_interval.to_std().unwrap(),
+                        end_interval.to_std().unwrap(),
                     )
                 } else {
-                    write!(
-                        f,
-                        "starts: {} sec {} ms, no end",
-                        start_interval.num_seconds(),
-                        start_interval.num_milliseconds() % 1000
-                    )
+                    write!(f, "starts: {:?}, no end", start_interval.to_std().unwrap())
                 }
             }
             IntervalSummary::Empty => f.write_str("Empty cluster"),

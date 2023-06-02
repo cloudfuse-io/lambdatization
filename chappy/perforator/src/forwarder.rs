@@ -255,15 +255,11 @@ impl Forwarder {
     }
 
     #[instrument(skip(self))]
-    pub async fn punch_hole(&self, addr: SocketAddr) {
+    pub async fn punch_hole(&self, nat: SocketAddr, virt: String) {
         debug!("make punch conn to client");
         let connecting = self
             .quic_endpoint
-            .connect_with(
-                quic_utils::configure_punch_client(),
-                addr,
-                PUNCH_SERVER_NAME,
-            )
+            .connect_with(quic_utils::configure_punch_client(), nat, PUNCH_SERVER_NAME)
             .unwrap();
         // we expect the connection establishment mechanism to handle retries
         // until the hole is actually punched

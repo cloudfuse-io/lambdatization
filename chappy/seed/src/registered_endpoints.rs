@@ -1,4 +1,4 @@
-use crate::Address;
+use crate::ServerPunchRequest;
 use chappy_util::awaitable_map::AwaitableMap;
 use std::{net::SocketAddr, time::Duration};
 use tokio::sync::mpsc::UnboundedSender;
@@ -15,7 +15,7 @@ struct VirtualTarget {
 #[derive(Clone)]
 pub struct ResolvedTarget {
     pub natted_address: SocketAddr,
-    pub punch_req_stream: mpsc::UnboundedSender<Address>,
+    pub punch_req_stream: mpsc::UnboundedSender<ServerPunchRequest>,
     pub server_certificate: Vec<u8>,
 }
 
@@ -65,7 +65,7 @@ impl RegisteredEndpoints {
     pub fn insert(
         &self,
         server_nated_addr: SocketAddr,
-        req_tx: UnboundedSender<Address>,
+        req_tx: UnboundedSender<ServerPunchRequest>,
         server_certificate: &[u8],
         registered_ip: &str,
         cluster_id: &str,

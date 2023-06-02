@@ -227,7 +227,7 @@ mod tests {
         assert!(!state.finished());
         assert_eq!(
             &format!("{:?}", state.state.interval_summary()),
-            "starts: 0 sec 0 ms, no end"
+            "starts: 0ns, no end"
         );
         assert_eq!(
             &format!("{:?}", state.state.node_summary()),
@@ -250,7 +250,7 @@ mod tests {
         assert!(!state.finished());
         assert_eq!(
             &format!("{:?}", state.state.interval_summary()),
-            "starts: 1 sec 0 ms, no end"
+            "starts: 1s, no end"
         );
         assert_eq!(
             &format!("{:?}", state.state.node_summary()),
@@ -273,7 +273,7 @@ mod tests {
         assert!(!state.finished());
         assert_eq!(
             &format!("{:?}", state.state.interval_summary()),
-            "starts: 1 sec 0 ms, ends: 0 sec 0 ms"
+            "starts: 1s, ends: 0ns"
         );
         assert_eq!(
             &format!("{:?}", state.state.node_summary()),
@@ -295,7 +295,7 @@ mod tests {
         assert!(state.finished());
         assert_eq!(
             &format!("{:?}", state.state.interval_summary()),
-            "starts: 1 sec 0 ms, ends: 1 sec 0 ms"
+            "starts: 1s, ends: 1s"
         );
         assert_eq!(
             &format!("{:?}", state.state.node_summary()),

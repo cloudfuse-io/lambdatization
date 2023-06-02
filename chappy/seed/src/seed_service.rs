@@ -66,9 +66,12 @@ impl Seed for SeedService {
         debug!(tgt_nat=%resolved_target.natted_address);
         resolved_target
             .punch_req_stream
-            .send(Address {
-                ip: src_nated_addr.ip().to_string(),
-                port: src_nated_addr.port().try_into().unwrap(),
+            .send(ServerPunchRequest {
+                client_nated_addr: Some(Address {
+                    ip: src_nated_addr.ip().to_string(),
+                    port: src_nated_addr.port().try_into().unwrap(),
+                }),
+                client_virtual_ip: src_ip.clone(),
             })
             .unwrap();
 

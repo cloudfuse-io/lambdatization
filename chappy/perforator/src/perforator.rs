@@ -9,7 +9,7 @@ use chappy_util::{awaitable_map::AwaitableMap, protocol::ParsedTcpStream};
 use futures::StreamExt;
 use std::net::Ipv4Addr;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::time::timeout;
 use tracing::{debug, debug_span, instrument, Instrument};
@@ -60,6 +60,7 @@ impl Perforator {
     #[instrument(name = "reg_cli", skip(self))]
     async fn register_client(&self, src_port: u16, tgt_virt: Ipv4Addr, tgt_port: u16) {
         debug!("starting...");
+        let start = Instant::now();
         let virtual_addr = TargetVirtualAddress {
             ip: tgt_virt,
             port: tgt_port,
@@ -84,7 +85,7 @@ impl Perforator {
             )
             .await
             .unwrap();
-        debug!("completed");
+        debug!(duration = ?start.elapsed(), "completed");
     }
 
     /// Forward a TCP stream from a registered port
@@ -139,8 +140,12 @@ impl Perforator {
                 debug!("subscribe to hole punching requests");
                 stream
                     .map(|punch_req| {
-                        let client_natted_addr = punch_req.unwrap().client_nated_addr.unwrap();
-                        fwd_ref.punch_hole(AddressConv(client_natted_addr).into())
+                        let punch_req = punch_req.unwrap();
+                        let client_natted_addr = punch_req.client_nated_addr.unwrap();
+                        fwd_ref.punch_hole(
+                            AddressConv(client_natted_addr).into(),
+                            punch_req.client_virtual_ip,
+                        )
                     })
                     .buffer_unordered(usize::MAX)
                     .take_until(shdn.wait_shutdown())
@@ -160,13 +165,13 @@ impl Perforator {
             .await
             .unwrap();
         loop {
-            let (stream, _) = listener.accept().await.unwrap();
+            let (mut stream, _) = listener.accept().await.unwrap();
             let src_port = stream.peer_addr().unwrap().port();
             let perforator = self.clone();
             let fwd_conn_shdwn_guard = shutdown.create_guard();
             tokio::spawn(metrics(
                 async move {
-                    let parsed_stream = ParsedTcpStream::from(stream).await;
+                    let parsed_stream = ParsedTcpStream::from(&mut stream).await;
                     match parsed_stream {
                         ParsedTcpStream::ClientRegistration {
                             source_port,
@@ -177,7 +182,7 @@ impl Perforator {
                                 .register_client(source_port, target_virtual_ip, target_port)
                                 .await
                         }
-                        ParsedTcpStream::Raw(stream) => {
+                        ParsedTcpStream::Raw => {
                             perforator.forward_conn(stream, fwd_conn_shdwn_guard).await
                         }
                     }

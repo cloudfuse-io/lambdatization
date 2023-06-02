@@ -116,7 +116,7 @@ mod tests {
         let Summary { node, interval } = manager.get_summary(cluster_id.to_owned()).await;
         assert_eq!(
             &format!("{:?}", interval),
-            "starts: 0 sec 0 ms, ends: 0 sec 0 ms"
+            "starts: 0ns, ends: 0ns"
         );
         assert_eq!(&format!("{:?}", node), "2 expected, 2 started, 2 ended");
 
