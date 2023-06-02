@@ -208,7 +208,7 @@ def invoke_lambda(
 
 
 @task
-def run_lambda_pair(c, seed=None, release=False, client="example-client"):
+def run_lambda_pair(c, seed=None, release=False, client="example-client-async"):
     """Run the Chappy binaries on Lambda using the provided seed public IP"""
     bucket_name = core.bucket_name(c)
     lambda_name = terraform_output(c, "chappy", "dev_lambda_name")

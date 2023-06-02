@@ -1,4 +1,4 @@
-use crate::CHAPPY_CONF;
+use crate::{metrics, CHAPPY_CONF};
 use chappy_seed::NodeBindingResponse;
 use chappy_seed::{
     seed_client::SeedClient, ClientBindingRequest, ClientBindingResponse, NodeBindingRequest,
@@ -75,7 +75,7 @@ impl BindingService {
             sock.connect(socket_addr)
         }))
         .await
-        .unwrap();
+        .expect("Connection to seed failed");
         SeedClient::new(channel)
     }
 
@@ -91,11 +91,11 @@ impl BindingService {
         let (tx, rx) = mpsc::channel::<NodeBindingRequest>(1);
 
         let mut client = self.client().await;
-        let handle = tokio::spawn(async move {
+        let handle = tokio::spawn(metrics(async move {
             client
                 .bind_node(tokio_stream::wrappers::ReceiverStream::new(rx))
                 .await
-        });
+        }));
         tx.send(NodeBindingRequest {
             cluster_id: CHAPPY_CONF.cluster_id.clone(),
             source_virtual_ip: CHAPPY_CONF.virtual_ip.clone(),
