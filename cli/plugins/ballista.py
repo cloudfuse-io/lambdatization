@@ -55,7 +55,7 @@ def run_executor(
         "CHAPPY_SEED_HOSTNAME": seed_ip,
         "CHAPPY_SEED_PORT": 8000,
         "CHAPPY_VIRTUAL_IP": virtual_ip,
-        "RUST_LOG": "info,chappy_perforator=debug,chappy=debug,ballista_executor=debug",
+        "RUST_LOG": "info,chappy_perforator=debug,chappy=debug",
         "RUST_BACKTRACE": "1",
     }
     if "L12N_CHAPPY_OPENTELEMETRY_APIKEY" in conf(VALIDATORS):
@@ -94,7 +94,7 @@ def run_scheduler(
         "CHAPPY_SEED_HOSTNAME": seed_ip,
         "CHAPPY_SEED_PORT": 8000,
         "CHAPPY_VIRTUAL_IP": virtual_ip,
-        "RUST_LOG": "info,chappy_perforator=debug,chappy=debug,ballista_scheduler=debug",
+        "RUST_LOG": "info,chappy_perforator=debug,chappy=debug",
         "RUST_BACKTRACE": "1",
     }
     if "L12N_CHAPPY_OPENTELEMETRY_APIKEY" in conf(VALIDATORS):
@@ -122,8 +122,8 @@ def run_scheduler(
 @task
 def distributed(c, seed, dataset=10):
     """CREATE EXTERNAL TABLE and find out stored page data by url_host_registered_domain"""
-    core.load_commoncrawl_index(c, dataset)
     bucket_name = core.bucket_name(c)
+    core.load_commoncrawl_index(c, dataset)
     sql = f"""
 CREATE EXTERNAL TABLE commoncrawl STORED AS PARQUET
 LOCATION 's3://{bucket_name}/commoncrawl/index/n{dataset}/';
@@ -131,6 +131,7 @@ SELECT url_host_registered_domain, SUM(warc_record_length) AS stored_bytes FROM 
 GROUP BY url_host_registered_domain
 ORDER BY SUM(warc_record_length) DESC
 LIMIT 10;"""
+
     executor_count = dataset
     lambda_name = terraform_output(c, "ballista", "distributed_lambda_name")
     with ThreadPoolExecutor() as ex:
