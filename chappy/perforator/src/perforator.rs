@@ -58,7 +58,12 @@ impl Perforator {
     }
 
     #[instrument(name = "reg_cli", skip(self))]
-    async fn register_client(&self, src_port: u16, tgt_virt: Ipv4Addr, tgt_port: u16) {
+    async fn register_client(
+        &self,
+        src_port: u16,
+        tgt_virt: Ipv4Addr,
+        tgt_port: u16,
+    ) -> anyhow::Result<()> {
         debug!("starting...");
         let start = Instant::now();
         let virtual_addr = TargetVirtualAddress {
@@ -83,9 +88,9 @@ impl Perforator {
                 tgt_port,
                 punch_resp.server_certificate,
             )
-            .await
-            .unwrap();
+            .await?;
         debug!(duration = ?start.elapsed(), "completed");
+        Ok(())
     }
 
     /// Forward a TCP stream from a registered port
@@ -165,25 +170,30 @@ impl Perforator {
             .await
             .unwrap();
         loop {
-            let (mut stream, _) = listener.accept().await.unwrap();
+            let (stream, _) = listener.accept().await.unwrap();
             let src_port = stream.peer_addr().unwrap().port();
             let perforator = self.clone();
             let fwd_conn_shdwn_guard = shutdown.create_guard();
             tokio::spawn(metrics(
                 async move {
-                    let parsed_stream = ParsedTcpStream::from(&mut stream).await;
+                    let parsed_stream = ParsedTcpStream::from(stream).await;
                     match parsed_stream {
                         ParsedTcpStream::ClientRegistration {
                             source_port,
                             target_virtual_ip,
                             target_port,
+                            response_writer,
                         } => {
-                            perforator
+                            match perforator
                                 .register_client(source_port, target_virtual_ip, target_port)
                                 .await
+                            {
+                                Ok(_) => response_writer.write_success().await,
+                                Err(_) => response_writer.write_failure().await,
+                            };
                         }
-                        ParsedTcpStream::Raw => {
-                            perforator.forward_conn(stream, fwd_conn_shdwn_guard).await
+                        ParsedTcpStream::Raw(stream) => {
+                            perforator.forward_conn(stream, fwd_conn_shdwn_guard).await;
                         }
                     }
                 }

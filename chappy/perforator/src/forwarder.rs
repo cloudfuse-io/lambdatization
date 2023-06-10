@@ -240,7 +240,10 @@ impl Forwarder {
         let InitResponse { code } = InitResponse::read(&mut quic_recv).await;
         match code {
             0 => debug!("target conn successful"),
-            err_code => return Err(anyhow!("target conn failed with code {}", err_code)),
+            err_code => {
+                error!(err_code, "target conn failed");
+                return Err(anyhow!("target conn failed with code {}", err_code));
+            }
         }
         debug!("closing bi");
         Ok(())

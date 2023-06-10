@@ -1,6 +1,6 @@
 /// Protocol talked between the interceptor and the perforator
 use std::fmt::Display;
-use std::io::{ErrorKind as IoErrorKind, Result as IoResult};
+use std::io::{Error as IoError, ErrorKind as IoErrorKind, Result as IoResult};
 use std::net::Ipv4Addr;
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -15,12 +15,13 @@ pub enum ParsedTcpStream {
         source_port: u16,
         target_virtual_ip: Ipv4Addr,
         target_port: u16,
+        response_writer: ResponseWriter,
     },
-    Raw,
+    Raw(TcpStream),
 }
 
 impl ParsedTcpStream {
-    pub async fn from(stream: &mut TcpStream) -> Self {
+    pub async fn from(mut stream: TcpStream) -> Self {
         let mut buff = [0; REGISTER_HEADER_LENGTH];
         stream.peek(&mut buff).await.unwrap();
         if buff == REGISTER_CLIENT_HEADER_BYTES {
@@ -32,10 +33,26 @@ impl ParsedTcpStream {
                 source_port,
                 target_virtual_ip,
                 target_port,
+                response_writer: ResponseWriter(stream),
             }
         } else {
-            Self::Raw
+            Self::Raw(stream)
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct ResponseWriter(TcpStream);
+
+impl ResponseWriter {
+    pub async fn write_success(mut self) {
+        self.0.write_u8(0).await.unwrap();
+        self.0.flush().await.unwrap();
+    }
+
+    pub async fn write_failure(mut self) {
+        self.0.write_u8(1).await.unwrap();
+        self.0.flush().await.unwrap();
     }
 }
 
@@ -73,6 +90,12 @@ pub async fn register_client(
     stream.write_u32(target_virtual_ip.into()).await?;
     stream.write_u16(target_port).await?;
     stream.flush().await?;
+    if stream.read_u8().await? > 0 {
+        return Err(IoError::new(
+            IoErrorKind::AddrNotAvailable,
+            anyhow::anyhow!("Perforator could not reach target"),
+        ));
+    }
     stream
         .read_u8()
         .await

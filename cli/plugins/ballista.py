@@ -55,7 +55,7 @@ def run_executor(
         "CHAPPY_SEED_HOSTNAME": seed_ip,
         "CHAPPY_SEED_PORT": 8000,
         "CHAPPY_VIRTUAL_IP": virtual_ip,
-        "RUST_LOG": "info,chappy_perforator=debug,chappy=debug",
+        "RUST_LOG": "info,chappy_perforator=debug,chappy=debug,rustls=error",
         "RUST_BACKTRACE": "1",
     }
     if "L12N_CHAPPY_OPENTELEMETRY_APIKEY" in conf(VALIDATORS):
@@ -94,7 +94,7 @@ def run_scheduler(
         "CHAPPY_SEED_HOSTNAME": seed_ip,
         "CHAPPY_SEED_PORT": 8000,
         "CHAPPY_VIRTUAL_IP": virtual_ip,
-        "RUST_LOG": "info,chappy_perforator=debug,chappy=debug",
+        "RUST_LOG": "info,chappy_perforator=debug,chappy=debug,rustls=error",
         "RUST_BACKTRACE": "1",
     }
     if "L12N_CHAPPY_OPENTELEMETRY_APIKEY" in conf(VALIDATORS):
