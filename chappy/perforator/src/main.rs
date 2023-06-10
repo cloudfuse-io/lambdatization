@@ -1,9 +1,8 @@
 use chappy_perforator::{
     binding_service::BindingService,
     forwarder::Forwarder,
-    metrics,
+    metrics::{meter, print_metrics},
     perforator::Perforator,
-    print_metrics,
     shutdown::{gracefull, GracefullyRunnable, Shutdown},
     CHAPPY_CONF,
 };
@@ -47,7 +46,7 @@ impl GracefullyRunnable for SrvRunnable {
 async fn main() {
     init_tracing(&format!("perf-{}", CHAPPY_CONF.virtual_ip));
 
-    metrics(
+    meter(
         gracefull(SrvRunnable, Duration::from_secs(1))
             .instrument(info_span!("perforator", virt_ip = CHAPPY_CONF.virtual_ip)),
     )

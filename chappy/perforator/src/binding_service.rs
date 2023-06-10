@@ -1,4 +1,4 @@
-use crate::{metrics, CHAPPY_CONF};
+use crate::{metrics::meter, CHAPPY_CONF};
 use chappy_seed::NodeBindingResponse;
 use chappy_seed::{
     seed_client::SeedClient, ClientBindingRequest, ClientBindingResponse, NodeBindingRequest,
@@ -91,7 +91,7 @@ impl BindingService {
         let (tx, rx) = mpsc::channel::<NodeBindingRequest>(1);
 
         let mut client = self.client().await;
-        let handle = tokio::spawn(metrics(async move {
+        let handle = tokio::spawn(meter(async move {
             client
                 .bind_node(tokio_stream::wrappers::ReceiverStream::new(rx))
                 .await

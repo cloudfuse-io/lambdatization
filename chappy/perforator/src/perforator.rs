@@ -1,5 +1,5 @@
 use crate::binding_service::NodeBindingHandle;
-use crate::metrics;
+use crate::metrics::meter;
 use crate::{
     binding_service::BindingService, forwarder::Forwarder, shutdown::Shutdown,
     shutdown::ShutdownGuard,
@@ -137,7 +137,7 @@ impl Perforator {
         let binding_service = Arc::clone(&self.binding_service);
         let fwd_ref = Arc::clone(&self.forwarder);
         let node_binding = binding_service.bind_node().await;
-        tokio::spawn(metrics(
+        tokio::spawn(meter(
             async move {
                 let stream = binding_service.bind_server(server_certificate).await;
                 // For each incoming server punch request, send a random packet to punch
@@ -174,7 +174,7 @@ impl Perforator {
             let src_port = stream.peer_addr().unwrap().port();
             let perforator = self.clone();
             let fwd_conn_shdwn_guard = shutdown.create_guard();
-            tokio::spawn(metrics(
+            tokio::spawn(meter(
                 async move {
                     let parsed_stream = ParsedTcpStream::from(stream).await;
                     match parsed_stream {

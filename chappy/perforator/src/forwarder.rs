@@ -1,5 +1,5 @@
 use crate::fwd_protocol::{copy, InitQuery, InitResponse};
-use crate::metrics;
+use crate::metrics::meter;
 use crate::{quic_utils, shutdown::Shutdown, PUNCH_SERVER_NAME, SERVER_NAME};
 use anyhow::{anyhow, Result};
 use chappy_util::tcp_connect::connect_retry;
@@ -145,7 +145,7 @@ impl Forwarder {
                 }
             };
             let shdwn_guard = shutdown.create_guard();
-            tokio::spawn(metrics(
+            tokio::spawn(meter(
                 shdwn_guard
                     .run_cancellable(Self::handle_srv_conn(conn), Duration::from_millis(50))
                     .instrument(debug_span!("srv_quic_conn", src_nat = %remote_addr)),
@@ -309,7 +309,7 @@ mod tests {
         let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
         let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
 
-        let accept_handle = tokio::spawn(metrics(async move {
+        let accept_handle = tokio::spawn(meter(async move {
             let (stream, _) = listener.accept().await.unwrap();
             (stream, listener)
         }));
@@ -318,7 +318,7 @@ mod tests {
         let (proxied_stream, listener) = accept_handle.await.unwrap();
 
         let fwd = Arc::clone(fwd);
-        let fwd_handle = tokio::spawn(metrics(async move {
+        let fwd_handle = tokio::spawn(meter(async move {
             fwd.forward(
                 proxied_stream,
                 SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, fwd.port().into())),
