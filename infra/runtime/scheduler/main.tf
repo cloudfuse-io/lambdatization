@@ -30,7 +30,7 @@ locals {
 resource "aws_cloudwatch_event_rule" "standalone_engine_schedule" {
   name                = "${module.env.module_name}-standalone-engine-sched-${module.env.stage}"
   description         = "Start standalone engine benchmark"
-  schedule_expression = "rate(15 minutes)"
+  schedule_expression = "rate(30 minutes)"
 }
 
 resource "aws_cloudwatch_event_target" "standalone_engine_schedule" {
@@ -52,7 +52,7 @@ locals {
   scales          = [64, 128, 256]
   scaling_cmds    = [for sc in local.scales : "l12n init ${local.init_flags} monitoring.bench-scaling -n ${sc}"]
   scaling_encoded = [for cmd in local.scaling_cmds : base64encode(cmd)]
-  samplings       = [for sc in local.scales : 32 / sc]
+  samplings       = [for sc in local.scales : 8 / sc]
   scaling_inputs  = [for i in range(length(local.scales)) : jsonencode({ "cmd" : local.scaling_encoded[i], "sampling" : local.samplings[i] })]
 }
 
