@@ -6,13 +6,17 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 import core
-import dynaconf
-from common import aws, conf, format_lambda_output, terraform_output
+from common import (
+    OTEL_VALIDATORS,
+    aws,
+    conf,
+    format_lambda_output,
+    get_otel_env,
+    terraform_output,
+)
 from invoke import Exit, task
 
-VALIDATORS = [
-    dynaconf.Validator("L12N_CHAPPY_OPENTELEMETRY_APIKEY", ne=""),
-]
+VALIDATORS = OTEL_VALIDATORS
 
 
 @task(autoprint=True)
@@ -57,11 +61,8 @@ def run_executor(
         "CHAPPY_VIRTUAL_IP": virtual_ip,
         "RUST_LOG": "info,chappy_perforator=debug,chappy=debug,rustls=error",
         "RUST_BACKTRACE": "1",
+        **get_otel_env(),
     }
-    if "L12N_CHAPPY_OPENTELEMETRY_APIKEY" in conf(VALIDATORS):
-        env["CHAPPY_OPENTELEMETRY_APIKEY"] = conf(VALIDATORS)[
-            "L12N_CHAPPY_OPENTELEMETRY_APIKEY"
-        ]
     lambda_res = aws("lambda").invoke(
         FunctionName=lambda_name,
         Payload=json.dumps(
@@ -96,11 +97,8 @@ def run_scheduler(
         "CHAPPY_VIRTUAL_IP": virtual_ip,
         "RUST_LOG": "info,chappy_perforator=debug,chappy=debug,rustls=error",
         "RUST_BACKTRACE": "1",
+        **get_otel_env(),
     }
-    if "L12N_CHAPPY_OPENTELEMETRY_APIKEY" in conf(VALIDATORS):
-        env["CHAPPY_OPENTELEMETRY_APIKEY"] = conf(VALIDATORS)[
-            "L12N_CHAPPY_OPENTELEMETRY_APIKEY"
-        ]
     lambda_res = aws("lambda").invoke(
         FunctionName=lambda_name,
         Payload=json.dumps(

@@ -3,6 +3,7 @@ use chappy_perforator::{
     forwarder::Forwarder,
     metrics,
     perforator::Perforator,
+    print_metrics,
     shutdown::{gracefull, GracefullyRunnable, Shutdown},
     CHAPPY_CONF,
 };
@@ -37,6 +38,7 @@ impl GracefullyRunnable for SrvRunnable {
             perforator.run_tcp_server(shutdown),
             forwarder.run_quic_server(shutdown),
         );
+        print_metrics();
         node_binding.close().await;
     }
 }

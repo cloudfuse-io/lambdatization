@@ -30,6 +30,11 @@ TF_BACKEND_VALIDATORS = [
     ),
 ]
 
+OTEL_VALIDATORS = [
+    dynaconf.Validator("L12N_CHAPPY_OPENTELEMETRY_URL", ne=""),
+    dynaconf.Validator("L12N_CHAPPY_OPENTELEMETRY_AUTHORIZATION", default=""),
+]
+
 
 @cache
 def s3_regions():
@@ -404,3 +409,13 @@ class FargateService:
             cluster=self.cluster, service=self.service_name, desiredCount=0
         )
         self._stop_task(timeout, start_time)
+
+
+def get_otel_env() -> dict:
+    env = {}
+    url_var = "CHAPPY_OPENTELEMETRY_URL"
+    auth_var = "CHAPPY_OPENTELEMETRY_AUTHORIZATION"
+    if f"L12N_{auth_var}" in conf(OTEL_VALIDATORS):
+        env[url_var] = conf(OTEL_VALIDATORS)[f"L12N_{url_var}"]
+        env[auth_var] = conf(OTEL_VALIDATORS)[f"L12N_{auth_var}"]
+    return env

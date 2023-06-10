@@ -1,4 +1,5 @@
 use chrono::prelude::{DateTime, Utc};
+use opentelemetry_otlp::WithExportConfig;
 use tracing_subscriber::{
     fmt::{format::Writer, time::FormatTime},
     layer::SubscriberExt,
@@ -26,15 +27,16 @@ pub fn init_tracing(service_name: &str) {
         .with(EnvFilter::from_default_env())
         .with(fmt_layer);
 
-    let otlp_layer = if let Ok(ot_key) = std::env::var("CHAPPY_OPENTELEMETRY_APIKEY") {
-        use opentelemetry_otlp::WithExportConfig;
+    let otlp_config = (
+        std::env::var("CHAPPY_OPENTELEMETRY_URL"),
+        std::env::var("CHAPPY_OPENTELEMETRY_AUTHORIZATION"),
+    );
+    let otlp_layer = if let (Ok(ot_url), Ok(ot_auth)) = otlp_config {
+        let headers = std::collections::HashMap::from([("Authorization".into(), ot_auth)]);
         let exporter = opentelemetry_otlp::new_exporter()
             .http()
-            .with_endpoint("https://otelcol.aspecto.io/v1/traces")
-            .with_headers(std::collections::HashMap::from([(
-                "Authorization".into(),
-                ot_key,
-            )]));
+            .with_endpoint(ot_url)
+            .with_headers(headers);
         let otlp_tracer = opentelemetry_otlp::new_pipeline()
             .tracing()
             .with_exporter(exporter)

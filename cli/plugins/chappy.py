@@ -8,23 +8,22 @@ from collections import namedtuple
 from concurrent.futures import ThreadPoolExecutor
 
 import core
-import dynaconf
 from common import (
     AWS_REGION,
     DOCKERDIR,
+    OTEL_VALIDATORS,
     REPOROOT,
     FargateService,
     aws,
     conf,
     format_lambda_output,
+    get_otel_env,
     terraform_output,
     wait_deployment,
 )
 from invoke import Context, Exit, task
 
-VALIDATORS = [
-    dynaconf.Validator("L12N_CHAPPY_OPENTELEMETRY_APIKEY", ne=""),
-]
+VALIDATORS = OTEL_VALIDATORS
 
 ## FARGATE COMPONENTS ##
 
@@ -130,12 +129,9 @@ def run_seed(c, release=False):
     env_map = {
         "RUST_LOG": "info,chappy_seed=debug,chappy_util=debug",
         "RUST_BACKTRACE": "1",
+        **get_otel_env(),
     }
-    if "L12N_CHAPPY_OPENTELEMETRY_APIKEY" in conf(VALIDATORS):
-        env_map["CHAPPY_OPENTELEMETRY_APIKEY"] = conf(VALIDATORS)[
-            "L12N_CHAPPY_OPENTELEMETRY_APIKEY"
-        ]
-    env = " ".join([f"{k}={v}" for k, v in env_map.items()])
+    env = " ".join([f'{k}="{v}"' for k, v in env_map.items()])
     seed_exec(c, f"{env} python3 dev-handler.py {bucket_name} {s3_key}", pty=False)
 
 
@@ -239,12 +235,8 @@ def run_lambda_pair(c, seed=None, release=False, client="example-client-async"):
             "CHAPPY_VIRTUAL_SUBNET": "172.28.0.0/16",
             "RUST_LOG": "info,chappy_perforator=debug,chappy=debug,chappy_util=debug,rustls=error",
             "RUST_BACKTRACE": "1",
+            **get_otel_env(),
         }
-
-        if "L12N_CHAPPY_OPENTELEMETRY_APIKEY" in conf(VALIDATORS):
-            common_env["CHAPPY_OPENTELEMETRY_APIKEY"] = conf(VALIDATORS)[
-                "L12N_CHAPPY_OPENTELEMETRY_APIKEY"
-            ]
 
         server_fut = executor.submit(
             invoke_lambda,
@@ -332,11 +324,8 @@ def run_lambda_cluster(c, seed=None, release=False, binary="example-n-to-n", nod
             "BYTES_SENT": 128,
             "RUST_LOG": "info,chappy_perforator=debug,chappy_util=debug,chappy=debug,rustls=error",
             "RUST_BACKTRACE": "1",
+            **get_otel_env(),
         }
-        if "L12N_CHAPPY_OPENTELEMETRY_APIKEY" in conf(VALIDATORS):
-            common_env["CHAPPY_OPENTELEMETRY_APIKEY"] = conf(VALIDATORS)[
-                "L12N_CHAPPY_OPENTELEMETRY_APIKEY"
-            ]
         node_futs = []
         for i in range(nodes):
             node_fut = executor.submit(
