@@ -2,6 +2,7 @@ use crate::fwd_protocol::{copy, InitQuery, InitResponse};
 use crate::metrics;
 use crate::{quic_utils, shutdown::Shutdown, PUNCH_SERVER_NAME, SERVER_NAME};
 use anyhow::{anyhow, Result};
+use chappy_util::tcp_connect::connect_retry;
 use quinn::{Connection, ConnectionError, Endpoint};
 use quinn_proto::{TransportError, TransportErrorCode};
 use rustls::AlertDescription::BadCertificate;
@@ -84,7 +85,15 @@ impl Forwarder {
         debug!(?query, "init query read");
 
         // forwarding connection
-        let fwd_stream = match TcpStream::connect((Ipv4Addr::LOCALHOST, query.target_port)).await {
+
+        // TODO: make timeout configurable according to expected target startup
+        // duration
+        let fwd_stream = match connect_retry(
+            (Ipv4Addr::LOCALHOST, query.target_port),
+            Duration::from_millis(500),
+        )
+        .await
+        {
             Ok(stream) => {
                 InitResponse { code: 0 }.write(&mut quic_send).await;
                 stream

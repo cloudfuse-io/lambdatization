@@ -1,5 +1,6 @@
 pub mod awaitable_map;
 pub mod protocol;
+pub mod tcp_connect;
 pub mod test;
 mod tracing_helpers;
 
