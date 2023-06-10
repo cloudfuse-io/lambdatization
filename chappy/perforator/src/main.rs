@@ -37,6 +37,7 @@ impl GracefullyRunnable for SrvRunnable {
             perforator.run_tcp_server(shutdown),
             forwarder.run_quic_server(shutdown),
         );
+        // TODO: not called because cancelled before
         print_metrics();
         node_binding.close().await;
     }

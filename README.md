@@ -99,6 +99,37 @@ If you want to use Terraform Cloud as a backend instead of `local`, set
 > **Note**
 > Environment variables will take precedence over the `.env` file
 
+#### Tracing backend
+
+For better analysis of the proxying components, you can setup any observability
+backend compatible with the OpenTelemetry Protocol (OTLP) over [the http
+protocol][otlp-http]. We recommend in particular Grafana Cloud which has a
+generous Free Tier and a nice interface.
+
+[otlp-http]: https://docs.lightstep.com/otel/send-otlp-over-http-to-lightstep#lightstep-otlphttp-endpoints
+
+```bash
+L12N_CHAPPY_OPENTELEMETRY_URL=https://otlp-gateway-{$grafana_region}.grafana.net/otlp/v1/traces
+L12N_CHAPPY_OPENTELEMETRY_AUTHORIZATION="Basic {echo -n "$instance_id:$api_key" | base64}"
+```
+
+Where:
+- `grafana_region` is the region of your Grafana Cloud instance, e.g
+  `prod-us-east-0`
+- `instance_id` can be obtained from the detail page of your Grafana Cloud
+  instance
+- `api_key` is a Grafana Cloud api key with MetricsPublisher role
+- `base64(instance_id:api_key)` is the base64 encoding of the two variables
+  above separated by `:`
+
+You can also try out [Aspecto][https://www.aspecto.io/] which has pretty similar
+capabilities and a very easy setup.
+
+```bash
+L12N_CHAPPY_OPENTELEMETRY_URL=https://otelcol.aspecto.io/v1/traces
+L12N_CHAPPY_OPENTELEMETRY_AUTHORIZATION=aspecto_key
+```
+
 ### The `l12n` CLI
 
 Inside the `l12n-shell`, you can use the following commands:
