@@ -174,6 +174,7 @@ impl Perforator {
             let src_port = stream.peer_addr().unwrap().port();
             let perforator = self.clone();
             let fwd_conn_shdwn_guard = shutdown.create_guard();
+            let reg_cli_shdwn_guard = shutdown.create_guard();
             tokio::spawn(meter(
                 async move {
                     let parsed_stream = ParsedTcpStream::from(stream).await;
@@ -184,12 +185,18 @@ impl Perforator {
                             target_port,
                             response_writer,
                         } => {
-                            match perforator
-                                .register_client(source_port, target_virtual_ip, target_port)
+                            let reg_fut = perforator.register_client(
+                                source_port,
+                                target_virtual_ip,
+                                target_port,
+                            );
+                            match reg_cli_shdwn_guard
+                                .run_cancellable(reg_fut, Duration::from_millis(50))
                                 .await
                             {
-                                Ok(_) => response_writer.write_success().await,
-                                Err(_) => response_writer.write_failure().await,
+                                Ok(Ok(_)) => response_writer.write_success().await,
+                                Ok(Err(_)) => response_writer.write_success().await,
+                                Err(_) => (),
                             };
                         }
                         ParsedTcpStream::Raw(stream) => {
