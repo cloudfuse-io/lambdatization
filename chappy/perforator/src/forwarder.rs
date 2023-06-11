@@ -7,6 +7,7 @@ use quinn::{Connection, ConnectionError, Endpoint};
 use quinn_proto::{TransportError, TransportErrorCode};
 use rustls::AlertDescription::BadCertificate;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpStream;
 use tracing::{debug, debug_span, error, info, instrument, warn, Instrument};
@@ -45,7 +46,7 @@ impl Forwarder {
             quinn::EndpointConfig::default(),
             Some(server_config),
             sock.into(),
-            quinn::TokioRuntime,
+            Arc::new(quinn::TokioRuntime),
         )
         .unwrap()
     }
