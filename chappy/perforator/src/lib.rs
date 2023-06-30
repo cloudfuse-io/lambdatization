@@ -6,6 +6,7 @@ pub mod metrics;
 pub mod perforator;
 pub mod quic_utils;
 pub mod shutdown;
+pub mod spawn;
 
 #[macro_use]
 extern crate lazy_static;

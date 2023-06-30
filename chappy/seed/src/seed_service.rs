@@ -169,6 +169,7 @@ impl Seed for SeedService {
                 time: Message::now(),
             },
         );
+        // debug!("waiting for bind node stream to close");
         if stream.next().await.is_some() {
             return Err(Status::invalid_argument(
                 "Expected only one binding request",
@@ -186,7 +187,6 @@ impl Seed for SeedService {
             "{:?}",
             self.cluster_manager.get_summary(bind_req.cluster_id).await
         );
-        // debug!("bind node completed");
         Ok(Response::new(NodeBindingResponse {}))
     }
 }

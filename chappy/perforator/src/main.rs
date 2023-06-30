@@ -7,6 +7,7 @@ use chappy_perforator::{
     CHAPPY_CONF,
 };
 use chappy_util::{close_tracing, init_tracing};
+use futures::FutureExt;
 use std::{sync::Arc, time::Duration};
 use tonic::async_trait;
 use tracing::{info, info_span, Instrument};
@@ -32,14 +33,34 @@ impl GracefullyRunnable for SrvRunnable {
             binding_service,
             tcp_port,
         ));
-        let node_binding = perforator.bind_node(shutdown.create_guard()).await;
+        let node_binding = perforator
+            .bind_node(shutdown.create_guard(), shutdown.create_guard())
+            .await;
+
+        let mut shtdwn_hook_guard = shutdown.create_guard();
+        tokio::spawn(async move {
+            shtdwn_hook_guard.wait_shutdown().await;
+            print_metrics();
+            // TODO -> this call seems to be stuck
+            node_binding.close().await;
+        });
+
         tokio::join!(
-            perforator.run_tcp_server(shutdown),
-            forwarder.run_quic_server(shutdown),
+            shutdown
+                .create_guard()
+                .run_cancellable(
+                    perforator.run_tcp_server(shutdown),
+                    Duration::from_millis(10)
+                )
+                .map(|o| o.ok()),
+            shutdown
+                .create_guard()
+                .run_cancellable(
+                    forwarder.run_quic_server(shutdown),
+                    Duration::from_millis(10)
+                )
+                .map(|o| o.ok()),
         );
-        // TODO: not called because cancelled before
-        print_metrics();
-        node_binding.close().await;
     }
 }
 

@@ -1,11 +1,11 @@
 use crate::fwd_protocol::{copy, InitQuery, InitResponse};
-use crate::metrics::meter;
+use crate::spawn::spawn_task;
 use crate::{quic_utils, shutdown::Shutdown, PUNCH_SERVER_NAME, SERVER_NAME};
 use anyhow::{anyhow, Result};
 use chappy_util::tcp_connect::connect_retry;
 use quinn::{Connection, ConnectionError, Endpoint};
 use quinn_proto::{TransportError, TransportErrorCode};
-use rustls::AlertDescription::BadCertificate;
+use rustls::AlertDescription::UnknownCA;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::sync::Arc;
 use std::time::Duration;
@@ -146,11 +146,11 @@ impl Forwarder {
                 }
             };
             let shdwn_guard = shutdown.create_guard();
-            tokio::spawn(meter(
-                shdwn_guard
-                    .run_cancellable(Self::handle_srv_conn(conn), Duration::from_millis(50))
-                    .instrument(debug_span!("srv_quic_conn", src_nat = %remote_addr)),
-            ));
+            spawn_task(
+                shdwn_guard,
+                debug_span!("srv_quic_conn", src_nat = %remote_addr),
+                Self::handle_srv_conn(conn),
+            );
         }
     }
 
@@ -279,9 +279,9 @@ impl Forwarder {
         match connecting.await {
             Ok(_) => warn!("Connection unexpectedly successful"),
             Err(ConnectionError::TransportError(TransportError { code: c, .. }))
-                if c == TransportErrorCode::crypto(BadCertificate.get_u8()) =>
+                if c == TransportErrorCode::crypto(UnknownCA.get_u8()) =>
             {
-                debug!("Got expected bad certificate error")
+                debug!("Got expected certificate error")
             }
             Err(e) => warn!("Unexpected error {:?}", e),
         }
@@ -302,7 +302,7 @@ mod tests {
     /// Create a TCP server on the specified port and connect to it, then
     /// forward the server side stream using the provided forwarder and target
     /// port
-    async fn proxied_connect(
+    async fn simulate_proxied_connect(
         port: u16,
         fwd: &Arc<Forwarder>,
         target_port: u16,
@@ -310,16 +310,16 @@ mod tests {
         let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
         let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
 
-        let accept_handle = tokio::spawn(meter(async move {
+        let accept_handle = tokio::spawn(async move {
             let (stream, _) = listener.accept().await.unwrap();
             (stream, listener)
-        }));
+        });
         tokio::time::sleep(Duration::from_millis(50)).await;
         let cli_stream = TcpStream::connect(addr).await.unwrap();
         let (proxied_stream, listener) = accept_handle.await.unwrap();
 
         let fwd = Arc::clone(fwd);
-        let fwd_handle = tokio::spawn(meter(async move {
+        let fwd_handle = tokio::spawn(async move {
             fwd.forward(
                 proxied_stream,
                 SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, fwd.port().into())),
@@ -328,7 +328,7 @@ mod tests {
             )
             .await;
             debug!("dropping moved listener {}", listener.local_addr().unwrap());
-        }));
+        });
         (cli_stream, fwd_handle)
     }
 
@@ -373,7 +373,7 @@ mod tests {
         let echo_srv_handle = tokio::spawn(echo_server(echo_srv_port));
         let (fwd, fwd_srv_handle) = create_and_start_forwarder(fwd_quic_port).await;
         let (mut cli_stream, fwd_handle) =
-            proxied_connect(cli_proxy_port, &fwd, echo_srv_port).await;
+            simulate_proxied_connect(cli_proxy_port, &fwd, echo_srv_port).await;
 
         // Try big and small writes to check whether bytes are properly flushed
         // through the proxies
@@ -405,7 +405,7 @@ mod tests {
                 async move {
                     let echo_srv_handle = tokio::spawn(echo_server(echo_srv_port));
                     let (cli_stream, fwd_handle) =
-                        proxied_connect(cli_proxy_port, &fwd, echo_srv_port).await;
+                        simulate_proxied_connect(cli_proxy_port, &fwd, echo_srv_port).await;
                     (cli_stream, echo_srv_handle, fwd_handle)
                 }
             })
@@ -439,7 +439,7 @@ mod tests {
         let echo_srv_handle = tokio::spawn(echo_server(echo_srv_port));
         let (fwd, fwd_srv_handle) = create_and_start_forwarder(fwd_quic_port).await;
         let (mut cli_stream, fwd_handle) =
-            proxied_connect(cli_proxy_port, &fwd, echo_srv_port).await;
+            simulate_proxied_connect(cli_proxy_port, &fwd, echo_srv_port).await;
 
         // Interrupt the target server in the middle of the communication
         assert_echo(&mut cli_stream, 10).await;
