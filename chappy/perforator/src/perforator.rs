@@ -97,7 +97,7 @@ impl Perforator {
     #[instrument(name = "fwd_conn", skip_all)]
     async fn forward_conn(&self, stream: TcpStream) {
         debug!("starting...");
-        // TODO adjust timout duration
+        // TODO adjust timeout duration
         let src_port = stream.peer_addr().unwrap().port();
         let target_virtual_address = timeout(
             Duration::from_secs(1),
@@ -105,7 +105,7 @@ impl Perforator {
         )
         .await
         .unwrap();
-        // TODO adjust timout duration
+        // TODO adjust timeout duration
         let target_address = timeout(
             Duration::from_secs(3),
             self.address_mappings.get(target_virtual_address, |_| false),
@@ -191,7 +191,7 @@ impl Perforator {
                             );
                             match reg_fut.await {
                                 Ok(_) => response_writer.write_success().await,
-                                Err(_) => response_writer.write_success().await,
+                                Err(_) => response_writer.write_failure().await,
                             };
                         }
                         ParsedTcpStream::Raw(stream) => {

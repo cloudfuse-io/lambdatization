@@ -18,8 +18,7 @@ pub fn configure_server(certificate_der: Vec<u8>, private_key_der: Vec<u8>) -> S
         .unwrap()
         .max_concurrent_uni_streams(0_u8.into())
         .keep_alive_interval(Some(Duration::from_secs(1)))
-        // NOTE: removing this timeout might leave lingering connections around
-        .max_idle_timeout(None);
+        .max_idle_timeout(Some(Duration::from_secs(5).try_into().unwrap()));
 
     server_config
 }
@@ -31,8 +30,7 @@ fn configure_client(server_cert: Vec<u8>) -> ClientConfig {
 
     let mut transport = TransportConfig::default();
     transport.keep_alive_interval(Some(Duration::from_secs(1)));
-    // NOTE: removing this timeout might leave lingering connections around
-    transport.max_idle_timeout(None);
+    transport.max_idle_timeout(Some(Duration::from_secs(5).try_into().unwrap()));
 
     let mut cli = ClientConfig::with_root_certificates(certs);
     cli.transport_config(Arc::new(transport));
@@ -70,7 +68,7 @@ pub async fn connect_with_retry(
     let start = Instant::now();
     let quic_con;
     // TODO: investigate whether this retry is necessary or whether
-    // QUIC/Quinn is handling retries itnernally
+    // QUIC/Quinn is handling retries internally
     loop {
         let endpoint_fut = endpoint
             .connect_with(cli_conf.clone(), target_server_addr, SERVER_NAME)
@@ -81,9 +79,9 @@ pub async fn connect_with_retry(
             break;
         } else if start.elapsed() > Duration::from_millis(CHAPPY_CONF.connection_timeout_ms) {
             error!(
-                "connection timeout elapsed: {:?}>{:?}",
-                start.elapsed(),
-                Duration::from_millis(CHAPPY_CONF.connection_timeout_ms)
+                elapsed=?start.elapsed(),
+                timeout=?Duration::from_millis(CHAPPY_CONF.connection_timeout_ms),
+                "connection timeout",
             );
             return None;
         } else {

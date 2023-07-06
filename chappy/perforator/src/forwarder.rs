@@ -240,7 +240,14 @@ impl Forwarder {
             return Err(anyhow!("quic conn failed"));
         }
         let quic_conn = conn_result.unwrap();
-        let (mut quic_send, mut quic_recv) = quic_conn.open_bi().await.unwrap();
+
+        // bi opening timeout means an unexpected QUIC flow control kicked in
+        let (mut quic_send, mut quic_recv) =
+            tokio::time::timeout(Duration::from_millis(50), quic_conn.open_bi())
+                .await
+                .unwrap()
+                .unwrap();
+
         debug!("new bi opened");
         let query = InitQuery {
             target_port,
