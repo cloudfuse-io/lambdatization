@@ -2,6 +2,8 @@ use core::panic;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tracing::{debug, error, warn};
 
+use chappy_util::timed_poll::{timed_drop, timed_poll};
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct InitQuery {
     pub target_port: u16,
@@ -50,53 +52,59 @@ where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
-    let mut buf = vec![0u8; 4096].into_boxed_slice();
-    let mut bytes_read = 0;
-    let mut nb_read = 0;
-    // Note: Using tokio::io::copy here was not flushing the stream eagerly
-    // enough, which was leaving some application low data volumetry
-    // connections hanging.
-    loop {
-        let read_res = reader.read(&mut buf).await;
-        match read_res {
-            Ok(0) => {
-                debug!(bytes_read, nb_read, "completed");
-                if let Err(err) = writer.shutdown().await {
-                    warn!(%err, "writer shutdown failed");
-                } else {
-                    debug!("writer shut down");
+    timed_poll("copy", async move {
+        let mut buf = vec![0u8; 4096].into_boxed_slice();
+        let mut bytes_read = 0;
+        let mut nb_read = 0;
+        // Note: Using tokio::io::copy here was not flushing the stream eagerly
+        // enough, which was leaving some application low data volumetry
+        // connections hanging.
+        let loop_res = loop {
+            let read_res = reader.read(&mut buf).await;
+            match read_res {
+                Ok(0) => {
+                    debug!(bytes_read, nb_read, "completed");
+                    if let Err(err) = writer.shutdown().await {
+                        warn!(%err, "writer shutdown failed");
+                    } else {
+                        debug!("writer shut down");
+                    }
+                    break Ok(());
                 }
-                break Ok(());
-            }
-            Ok(b) => match writer.write_all(&buf[0..b]).await {
-                Ok(()) => {
-                    bytes_read += b;
-                    nb_read += 1;
-                    // TODO: this systematic flushing might be inefficient, but
-                    // is required to ensure proper forwarding of streams with
-                    // small data exchanges. Maybe an improved heuristic could
-                    // be applied.
-                    if let Err(err) = writer.flush().await {
-                        error!(%err, "flush failure");
+                Ok(b) => match writer.write_all(&buf[0..b]).await {
+                    Ok(()) => {
+                        bytes_read += b;
+                        nb_read += 1;
+                        // TODO: this systematic flushing might be inefficient, but
+                        // is required to ensure proper forwarding of streams with
+                        // small data exchanges. Maybe an improved heuristic could
+                        // be applied.
+                        if let Err(err) = writer.flush().await {
+                            error!(%err, "flush failure");
+                            break Err(err);
+                        }
+                    }
+                    Err(err) => {
+                        error!(%err, "write failure");
                         break Err(err);
                     }
-                }
+                },
                 Err(err) => {
-                    error!(%err, "write failure");
+                    error!(%err, "read failure");
+                    if let Err(err) = writer.shutdown().await {
+                        warn!(%err, "writer shutdown also failed");
+                    } else {
+                        debug!("writer shut down");
+                    }
                     break Err(err);
                 }
-            },
-            Err(err) => {
-                error!(%err, "read failure");
-                if let Err(err) = writer.shutdown().await {
-                    warn!(%err, "writer shutdown also failed");
-                } else {
-                    debug!("writer shut down");
-                }
-                break Err(err);
-            }
+            };
         };
-    }
+        timed_drop("reader", reader);
+        timed_drop("writer", writer);
+        loop_res
+    })
+    .await
 }
 
 #[cfg(test)]
