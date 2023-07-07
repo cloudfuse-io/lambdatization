@@ -1,5 +1,6 @@
 /// Protocol talked between the interceptor and the perforator
 use crate::tcp_connect::connect_retry;
+use crate::timed_poll::timed_poll;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind, Result as IoResult};
 use std::net::Ipv4Addr;
 use std::time::Duration;
@@ -46,13 +47,19 @@ pub struct ResponseWriter(TcpStream);
 
 impl ResponseWriter {
     pub async fn write_success(mut self) {
-        self.0.write_u8(0).await.unwrap();
-        self.0.flush().await.unwrap();
+        timed_poll("resp_success", async {
+            self.0.write_u8(0).await.unwrap();
+            self.0.flush().await.unwrap();
+        })
+        .await;
     }
 
     pub async fn write_failure(mut self) {
-        self.0.write_u8(1).await.unwrap();
-        self.0.flush().await.unwrap();
+        timed_poll("resp_failure", async {
+            self.0.write_u8(1).await.unwrap();
+            self.0.flush().await.unwrap();
+        })
+        .await;
     }
 }
 

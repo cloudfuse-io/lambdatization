@@ -3,6 +3,7 @@ use crate::spawn::spawn_task;
 use crate::{quic_utils, shutdown::Shutdown, PUNCH_SERVER_NAME, SERVER_NAME};
 use anyhow::{anyhow, Result};
 use chappy_util::tcp_connect::connect_retry;
+use chappy_util::timed_poll::timed_poll;
 use quinn::{Connection, ConnectionError, Endpoint};
 use quinn_proto::{TransportError, TransportErrorCode};
 use rustls::AlertDescription::UnknownCA;
@@ -187,7 +188,8 @@ impl Forwarder {
             return;
         }
         let quic_conn = conn_result.unwrap();
-        let (mut quic_send, mut quic_recv) = quic_conn.open_bi().await.unwrap();
+        let (mut quic_send, mut quic_recv) =
+            timed_poll("open_bi", quic_conn.open_bi()).await.unwrap();
         debug!("new bi opened");
         let query = InitQuery {
             target_port,
@@ -230,10 +232,13 @@ impl Forwarder {
         target_port: u16,
         target_server_certificate_der: Vec<u8>,
     ) -> Result<()> {
-        let conn_result = quic_utils::connect_with_retry(
-            &self.quic_endpoint,
-            nated_addr,
-            target_server_certificate_der,
+        let conn_result = timed_poll(
+            "connect_with_retry",
+            quic_utils::connect_with_retry(
+                &self.quic_endpoint,
+                nated_addr,
+                target_server_certificate_der,
+            ),
         )
         .await;
         if conn_result.is_none() {
@@ -243,18 +248,16 @@ impl Forwarder {
 
         // bi opening timeout means an unexpected QUIC flow control kicked in
         let (mut quic_send, mut quic_recv) =
-            tokio::time::timeout(Duration::from_millis(50), quic_conn.open_bi())
-                .await
-                .unwrap()
-                .unwrap();
+            timed_poll("open_bi", quic_conn.open_bi()).await.unwrap();
 
         debug!("new bi opened");
         let query = InitQuery {
             target_port,
             connect_only: true,
         };
-        query.write(&mut quic_send).await;
-        let InitResponse { code } = InitResponse::read(&mut quic_recv).await;
+        timed_poll("write_init", query.write(&mut quic_send)).await;
+        let InitResponse { code } =
+            timed_poll("read_init", InitResponse::read(&mut quic_recv)).await;
         match code {
             0 => debug!("target conn successful"),
             err_code => {
@@ -277,14 +280,16 @@ impl Forwarder {
     #[instrument(skip(self))]
     pub async fn punch_hole(&self, nat: SocketAddr, virt: String) {
         debug!("make punch conn to client");
-        let connecting = self
-            .quic_endpoint
-            .connect_with(quic_utils::configure_punch_client(), nat, PUNCH_SERVER_NAME)
-            .unwrap();
+        let connecting = timed_poll(
+            "quic_conn",
+            self.quic_endpoint
+                .connect_with(quic_utils::configure_punch_client(), nat, PUNCH_SERVER_NAME)
+                .unwrap(),
+        );
         // we expect the connection establishment mechanism to handle retries
         // until the hole is actually punched
         match connecting.await {
-            Ok(_) => warn!("Connection unexpectedly successful"),
+            Ok(_) => panic!("Connection unexpectedly successful"),
             Err(ConnectionError::TransportError(TransportError { code: c, .. }))
                 if c == TransportErrorCode::crypto(UnknownCA.get_u8()) =>
             {

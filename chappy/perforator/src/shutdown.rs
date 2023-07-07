@@ -1,3 +1,4 @@
+use chappy_util::timed_poll::timed_poll;
 use futures::{Future, FutureExt};
 use std::fmt;
 use std::time::Duration;
@@ -14,11 +15,14 @@ pub struct ShutdownGuard {
 impl ShutdownGuard {
     /// Wait for the shutdown signal
     pub async fn wait_shutdown(&mut self) {
-        while self.is_shutdown.changed().await.is_ok() {
-            if *self.is_shutdown.borrow() {
-                break;
+        timed_poll("wait_shutdown", async {
+            while self.is_shutdown.changed().await.is_ok() {
+                if *self.is_shutdown.borrow() {
+                    break;
+                }
             }
-        }
+        })
+        .await
     }
 
     /// Run the provided future until completion or a shutdown notification is
