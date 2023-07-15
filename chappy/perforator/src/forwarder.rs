@@ -10,7 +10,7 @@ use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpStream;
-use tracing::{debug, debug_span, error, info, instrument, warn, Instrument};
+use tracing::{debug, debug_span, error, info, instrument, trace, warn, Instrument};
 
 /// A service relays TCP streams through a QUIC tunnel
 ///
@@ -74,7 +74,7 @@ impl Forwarder {
     async fn handle_srv_conn(conn: Connection) {
         let (mut quic_send, mut quic_recv) = match conn.accept_bi().await {
             Ok(streams) => {
-                debug!("new bi accepted");
+                trace!("new bi accepted");
                 streams
             }
             Err(e) => {
@@ -119,7 +119,7 @@ impl Forwarder {
         let in_fut = copy(fwd_read, quic_send)
             .instrument(debug_span!("cp_tcp_quic", port = query.target_port));
         tokio::try_join!(out_fut, in_fut).ok();
-        debug!("closing bi");
+        trace!("closing bi");
         // expect the connection to be closed by caller
         conn.accept_bi()
             .await
@@ -188,7 +188,7 @@ impl Forwarder {
         }
         let quic_conn = conn_result.unwrap();
         let (mut quic_send, mut quic_recv) = quic_conn.open_bi().await.unwrap();
-        debug!("new bi opened");
+        trace!("new bi opened");
         let query = InitQuery {
             target_port,
             connect_only: false,
@@ -213,7 +213,7 @@ impl Forwarder {
         let in_fut =
             copy(quic_recv, tcp_write).instrument(debug_span!("cp_quic_tcp", port = target_port));
         tokio::try_join!(out_fut, in_fut).ok();
-        debug!("closing bi");
+        trace!("closing bi");
     }
 
     #[instrument(
@@ -248,7 +248,7 @@ impl Forwarder {
                 .unwrap()
                 .unwrap();
 
-        debug!("new bi opened");
+        trace!("new bi opened");
         let query = InitQuery {
             target_port,
             connect_only: true,
@@ -262,7 +262,7 @@ impl Forwarder {
                 return Err(anyhow!("target conn failed with code {}", err_code));
             }
         }
-        debug!("closing bi");
+        trace!("closing bi");
         Ok(())
     }
 

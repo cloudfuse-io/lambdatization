@@ -18,14 +18,13 @@ impl FormatTime for CustomTime {
 
 /// Configure and init tracing for executables
 pub fn init_tracing(service_name: &str) {
+    let reg = tracing_subscriber::registry().with(EnvFilter::from_default_env());
+
     let mut fmt_layer = tracing_subscriber::fmt::layer()
         .with_writer(std::io::stderr)
         .with_timer(CustomTime);
     fmt_layer.set_ansi(false);
-
-    let reg = tracing_subscriber::registry()
-        .with(EnvFilter::from_default_env())
-        .with(fmt_layer);
+    let reg = reg.with(fmt_layer);
 
     let otlp_config = (
         std::env::var("CHAPPY_OPENTELEMETRY_URL"),
@@ -53,7 +52,9 @@ pub fn init_tracing(service_name: &str) {
     } else {
         None
     };
-    reg.with(otlp_layer).init();
+    let reg = reg.with(otlp_layer);
+
+    reg.init();
 }
 
 /// Configure and init tracing with some tweeks specific to shared libraries

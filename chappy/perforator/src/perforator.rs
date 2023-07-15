@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::time::timeout;
-use tracing::{debug, debug_span, instrument};
+use tracing::{debug, debug_span, instrument, trace};
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct TargetVirtualAddress {
@@ -64,7 +64,7 @@ impl Perforator {
         tgt_virt: Ipv4Addr,
         tgt_port: u16,
     ) -> anyhow::Result<()> {
-        debug!("starting...");
+        trace!("starting...");
         let start = Instant::now();
         let virtual_addr = TargetVirtualAddress {
             ip: tgt_virt,
@@ -96,7 +96,7 @@ impl Perforator {
     /// Forward a TCP stream from a registered port
     #[instrument(name = "fwd_conn", skip_all)]
     async fn forward_conn(&self, stream: TcpStream) {
-        debug!("starting...");
+        trace!("starting...");
         // TODO adjust timeout duration
         let src_port = stream.peer_addr().unwrap().port();
         let target_virtual_address = timeout(
@@ -133,7 +133,7 @@ impl Perforator {
         mut punch_stream_shdn_guard: ShutdownGuard,
         safety_shdn_guard: ShutdownGuard,
     ) -> NodeBindingHandle {
-        debug!("starting...");
+        trace!("starting...");
         let server_certificate = self.forwarder.server_certificate().to_owned();
         let binding_service = Arc::clone(&self.binding_service);
         let fwd_ref = Arc::clone(&self.forwarder);

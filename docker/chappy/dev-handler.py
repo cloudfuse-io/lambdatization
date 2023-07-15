@@ -3,6 +3,7 @@ import os
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 
 import boto3
@@ -48,9 +49,10 @@ def setup_binaries(
 
 class Perforator:
     def __init__(self, bin_path):
+        self.tmp_file = tempfile.NamedTemporaryFile(mode="w+", delete=True)
         self.proc = subprocess.Popen(
             [bin_path],
-            stderr=subprocess.PIPE,
+            stderr=self.tmp_file,
         )
         self.logs = ""
 
@@ -58,13 +60,15 @@ class Perforator:
         if self.logs == "":
             self.proc.terminate()
             try:
-                _, stderr = self.proc.communicate(timeout=5)
+                self.proc.communicate(timeout=5)
                 logging.info("Perforator successfully terminated")
             except subprocess.TimeoutExpired:
                 logging.error("Perforator could not terminate properly")
                 self.proc.kill()
-                _, stderr = self.proc.communicate()
-            self.logs = stderr.decode().strip()
+                self.proc.communicate()
+            self.tmp_file.seek(0)
+            self.logs = self.tmp_file.read().strip()
+            self.tmp_file.close()
 
     def get_logs(self) -> str:
         self._load_logs()
