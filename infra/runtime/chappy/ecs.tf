@@ -4,6 +4,7 @@ locals {
 
 module "vpc" {
   source = "terraform-aws-modules/vpc/aws"
+  version = "4.0.2"
 
   name = "${module.env.module_name}-chappydev-${var.region_name}-${module.env.stage}"
   cidr = "10.0.0.0/28"
