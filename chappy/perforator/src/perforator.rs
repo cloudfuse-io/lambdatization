@@ -6,13 +6,13 @@ use crate::{
 };
 use chappy_seed::{Address, AddressConv};
 use chappy_util::{awaitable_map::AwaitableMap, protocol::ParsedTcpStream};
-use futures::StreamExt;
+use futures::{StreamExt, TryStreamExt};
 use std::net::Ipv4Addr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::time::timeout;
-use tracing::{debug, debug_span, instrument, trace};
+use tracing::{debug, debug_span, error, instrument, trace, warn};
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct TargetVirtualAddress {
@@ -73,6 +73,9 @@ impl Perforator {
         self.port_mappings.insert(src_port, virtual_addr.clone());
         // TODO bind only once per target virtual IP
         let punch_resp = self.binding_service.bind_client(tgt_virt.to_string()).await;
+        if punch_resp.failed_punch_request {
+            warn!("seed failed to send punch request");
+        }
         let natted_addr = punch_resp.target_nated_addr.unwrap();
         self.address_mappings.insert(
             virtual_addr,
@@ -128,36 +131,35 @@ impl Perforator {
     }
 
     #[instrument(name = "reg_node", skip_all)]
-    pub async fn bind_node(
-        &self,
-        mut punch_stream_shdn_guard: ShutdownGuard,
-        safety_shdn_guard: ShutdownGuard,
-    ) -> NodeBindingHandle {
+    pub async fn bind_node(&self, punch_stream_shdn_guard: ShutdownGuard) -> NodeBindingHandle {
         trace!("starting...");
         let server_certificate = self.forwarder.server_certificate().to_owned();
         let binding_service = Arc::clone(&self.binding_service);
         let fwd_ref = Arc::clone(&self.forwarder);
         let node_binding = binding_service.bind_node().await;
-        spawn_task(safety_shdn_guard, tracing::Span::current(), async move {
-            let stream = binding_service.bind_server(server_certificate).await;
-            // For each incoming server punch request, send a random packet to punch
-            // a hole in the NAT
-            debug!("subscribe to hole punching requests");
-            stream
-                .map(|punch_req| {
-                    let punch_req = punch_req.unwrap();
-                    let client_natted_addr = punch_req.client_nated_addr.unwrap();
-                    fwd_ref.punch_hole(
-                        AddressConv(client_natted_addr).into(),
-                        punch_req.client_virtual_ip,
-                    )
-                })
-                .buffer_unordered(usize::MAX)
-                .take_until(punch_stream_shdn_guard.wait_shutdown())
-                .for_each(|_| async {})
-                .await;
-            debug!("subscription to hole punching requests closed");
-        });
+        spawn_task(
+            punch_stream_shdn_guard,
+            tracing::Span::current(),
+            async move {
+                let stream = binding_service.bind_server(server_certificate).await;
+                // For each incoming server punch request, send a random packet to punch
+                // a hole in the NAT
+                debug!("subscribe to hole punching requests");
+                let err = stream
+                    .map(|punch_req| {
+                        let punch_req = punch_req.unwrap();
+                        let client_natted_addr = punch_req.client_nated_addr.unwrap();
+                        Ok(fwd_ref.punch_hole(
+                            AddressConv(client_natted_addr).into(),
+                            punch_req.client_virtual_ip,
+                        ))
+                    })
+                    .try_for_each_concurrent(None, |f| f)
+                    .await
+                    .expect_err("Punch stream expected to last until it is cancelled");
+                error!(%err, "subscription to hole punching closed early");
+            },
+        );
         debug!("completed");
         node_binding
     }

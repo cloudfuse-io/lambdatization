@@ -34,9 +34,9 @@ pub struct InitResponse {
 }
 
 impl InitResponse {
-    pub async fn read<R: AsyncRead + Unpin>(recv: &mut R) -> Self {
-        let code = recv.read_u8().await.unwrap();
-        InitResponse { code }
+    pub async fn read<R: AsyncRead + Unpin>(recv: &mut R) -> std::io::Result<Self> {
+        let code = recv.read_u8().await?;
+        Ok(InitResponse { code })
     }
 
     pub async fn write<W: AsyncWrite + Unpin>(self, send: &mut W) {
@@ -84,7 +84,7 @@ mod tests {
         let original = InitResponse { code: 1 };
         let mut buf = vec![];
         original.clone().write(&mut buf).await;
-        let result = InitResponse::read(&mut buf.as_slice()).await;
+        let result = InitResponse::read(&mut buf.as_slice()).await.unwrap();
         assert_eq!(original, result);
     }
 }

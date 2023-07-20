@@ -10,7 +10,7 @@ use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpStream;
-use tracing::{debug, debug_span, error, info, instrument, trace, warn, Instrument};
+use tracing::{debug, debug_span, error, info, instrument, trace, Instrument};
 
 /// A service relays TCP streams through a QUIC tunnel
 ///
@@ -194,7 +194,7 @@ impl Forwarder {
             connect_only: false,
         };
         query.write(&mut quic_send).await;
-        let InitResponse { code } = InitResponse::read(&mut quic_recv).await;
+        let InitResponse { code } = InitResponse::read(&mut quic_recv).await.unwrap();
         match code {
             0 => debug!("target conn successful"),
             err_code => {
@@ -254,7 +254,13 @@ impl Forwarder {
             connect_only: true,
         };
         query.write(&mut quic_send).await;
-        let InitResponse { code } = InitResponse::read(&mut quic_recv).await;
+        let InitResponse { code } = match InitResponse::read(&mut quic_recv).await {
+            Ok(r) => r,
+            Err(err) => {
+                error!(%err, "proxy conn failed");
+                return Err(err.into());
+            }
+        };
         match code {
             0 => debug!("target conn successful"),
             err_code => {
@@ -275,7 +281,7 @@ impl Forwarder {
     }
 
     #[instrument(skip(self))]
-    pub async fn punch_hole(&self, nat: SocketAddr, virt: String) {
+    pub async fn punch_hole(&self, nat: SocketAddr, virt: String) -> Result<()> {
         debug!("make punch conn to client");
         let connecting = self
             .quic_endpoint
@@ -284,13 +290,14 @@ impl Forwarder {
         // we expect the connection establishment mechanism to handle retries
         // until the hole is actually punched
         match connecting.await {
-            Ok(_) => warn!("Connection unexpectedly successful"),
+            Ok(_) => Err(anyhow!("Connection unexpectedly successful")),
             Err(ConnectionError::TransportError(TransportError { code: c, .. }))
                 if c == TransportErrorCode::crypto(UnknownCA.get_u8()) =>
             {
-                debug!("Got expected certificate error")
+                // Got expected certificate error
+                Ok(())
             }
-            Err(e) => warn!("Unexpected error {:?}", e),
+            Err(e) => Err(anyhow!("Unexpected error {:?}", e)),
         }
     }
 }

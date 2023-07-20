@@ -20,6 +20,7 @@ pub struct ResolvedTarget {
 }
 
 /// Map virtual addresses to the NATed endpoint and punch request stream
+/// TODO: a cleanup mechanism of old endpoints
 pub struct RegisteredEndpoints(AwaitableMap<VirtualTarget, ResolvedTarget>);
 
 impl RegisteredEndpoints {
@@ -43,7 +44,9 @@ impl RegisteredEndpoints {
             self.0.get(virtual_target_key, |prev_tgt| {
                 if prev_tgt.punch_req_stream.is_closed() {
                     info!(ip = tgt_ip, cluster_id, "reset closed target first");
-                    true
+                    // Assume the value does not need to be reset because we
+                    // use a different cluster each time
+                    false
                 } else {
                     false
                 }

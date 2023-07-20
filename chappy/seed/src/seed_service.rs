@@ -64,16 +64,19 @@ impl Seed for SeedService {
         let resolved_target = self.registered_endpoints.get(tgt_ip, cluster_id).await?;
 
         debug!(tgt_nat=%resolved_target.natted_address);
-        resolved_target
-            .punch_req_stream
-            .send(ServerPunchRequest {
-                client_nated_addr: Some(Address {
-                    ip: src_nated_addr.ip().to_string(),
-                    port: src_nated_addr.port().try_into().unwrap(),
-                }),
-                client_virtual_ip: src_ip.clone(),
-            })
-            .unwrap();
+        let punch_req_res = resolved_target.punch_req_stream.send(ServerPunchRequest {
+            client_nated_addr: Some(Address {
+                ip: src_nated_addr.ip().to_string(),
+                port: src_nated_addr.port().try_into().unwrap(),
+            }),
+            client_virtual_ip: src_ip.clone(),
+        });
+        let failed_punch_request = if let Err(err) = punch_req_res {
+            error!(%err, "failed to send punch request");
+            true
+        } else {
+            false
+        };
 
         self.cluster_manager.send(
             cluster_id.clone(),
@@ -90,6 +93,7 @@ impl Seed for SeedService {
                 port: resolved_target.natted_address.port().try_into().unwrap(),
             }),
             server_certificate: resolved_target.server_certificate,
+            failed_punch_request,
         }))
     }
 

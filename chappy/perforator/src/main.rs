@@ -33,9 +33,7 @@ impl GracefullyRunnable for SrvRunnable {
             binding_service,
             tcp_port,
         ));
-        let node_binding = perforator
-            .bind_node(shutdown.create_guard(), shutdown.create_guard())
-            .await;
+        let node_binding = perforator.bind_node(shutdown.create_guard()).await;
 
         let mut shtdwn_hook_guard = shutdown.create_guard();
         tokio::spawn(async move {

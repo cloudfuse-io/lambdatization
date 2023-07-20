@@ -3,10 +3,10 @@ use nix::{
     sys::socket::{SockaddrIn, SockaddrLike},
 };
 use std::net::Ipv4Addr;
-use tracing::debug;
+use tracing::trace;
 
 pub(crate) fn dst_rewrite(func: &str, fd: c_int, new_addr: &SockaddrIn, old_addr: &SockaddrIn) {
-    debug!(
+    trace!(
         "Calling libc.{}({}, {}:{}) instead of ({}, {}:{})",
         func,
         fd,
@@ -25,13 +25,13 @@ pub(crate) unsafe fn dst(func: &str, fd: c_int, addr: *const sockaddr, len: sock
     } else {
         String::from("not-ipv4")
     };
-    debug!("Calling libc.{}({}, {})", func, fd, addr);
+    trace!("Calling libc.{}({}, {})", func, fd, addr);
 }
 
 pub(crate) fn return_code(func: &str, fd: c_int, code: c_int) {
     if code == -1 {
-        debug!("libc.{}({}): errno {}", func, fd, nix::errno::errno())
+        trace!("libc.{}({}): errno {}", func, fd, nix::errno::errno())
     } else {
-        debug!("libc.{}({}): success", func, fd)
+        trace!("libc.{}({}): success", func, fd)
     }
 }

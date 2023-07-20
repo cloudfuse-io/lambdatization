@@ -113,16 +113,19 @@ impl BindingService {
 
     pub async fn bind_client(&self, target_virtual_ip: String) -> ClientBindingResponse {
         debug!("call seed to bind client");
-        self.client()
+        let resp = self
+            .client()
             .await
             .bind_client(ClientBindingRequest {
                 cluster_id: CHAPPY_CONF.cluster_id.clone(),
                 source_virtual_ip: CHAPPY_CONF.virtual_ip.clone(),
                 target_virtual_ip,
             })
-            .await
-            .unwrap()
-            .into_inner()
+            .await;
+        if let Err(err) = &resp {
+            error!(%err,"cli binding failed");
+        }
+        resp.unwrap().into_inner()
     }
 
     pub async fn bind_server(&self, server_certificate: Vec<u8>) -> Streaming<ServerPunchRequest> {

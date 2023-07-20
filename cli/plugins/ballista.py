@@ -3,6 +3,7 @@
 import base64
 import json
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 import core
@@ -52,6 +53,7 @@ def run_executor(
     virtual_ip: str,
     scheduler_ip: str,
     nodes: int,
+    cluster_id: str,
 ):
     start_time = time.time()
     env = {
@@ -60,6 +62,7 @@ def run_executor(
         "CHAPPY_SEED_PORT": 8000,
         "CHAPPY_VIRTUAL_IP": virtual_ip,
         "RUST_LOG": "info,chappy_perforator=debug,chappy=debug,rustls=error",
+        "CHAPPY_CLUSTER_ID": cluster_id,
         "RUST_BACKTRACE": "1",
         **get_otel_env(),
     }
@@ -88,12 +91,14 @@ def run_scheduler(
     virtual_ip: str,
     query: str,
     nodes: int,
+    cluster_id: str,
 ):
     start_time = time.time()
     env = {
         "CHAPPY_CLUSTER_SIZE": nodes,
         "CHAPPY_SEED_HOSTNAME": seed_ip,
         "CHAPPY_SEED_PORT": 8000,
+        "CHAPPY_CLUSTER_ID": cluster_id,
         "CHAPPY_VIRTUAL_IP": virtual_ip,
         "RUST_LOG": "info,chappy_perforator=debug,chappy=debug,rustls=error",
         "RUST_BACKTRACE": "1",
@@ -122,6 +127,7 @@ def distributed(c, seed, dataset=10):
     """CREATE EXTERNAL TABLE and find out stored page data by url_host_registered_domain"""
     bucket_name = core.bucket_name(c)
     core.load_commoncrawl_index(c, dataset)
+    cluster_id = str(uuid.uuid4())
     sql = f"""
 CREATE EXTERNAL TABLE commoncrawl STORED AS PARQUET
 LOCATION 's3://{bucket_name}/commoncrawl/index/n{dataset}/';
@@ -141,6 +147,7 @@ LIMIT 10;"""
             "172.28.0.1",
             sql,
             executor_count + 1,
+            cluster_id,
         )
         executor_futs = []
         for i in range(executor_count):
@@ -153,6 +160,7 @@ LIMIT 10;"""
                     f"172.28.0.{i+2}",
                     "172.28.0.1",
                     executor_count + 1,
+                    cluster_id,
                 )
             )
 
