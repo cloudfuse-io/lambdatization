@@ -3,7 +3,7 @@ locals {
 }
 
 module "vpc" {
-  source = "terraform-aws-modules/vpc/aws"
+  source  = "terraform-aws-modules/vpc/aws"
   version = "4.0.2"
 
   name = "${module.env.module_name}-chappydev-${var.region_name}-${module.env.stage}"
