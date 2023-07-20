@@ -145,7 +145,7 @@ impl Perforator {
                 // For each incoming server punch request, send a random packet to punch
                 // a hole in the NAT
                 debug!("subscribe to hole punching requests");
-                let err = stream
+                let stream_res = stream
                     .map(|punch_req| {
                         let punch_req = punch_req.unwrap();
                         let client_natted_addr = punch_req.client_nated_addr.unwrap();
@@ -155,9 +155,12 @@ impl Perforator {
                         ))
                     })
                     .try_for_each_concurrent(None, |f| f)
-                    .await
-                    .expect_err("Punch stream expected to last until it is cancelled");
-                error!(%err, "subscription to hole punching closed early");
+                    .await;
+                if let Err(err) = stream_res {
+                    error!(%err, "subscription to hole punching closed early");
+                } else {
+                    error!("punch stream expected to last until cancelled");
+                }
             },
         );
         debug!("completed");

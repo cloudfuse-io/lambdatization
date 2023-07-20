@@ -2,6 +2,8 @@
 
 import base64
 import json
+import random
+import string
 import time
 import uuid
 from collections import namedtuple
@@ -25,7 +27,11 @@ from invoke import Context, Exit, task
 
 VALIDATORS = OTEL_VALIDATORS
 
-## FARGATE COMPONENTS ##
+
+def rand_cluster_id() -> str:
+    return "".join(
+        random.choice(string.digits + string.ascii_letters) for _ in range(6)
+    )
 
 
 def service_outputs(c: Context) -> tuple[str, str, str]:
@@ -232,7 +238,7 @@ def run_lambda_pair(c, seed=None, release=False, client="example-client-async"):
             "CHAPPY_SEED_HOSTNAME": seed,
             "CHAPPY_SEED_PORT": 8000,
             "CHAPPY_CLUSTER_SIZE": 2,
-            "CHAPPY_CLUSTER_ID": str(uuid.uuid4()),
+            "CHAPPY_CLUSTER_ID": rand_cluster_id(),
             "CHAPPY_VIRTUAL_SUBNET": "172.28.0.0/16",
             "RUST_LOG": "info,chappy_perforator=debug,chappy=debug,chappy_util=debug,rustls=error",
             "RUST_BACKTRACE": "1",
@@ -320,7 +326,7 @@ def run_lambda_cluster(c, seed=None, release=False, binary="example-n-to-n", nod
             "CHAPPY_SEED_PORT": 8000,
             "CHAPPY_VIRTUAL_SUBNET": "172.28.0.0/16",
             "CHAPPY_CLUSTER_SIZE": nodes,
-            "CHAPPY_CLUSTER_ID": str(uuid.uuid4()),
+            "CHAPPY_CLUSTER_ID": rand_cluster_id(),
             "CLUSTER_IPS": ",".join([f"172.28.0.{i+1}" for i in range(nodes)]),
             "BATCH_SIZE": 32,
             "BYTES_SENT": 128,

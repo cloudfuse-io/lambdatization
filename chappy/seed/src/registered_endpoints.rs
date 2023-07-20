@@ -41,16 +41,9 @@ impl RegisteredEndpoints {
         // TODO adjust timeout duration
         let resolved_target_timeout = timeout(
             Duration::from_secs(10),
-            self.0.get(virtual_target_key, |prev_tgt| {
-                if prev_tgt.punch_req_stream.is_closed() {
-                    info!(ip = tgt_ip, cluster_id, "reset closed target first");
-                    // Assume the value does not need to be reset because we
-                    // use a different cluster each time
-                    false
-                } else {
-                    false
-                }
-            }),
+            // Assume the value does not need to be reset because we use a
+            // different cluster each time
+            self.0.get(virtual_target_key, |_| false),
         )
         .await;
 

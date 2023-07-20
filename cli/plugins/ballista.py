@@ -2,8 +2,9 @@
 
 import base64
 import json
+import random
+import string
 import time
-import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 import core
@@ -18,6 +19,12 @@ from common import (
 from invoke import Exit, task
 
 VALIDATORS = OTEL_VALIDATORS
+
+
+def rand_cluster_id() -> str:
+    return "".join(
+        random.choice(string.digits + string.ascii_letters) for _ in range(6)
+    )
 
 
 @task(autoprint=True)
@@ -127,7 +134,7 @@ def distributed(c, seed, dataset=10):
     """CREATE EXTERNAL TABLE and find out stored page data by url_host_registered_domain"""
     bucket_name = core.bucket_name(c)
     core.load_commoncrawl_index(c, dataset)
-    cluster_id = str(uuid.uuid4())
+    cluster_id = rand_cluster_id()
     sql = f"""
 CREATE EXTERNAL TABLE commoncrawl STORED AS PARQUET
 LOCATION 's3://{bucket_name}/commoncrawl/index/n{dataset}/';
@@ -138,7 +145,7 @@ LIMIT 10;"""
 
     executor_count = dataset
     lambda_name = terraform_output(c, "ballista", "distributed_lambda_name")
-    with ThreadPoolExecutor() as ex:
+    with ThreadPoolExecutor(max_workers=executor_count + 4) as ex:
         scheduler_fut = ex.submit(
             run_scheduler,
             lambda_name,
