@@ -39,6 +39,31 @@ resource "aws_iam_policy" "s3_access" {
 EOF
 }
 
+resource "aws_iam_policy" "lambda_insights" {
+  name = "${module.env.module_name}-chappydev-lambda-insights-${var.region_name}-${module.env.stage}"
+
+  policy = <<EOF
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": "logs:CreateLogGroup",
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+            ],
+            "Resource": "arn:aws:logs:*:*:log-group:/aws/lambda-insights:*"
+        }
+    ]
+}
+EOF
+}
+
 module "dev_lambda" {
   source = "../../common/lambda"
 
@@ -48,7 +73,7 @@ module "dev_lambda" {
   memory_size        = 2048
   timeout            = 300
 
-  additional_policies = [aws_iam_policy.s3_access.arn]
+  additional_policies = [aws_iam_policy.s3_access.arn, aws_iam_policy.lambda_insights.arn]
   environment         = {}
 
 }

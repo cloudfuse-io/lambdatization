@@ -15,7 +15,12 @@ pub struct AddressConv(pub Address);
 
 impl From<AddressConv> for SocketAddr {
     fn from(addr: AddressConv) -> Self {
-        let addr_str = format!("{}:{}", addr.0.ip, addr.0.port);
-        SocketAddr::from_str(&addr_str).unwrap()
+        SocketAddr::from_str(&format!("{}", addr)).unwrap()
+    }
+}
+
+impl std::fmt::Display for AddressConv {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}:{}", self.0.ip, self.0.port)
     }
 }

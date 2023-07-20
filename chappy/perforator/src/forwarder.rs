@@ -1,14 +1,16 @@
 use crate::fwd_protocol::{copy, InitQuery, InitResponse};
-use crate::metrics;
+use crate::spawn::spawn_task;
 use crate::{quic_utils, shutdown::Shutdown, PUNCH_SERVER_NAME, SERVER_NAME};
 use anyhow::{anyhow, Result};
+use chappy_util::tcp_connect::connect_retry;
 use quinn::{Connection, ConnectionError, Endpoint};
 use quinn_proto::{TransportError, TransportErrorCode};
-use rustls::AlertDescription::BadCertificate;
+use rustls::AlertDescription::UnknownCA;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpStream;
-use tracing::{debug, debug_span, error, info, instrument, warn, Instrument};
+use tracing::{debug, debug_span, error, info, instrument, trace, Instrument};
 
 /// A service relays TCP streams through a QUIC tunnel
 ///
@@ -44,7 +46,7 @@ impl Forwarder {
             quinn::EndpointConfig::default(),
             Some(server_config),
             sock.into(),
-            quinn::TokioRuntime,
+            Arc::new(quinn::TokioRuntime),
         )
         .unwrap()
     }
@@ -72,7 +74,7 @@ impl Forwarder {
     async fn handle_srv_conn(conn: Connection) {
         let (mut quic_send, mut quic_recv) = match conn.accept_bi().await {
             Ok(streams) => {
-                debug!("new bi accepted");
+                trace!("new bi accepted");
                 streams
             }
             Err(e) => {
@@ -84,7 +86,15 @@ impl Forwarder {
         debug!(?query, "init query read");
 
         // forwarding connection
-        let fwd_stream = match TcpStream::connect((Ipv4Addr::LOCALHOST, query.target_port)).await {
+
+        // TODO: make timeout configurable according to expected target startup
+        // duration
+        let fwd_stream = match connect_retry(
+            (Ipv4Addr::LOCALHOST, query.target_port),
+            Duration::from_millis(500),
+        )
+        .await
+        {
             Ok(stream) => {
                 InitResponse { code: 0 }.write(&mut quic_send).await;
                 stream
@@ -109,7 +119,7 @@ impl Forwarder {
         let in_fut = copy(fwd_read, quic_send)
             .instrument(debug_span!("cp_tcp_quic", port = query.target_port));
         tokio::try_join!(out_fut, in_fut).ok();
-        debug!("closing bi");
+        trace!("closing bi");
         // expect the connection to be closed by caller
         conn.accept_bi()
             .await
@@ -136,11 +146,11 @@ impl Forwarder {
                 }
             };
             let shdwn_guard = shutdown.create_guard();
-            tokio::spawn(metrics(
-                shdwn_guard
-                    .run_cancellable(Self::handle_srv_conn(conn), Duration::from_millis(50))
-                    .instrument(debug_span!("srv_quic_conn", src_nat = %remote_addr)),
-            ));
+            spawn_task(
+                shdwn_guard,
+                debug_span!("srv_quic_conn", src_nat = %remote_addr),
+                Self::handle_srv_conn(conn),
+            );
         }
     }
 
@@ -178,13 +188,13 @@ impl Forwarder {
         }
         let quic_conn = conn_result.unwrap();
         let (mut quic_send, mut quic_recv) = quic_conn.open_bi().await.unwrap();
-        debug!("new bi opened");
+        trace!("new bi opened");
         let query = InitQuery {
             target_port,
             connect_only: false,
         };
         query.write(&mut quic_send).await;
-        let InitResponse { code } = InitResponse::read(&mut quic_recv).await;
+        let InitResponse { code } = InitResponse::read(&mut quic_recv).await.unwrap();
         match code {
             0 => debug!("target conn successful"),
             err_code => {
@@ -203,7 +213,7 @@ impl Forwarder {
         let in_fut =
             copy(quic_recv, tcp_write).instrument(debug_span!("cp_quic_tcp", port = target_port));
         tokio::try_join!(out_fut, in_fut).ok();
-        debug!("closing bi");
+        trace!("closing bi");
     }
 
     #[instrument(
@@ -230,19 +240,35 @@ impl Forwarder {
             return Err(anyhow!("quic conn failed"));
         }
         let quic_conn = conn_result.unwrap();
-        let (mut quic_send, mut quic_recv) = quic_conn.open_bi().await.unwrap();
-        debug!("new bi opened");
+
+        // bi opening timeout means an unexpected QUIC flow control kicked in
+        let (mut quic_send, mut quic_recv) =
+            tokio::time::timeout(Duration::from_millis(50), quic_conn.open_bi())
+                .await
+                .unwrap()
+                .unwrap();
+
+        trace!("new bi opened");
         let query = InitQuery {
             target_port,
             connect_only: true,
         };
         query.write(&mut quic_send).await;
-        let InitResponse { code } = InitResponse::read(&mut quic_recv).await;
+        let InitResponse { code } = match InitResponse::read(&mut quic_recv).await {
+            Ok(r) => r,
+            Err(err) => {
+                error!(%err, "proxy conn failed");
+                return Err(err.into());
+            }
+        };
         match code {
             0 => debug!("target conn successful"),
-            err_code => return Err(anyhow!("target conn failed with code {}", err_code)),
+            err_code => {
+                error!(err_code, "target conn failed");
+                return Err(anyhow!("target conn failed with code {}", err_code));
+            }
         }
-        debug!("closing bi");
+        trace!("closing bi");
         Ok(())
     }
 
@@ -255,26 +281,23 @@ impl Forwarder {
     }
 
     #[instrument(skip(self))]
-    pub async fn punch_hole(&self, addr: SocketAddr) {
+    pub async fn punch_hole(&self, nat: SocketAddr, virt: String) -> Result<()> {
         debug!("make punch conn to client");
         let connecting = self
             .quic_endpoint
-            .connect_with(
-                quic_utils::configure_punch_client(),
-                addr,
-                PUNCH_SERVER_NAME,
-            )
+            .connect_with(quic_utils::configure_punch_client(), nat, PUNCH_SERVER_NAME)
             .unwrap();
         // we expect the connection establishment mechanism to handle retries
         // until the hole is actually punched
         match connecting.await {
-            Ok(_) => warn!("Connection unexpectedly successful"),
+            Ok(_) => Err(anyhow!("Connection unexpectedly successful")),
             Err(ConnectionError::TransportError(TransportError { code: c, .. }))
-                if c == TransportErrorCode::crypto(BadCertificate.get_u8()) =>
+                if c == TransportErrorCode::crypto(UnknownCA.get_u8()) =>
             {
-                debug!("Got expected bad certificate error")
+                // Got expected certificate error
+                Ok(())
             }
-            Err(e) => warn!("Unexpected error {:?}", e),
+            Err(e) => Err(anyhow!("Unexpected error {:?}", e)),
         }
     }
 }
@@ -293,7 +316,7 @@ mod tests {
     /// Create a TCP server on the specified port and connect to it, then
     /// forward the server side stream using the provided forwarder and target
     /// port
-    async fn proxied_connect(
+    async fn simulate_proxied_connect(
         port: u16,
         fwd: &Arc<Forwarder>,
         target_port: u16,
@@ -301,16 +324,16 @@ mod tests {
         let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
         let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
 
-        let accept_handle = tokio::spawn(metrics(async move {
+        let accept_handle = tokio::spawn(async move {
             let (stream, _) = listener.accept().await.unwrap();
             (stream, listener)
-        }));
+        });
         tokio::time::sleep(Duration::from_millis(50)).await;
         let cli_stream = TcpStream::connect(addr).await.unwrap();
         let (proxied_stream, listener) = accept_handle.await.unwrap();
 
         let fwd = Arc::clone(fwd);
-        let fwd_handle = tokio::spawn(metrics(async move {
+        let fwd_handle = tokio::spawn(async move {
             fwd.forward(
                 proxied_stream,
                 SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, fwd.port().into())),
@@ -319,7 +342,7 @@ mod tests {
             )
             .await;
             debug!("dropping moved listener {}", listener.local_addr().unwrap());
-        }));
+        });
         (cli_stream, fwd_handle)
     }
 
@@ -364,7 +387,7 @@ mod tests {
         let echo_srv_handle = tokio::spawn(echo_server(echo_srv_port));
         let (fwd, fwd_srv_handle) = create_and_start_forwarder(fwd_quic_port).await;
         let (mut cli_stream, fwd_handle) =
-            proxied_connect(cli_proxy_port, &fwd, echo_srv_port).await;
+            simulate_proxied_connect(cli_proxy_port, &fwd, echo_srv_port).await;
 
         // Try big and small writes to check whether bytes are properly flushed
         // through the proxies
@@ -396,7 +419,7 @@ mod tests {
                 async move {
                     let echo_srv_handle = tokio::spawn(echo_server(echo_srv_port));
                     let (cli_stream, fwd_handle) =
-                        proxied_connect(cli_proxy_port, &fwd, echo_srv_port).await;
+                        simulate_proxied_connect(cli_proxy_port, &fwd, echo_srv_port).await;
                     (cli_stream, echo_srv_handle, fwd_handle)
                 }
             })
@@ -430,7 +453,7 @@ mod tests {
         let echo_srv_handle = tokio::spawn(echo_server(echo_srv_port));
         let (fwd, fwd_srv_handle) = create_and_start_forwarder(fwd_quic_port).await;
         let (mut cli_stream, fwd_handle) =
-            proxied_connect(cli_proxy_port, &fwd, echo_srv_port).await;
+            simulate_proxied_connect(cli_proxy_port, &fwd, echo_srv_port).await;
 
         // Interrupt the target server in the middle of the communication
         assert_echo(&mut cli_stream, 10).await;

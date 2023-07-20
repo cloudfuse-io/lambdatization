@@ -4,7 +4,7 @@ use nix::sys::socket::{self, SockaddrIn, SockaddrLike, SockaddrStorage};
 use std::io::Result as IoResult;
 use std::net::{Ipv4Addr, SocketAddrV4};
 use std::str::FromStr;
-use tracing::{debug, error};
+use tracing::{debug, error, trace};
 
 const PERFORATOR_ADDRESS: &str = "127.0.0.1:5000";
 
@@ -81,7 +81,7 @@ pub(crate) unsafe fn parse_virtual(addr: *const sockaddr, len: socklen_t) -> Par
             } else if virt_range.contains(&ip) {
                 ParsedAddress::RemoteVirtual(*addr_in)
             } else {
-                debug!(
+                trace!(
                     "{} not in virtual network {}",
                     Ipv4Addr::from(addr_in.ip()).to_string(),
                     virt_range
@@ -90,7 +90,7 @@ pub(crate) unsafe fn parse_virtual(addr: *const sockaddr, len: socklen_t) -> Par
             }
         }
         None => {
-            debug!("Not an IPv4 addr");
+            trace!("Not an IPv4 addr");
             ParsedAddress::NotVirtual
         }
     }

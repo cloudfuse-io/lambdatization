@@ -87,7 +87,12 @@ fn main() {
         read_handle.join().unwrap();
         info!("Read {} Bytes completed", BYTES_SENT);
     }
-    info!("Reads and writes completed, waiting for other clients to complete...");
-    thread::sleep(Duration::from_secs(1));
+    let wait_secs = 5;
+    info!("Reads and writes completed");
+    info!(
+        "/!\\ WAITING {} SECONDS FOR OTHER CLIENTS TO COMPLETE...",
+        wait_secs
+    );
+    thread::sleep(Duration::from_secs(wait_secs));
     info!("Completed!");
 }

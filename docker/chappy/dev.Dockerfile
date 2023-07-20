@@ -15,6 +15,16 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* && \
     rm -rf /var/cache/apt/*
 
+RUN apt-get update && \
+    apt-get install -y alien && \
+    curl -O https://lambda-insights-extension.s3-ap-northeast-1.amazonaws.com/amazon_linux/lambda-insights-extension.rpm && \
+    alien --to-deb lambda-insights-extension.rpm -i && \
+    rm -f lambda-insights-extension.rpm && \
+    apt-get remove -y alien && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    rm -rf /var/cache/apt/*
+
 ARG FUNCTION_DIR
 
 RUN mkdir -p ${FUNCTION_DIR}

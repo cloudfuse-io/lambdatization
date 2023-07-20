@@ -2,17 +2,29 @@
 
 import base64
 import json
+import random
+import string
 import time
 from concurrent.futures import ThreadPoolExecutor
 
 import core
-import dynaconf
-from common import aws, conf, format_lambda_output, terraform_output
+from common import (
+    OTEL_VALIDATORS,
+    aws,
+    conf,
+    format_lambda_output,
+    get_otel_env,
+    terraform_output,
+)
 from invoke import Exit, task
 
-VALIDATORS = [
-    dynaconf.Validator("L12N_CHAPPY_OPENTELEMETRY_APIKEY", ne=""),
-]
+VALIDATORS = OTEL_VALIDATORS
+
+
+def rand_cluster_id() -> str:
+    return "".join(
+        random.choice(string.digits + string.ascii_letters) for _ in range(6)
+    )
 
 
 @task(autoprint=True)
@@ -48,6 +60,7 @@ def run_executor(
     virtual_ip: str,
     scheduler_ip: str,
     nodes: int,
+    cluster_id: str,
 ):
     start_time = time.time()
     env = {
@@ -55,13 +68,11 @@ def run_executor(
         "CHAPPY_SEED_HOSTNAME": seed_ip,
         "CHAPPY_SEED_PORT": 8000,
         "CHAPPY_VIRTUAL_IP": virtual_ip,
-        "RUST_LOG": "info,chappy_perforator=debug,chappy=debug",
+        "RUST_LOG": "info,chappy_perforator=debug,chappy=debug,rustls=error",
+        "CHAPPY_CLUSTER_ID": cluster_id,
         "RUST_BACKTRACE": "1",
+        **get_otel_env(),
     }
-    if "L12N_CHAPPY_OPENTELEMETRY_APIKEY" in conf(VALIDATORS):
-        env["CHAPPY_OPENTELEMETRY_APIKEY"] = conf(VALIDATORS)[
-            "L12N_CHAPPY_OPENTELEMETRY_APIKEY"
-        ]
     lambda_res = aws("lambda").invoke(
         FunctionName=lambda_name,
         Payload=json.dumps(
@@ -87,20 +98,19 @@ def run_scheduler(
     virtual_ip: str,
     query: str,
     nodes: int,
+    cluster_id: str,
 ):
     start_time = time.time()
     env = {
         "CHAPPY_CLUSTER_SIZE": nodes,
         "CHAPPY_SEED_HOSTNAME": seed_ip,
         "CHAPPY_SEED_PORT": 8000,
+        "CHAPPY_CLUSTER_ID": cluster_id,
         "CHAPPY_VIRTUAL_IP": virtual_ip,
-        "RUST_LOG": "info,chappy_perforator=debug,chappy=debug",
+        "RUST_LOG": "info,chappy_perforator=debug,chappy=debug,rustls=error",
         "RUST_BACKTRACE": "1",
+        **get_otel_env(),
     }
-    if "L12N_CHAPPY_OPENTELEMETRY_APIKEY" in conf(VALIDATORS):
-        env["CHAPPY_OPENTELEMETRY_APIKEY"] = conf(VALIDATORS)[
-            "L12N_CHAPPY_OPENTELEMETRY_APIKEY"
-        ]
     lambda_res = aws("lambda").invoke(
         FunctionName=lambda_name,
         Payload=json.dumps(
@@ -124,6 +134,7 @@ def distributed(c, seed, dataset=10):
     """CREATE EXTERNAL TABLE and find out stored page data by url_host_registered_domain"""
     bucket_name = core.bucket_name(c)
     core.load_commoncrawl_index(c, dataset)
+    cluster_id = rand_cluster_id()
     sql = f"""
 CREATE EXTERNAL TABLE commoncrawl STORED AS PARQUET
 LOCATION 's3://{bucket_name}/commoncrawl/index/n{dataset}/';
@@ -134,7 +145,7 @@ LIMIT 10;"""
 
     executor_count = dataset
     lambda_name = terraform_output(c, "ballista", "distributed_lambda_name")
-    with ThreadPoolExecutor() as ex:
+    with ThreadPoolExecutor(max_workers=executor_count + 4) as ex:
         scheduler_fut = ex.submit(
             run_scheduler,
             lambda_name,
@@ -143,6 +154,7 @@ LIMIT 10;"""
             "172.28.0.1",
             sql,
             executor_count + 1,
+            cluster_id,
         )
         executor_futs = []
         for i in range(executor_count):
@@ -155,6 +167,7 @@ LIMIT 10;"""
                     f"172.28.0.{i+2}",
                     "172.28.0.1",
                     executor_count + 1,
+                    cluster_id,
                 )
             )
 

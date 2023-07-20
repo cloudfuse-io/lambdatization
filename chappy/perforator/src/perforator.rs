@@ -1,18 +1,18 @@
 use crate::binding_service::NodeBindingHandle;
-use crate::metrics;
+use crate::spawn::spawn_task;
 use crate::{
     binding_service::BindingService, forwarder::Forwarder, shutdown::Shutdown,
     shutdown::ShutdownGuard,
 };
 use chappy_seed::{Address, AddressConv};
 use chappy_util::{awaitable_map::AwaitableMap, protocol::ParsedTcpStream};
-use futures::StreamExt;
+use futures::{StreamExt, TryStreamExt};
 use std::net::Ipv4Addr;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::time::timeout;
-use tracing::{debug, debug_span, instrument, Instrument};
+use tracing::{debug, debug_span, error, instrument, trace, warn};
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct TargetVirtualAddress {
@@ -58,8 +58,14 @@ impl Perforator {
     }
 
     #[instrument(name = "reg_cli", skip(self))]
-    async fn register_client(&self, src_port: u16, tgt_virt: Ipv4Addr, tgt_port: u16) {
-        debug!("starting...");
+    async fn register_client(
+        &self,
+        src_port: u16,
+        tgt_virt: Ipv4Addr,
+        tgt_port: u16,
+    ) -> anyhow::Result<()> {
+        trace!("starting...");
+        let start = Instant::now();
         let virtual_addr = TargetVirtualAddress {
             ip: tgt_virt,
             port: tgt_port,
@@ -67,6 +73,9 @@ impl Perforator {
         self.port_mappings.insert(src_port, virtual_addr.clone());
         // TODO bind only once per target virtual IP
         let punch_resp = self.binding_service.bind_client(tgt_virt.to_string()).await;
+        if punch_resp.failed_punch_request {
+            warn!("seed failed to send punch request");
+        }
         let natted_addr = punch_resp.target_nated_addr.unwrap();
         self.address_mappings.insert(
             virtual_addr,
@@ -82,16 +91,16 @@ impl Perforator {
                 tgt_port,
                 punch_resp.server_certificate,
             )
-            .await
-            .unwrap();
-        debug!("completed");
+            .await?;
+        debug!(duration = ?start.elapsed(), "completed");
+        Ok(())
     }
 
     /// Forward a TCP stream from a registered port
     #[instrument(name = "fwd_conn", skip_all)]
-    async fn forward_conn(&self, stream: TcpStream, shdn: ShutdownGuard) {
-        debug!("starting...");
-        // TODO adjust timout duration
+    async fn forward_conn(&self, stream: TcpStream) {
+        trace!("starting...");
+        // TODO adjust timeout duration
         let src_port = stream.peer_addr().unwrap().port();
         let target_virtual_address = timeout(
             Duration::from_secs(1),
@@ -99,7 +108,7 @@ impl Perforator {
         )
         .await
         .unwrap();
-        // TODO adjust timout duration
+        // TODO adjust timeout duration
         let target_address = timeout(
             Duration::from_secs(3),
             self.address_mappings.get(target_virtual_address, |_| false),
@@ -118,38 +127,42 @@ impl Perforator {
             target_address.tgt_port,
             target_address.certificate_der,
         );
-        shdn.run_cancellable(fwd_fut, Duration::from_millis(50))
-            .await
-            .map(|_| debug!("completed"))
-            .ok();
+        fwd_fut.await;
     }
 
     #[instrument(name = "reg_node", skip_all)]
-    pub async fn bind_node(&self, mut shdn: ShutdownGuard) -> NodeBindingHandle {
-        debug!("starting...");
+    pub async fn bind_node(&self, punch_stream_shdn_guard: ShutdownGuard) -> NodeBindingHandle {
+        trace!("starting...");
         let server_certificate = self.forwarder.server_certificate().to_owned();
         let binding_service = Arc::clone(&self.binding_service);
         let fwd_ref = Arc::clone(&self.forwarder);
         let node_binding = binding_service.bind_node().await;
-        tokio::spawn(metrics(
+        spawn_task(
+            punch_stream_shdn_guard,
+            tracing::Span::current(),
             async move {
                 let stream = binding_service.bind_server(server_certificate).await;
                 // For each incoming server punch request, send a random packet to punch
                 // a hole in the NAT
                 debug!("subscribe to hole punching requests");
-                stream
+                let stream_res = stream
                     .map(|punch_req| {
-                        let client_natted_addr = punch_req.unwrap().client_nated_addr.unwrap();
-                        fwd_ref.punch_hole(AddressConv(client_natted_addr).into())
+                        let punch_req = punch_req.unwrap();
+                        let client_natted_addr = punch_req.client_nated_addr.unwrap();
+                        Ok(fwd_ref.punch_hole(
+                            AddressConv(client_natted_addr).into(),
+                            punch_req.client_virtual_ip,
+                        ))
                     })
-                    .buffer_unordered(usize::MAX)
-                    .take_until(shdn.wait_shutdown())
-                    .for_each(|_| async {})
+                    .try_for_each_concurrent(None, |f| f)
                     .await;
-                debug!("subscription to hole punching requests closed");
-            }
-            .instrument(tracing::Span::current()),
-        ));
+                if let Err(err) = stream_res {
+                    error!(%err, "subscription to hole punching closed early");
+                } else {
+                    error!("punch stream expected to last until cancelled");
+                }
+            },
+        );
         debug!("completed");
         node_binding
     }
@@ -163,8 +176,10 @@ impl Perforator {
             let (stream, _) = listener.accept().await.unwrap();
             let src_port = stream.peer_addr().unwrap().port();
             let perforator = self.clone();
-            let fwd_conn_shdwn_guard = shutdown.create_guard();
-            tokio::spawn(metrics(
+            let shutdown_guard = shutdown.create_guard();
+            spawn_task(
+                shutdown_guard,
+                debug_span!("tcp_conn", src_port),
                 async move {
                     let parsed_stream = ParsedTcpStream::from(stream).await;
                     match parsed_stream {
@@ -172,18 +187,24 @@ impl Perforator {
                             source_port,
                             target_virtual_ip,
                             target_port,
+                            response_writer,
                         } => {
-                            perforator
-                                .register_client(source_port, target_virtual_ip, target_port)
-                                .await
+                            let reg_fut = perforator.register_client(
+                                source_port,
+                                target_virtual_ip,
+                                target_port,
+                            );
+                            match reg_fut.await {
+                                Ok(_) => response_writer.write_success().await,
+                                Err(_) => response_writer.write_failure().await,
+                            };
                         }
                         ParsedTcpStream::Raw(stream) => {
-                            perforator.forward_conn(stream, fwd_conn_shdwn_guard).await
+                            perforator.forward_conn(stream).await;
                         }
                     }
-                }
-                .instrument(debug_span!("tcp_conn", src_port)),
-            ));
+                },
+            );
         }
     }
 }

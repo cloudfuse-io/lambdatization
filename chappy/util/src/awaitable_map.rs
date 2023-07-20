@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::sync::Mutex;
 use tokio::sync::watch;
-use tracing::debug_span;
+use tracing::trace_span;
 
 /// A map where values can be asynchronously be awaited.
 pub struct AwaitableMap<K, V> {
@@ -30,7 +30,7 @@ where
     where
         F: FnOnce(V) -> bool,
     {
-        let mut rx = debug_span!("lock", src = "AwaitableMap.get").in_scope(|| {
+        let mut rx = trace_span!("lock", src = "AwaitableMap.get").in_scope(|| {
             let mut guard = self.inner.lock().unwrap();
             if let Some(value_tx) = guard.get(&key) {
                 let current_val = value_tx.subscribe().borrow().clone();
@@ -53,7 +53,7 @@ where
 
     /// Insert the key/value pair, and returns the existing value if any
     pub fn insert(&self, key: K, value: V) -> Option<V> {
-        debug_span!("lock", src = "AwaitableMap.insert").in_scope(|| {
+        trace_span!("lock", src = "AwaitableMap.insert").in_scope(|| {
             let mut guard = self.inner.lock().unwrap();
             if let Some(target_tx) = guard.get(&key) {
                 target_tx.send_replace(Some(value))

@@ -1,4 +1,4 @@
-use crate::{Address, ServerPunchRequest};
+use crate::{AddressConv, ServerPunchRequest};
 use futures::{Stream, StreamExt};
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -15,14 +15,15 @@ pub struct PunchRequestStream {
 }
 
 impl PunchRequestStream {
-    pub fn new(recv: UnboundedReceiver<Address>, parent_span: Span) -> Self {
+    pub fn new(recv: UnboundedReceiver<ServerPunchRequest>, parent_span: Span) -> Self {
         let span = parent_span.clone();
-        let inner = UnboundedReceiverStream::new(recv).map(move |addr| {
-            debug!(parent: &span, tgt_nat=%format!("{}:{}", addr.ip, addr.port), "forwarding punch request");
-            Ok(ServerPunchRequest {
-                client_nated_addr: Some(addr),
+        let inner = UnboundedReceiverStream::new(recv)
+            .map(move |preq| {
+                let addr = AddressConv(preq.client_nated_addr.as_ref().unwrap().clone());
+                debug!(parent: &span, tgt_nat=%addr, "forwarding punch request");
+                Ok(preq)
             })
-        }).boxed();
+            .boxed();
         Self { inner, parent_span }
     }
 }

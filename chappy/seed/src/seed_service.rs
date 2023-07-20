@@ -9,7 +9,7 @@ use futures::stream::{Stream, StreamExt};
 use std::{pin::Pin, sync::Arc};
 use tokio::sync::mpsc;
 use tonic::{Request, Response, Result, Status, Streaming};
-use tracing::{debug, error, instrument};
+use tracing::{debug, error, field::Empty as EmptyField, instrument};
 
 pub struct SeedService {
     registered_endpoints: Arc<RegisteredEndpoints>,
@@ -38,6 +38,7 @@ impl Seed for SeedService {
         name = "bind_cli",
         skip_all,
         fields(
+            clust=%req.get_ref().cluster_id,
             src_virt=%req.get_ref().source_virtual_ip,
             src_nat=%req.remote_addr().unwrap(),
             tgt_virt=%req.get_ref().target_virtual_ip
@@ -64,13 +65,19 @@ impl Seed for SeedService {
         let resolved_target = self.registered_endpoints.get(tgt_ip, cluster_id).await?;
 
         debug!(tgt_nat=%resolved_target.natted_address);
-        resolved_target
-            .punch_req_stream
-            .send(Address {
+        let punch_req_res = resolved_target.punch_req_stream.send(ServerPunchRequest {
+            client_nated_addr: Some(Address {
                 ip: src_nated_addr.ip().to_string(),
                 port: src_nated_addr.port().try_into().unwrap(),
-            })
-            .unwrap();
+            }),
+            client_virtual_ip: src_ip.clone(),
+        });
+        let failed_punch_request = if let Err(err) = punch_req_res {
+            error!(%err, "failed to send punch request");
+            true
+        } else {
+            false
+        };
 
         self.cluster_manager.send(
             cluster_id.clone(),
@@ -87,13 +94,14 @@ impl Seed for SeedService {
                 port: resolved_target.natted_address.port().try_into().unwrap(),
             }),
             server_certificate: resolved_target.server_certificate,
+            failed_punch_request,
         }))
     }
 
     #[instrument(
         name = "bind_srv",
         skip_all,
-        fields(virt=%req.get_ref().virtual_ip, nat=%req.remote_addr().unwrap())
+        fields(clust=%req.get_ref().cluster_id,virt=%req.get_ref().virtual_ip, nat=%req.remote_addr().unwrap())
     )]
     async fn bind_server(
         &self,
@@ -135,7 +143,7 @@ impl Seed for SeedService {
     #[instrument(
         name = "bind_node",
         skip_all,
-        fields(src_nat=%req.remote_addr().unwrap())
+        fields(clust = EmptyField,src_nat=%req.remote_addr().unwrap())
     )]
     async fn bind_node(
         &self,
@@ -144,6 +152,7 @@ impl Seed for SeedService {
         let mut stream = req.into_inner();
         let bind_req = match stream.next().await {
             Some(Ok(res)) => {
+                tracing::Span::current().record("clust", &res.cluster_id);
                 debug!(virt=%res.source_virtual_ip, "new request");
                 res
             }
@@ -166,6 +175,7 @@ impl Seed for SeedService {
                 time: Message::now(),
             },
         );
+        // debug!("waiting for bind node stream to close");
         if stream.next().await.is_some() {
             return Err(Status::invalid_argument(
                 "Expected only one binding request",
@@ -181,9 +191,10 @@ impl Seed for SeedService {
         );
         debug!(
             "{:?}",
-            self.cluster_manager.get_summary(bind_req.cluster_id).await
+            self.cluster_manager
+                .get_summary(bind_req.cluster_id.clone())
+                .await
         );
-        // debug!("bind node completed");
         Ok(Response::new(NodeBindingResponse {}))
     }
 }

@@ -16,6 +16,7 @@ message ClientBindingRequest {
 message ClientBindingResponse {
     Address target_nated_addr = 1;
     bytes server_certificate = 2;
+    bool failed_punch_request = 3;
 }
 
 message ServerBindingRequest {
@@ -25,7 +26,8 @@ message ServerBindingRequest {
 }
 
 message ServerPunchRequest {
-    Address client_nated_addr = 2;
+    Address client_nated_addr = 1;
+    string client_virtual_ip = 2;
 }
 
 message NodeBindingRequest {

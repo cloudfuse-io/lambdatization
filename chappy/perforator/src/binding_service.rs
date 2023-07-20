@@ -1,4 +1,4 @@
-use crate::{metrics, CHAPPY_CONF};
+use crate::CHAPPY_CONF;
 use chappy_seed::NodeBindingResponse;
 use chappy_seed::{
     seed_client::SeedClient, ClientBindingRequest, ClientBindingResponse, NodeBindingRequest,
@@ -14,7 +14,7 @@ use tokio::task::JoinHandle;
 use tonic::transport::{Channel, Endpoint, Uri};
 use tonic::{Response, Status, Streaming};
 use tower::service_fn;
-use tracing::{debug, error, instrument};
+use tracing::{debug, error, instrument, Instrument};
 
 pub struct BindingService {
     p2p_port: u16,
@@ -28,10 +28,11 @@ pub struct NodeBindingHandle(
 
 impl NodeBindingHandle {
     pub async fn close(self) {
-        let NodeBindingHandle(handle, _) = self;
+        let NodeBindingHandle(handle, sender) = self;
+        drop(sender);
         match handle.await {
-            Ok(Ok(resp)) => debug!("{:?}", resp.get_ref()),
-            err => error!("{:?}", err),
+            Ok(Ok(_)) => debug!("node binding closed"),
+            err => error!(?err, "node binding failed to close"),
         }
     }
 }
@@ -91,11 +92,15 @@ impl BindingService {
         let (tx, rx) = mpsc::channel::<NodeBindingRequest>(1);
 
         let mut client = self.client().await;
-        let handle = tokio::spawn(metrics(async move {
-            client
-                .bind_node(tokio_stream::wrappers::ReceiverStream::new(rx))
-                .await
-        }));
+        // don't use a gracefull spawn here as we manually close the handle
+        let handle = tokio::spawn(
+            async move {
+                client
+                    .bind_node(tokio_stream::wrappers::ReceiverStream::new(rx))
+                    .await
+            }
+            .instrument(tracing::Span::current()),
+        );
         tx.send(NodeBindingRequest {
             cluster_id: CHAPPY_CONF.cluster_id.clone(),
             source_virtual_ip: CHAPPY_CONF.virtual_ip.clone(),
@@ -108,16 +113,19 @@ impl BindingService {
 
     pub async fn bind_client(&self, target_virtual_ip: String) -> ClientBindingResponse {
         debug!("call seed to bind client");
-        self.client()
+        let resp = self
+            .client()
             .await
             .bind_client(ClientBindingRequest {
                 cluster_id: CHAPPY_CONF.cluster_id.clone(),
                 source_virtual_ip: CHAPPY_CONF.virtual_ip.clone(),
                 target_virtual_ip,
             })
-            .await
-            .unwrap()
-            .into_inner()
+            .await;
+        if let Err(err) = &resp {
+            error!(%err,"cli binding failed");
+        }
+        resp.unwrap().into_inner()
     }
 
     pub async fn bind_server(&self, server_certificate: Vec<u8>) -> Streaming<ServerPunchRequest> {
