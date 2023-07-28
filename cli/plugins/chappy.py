@@ -2,8 +2,6 @@
 
 import base64
 import json
-import random
-import string
 import time
 import uuid
 from collections import namedtuple
@@ -17,21 +15,15 @@ from common import (
     REPOROOT,
     FargateService,
     aws,
-    conf,
     format_lambda_output,
     get_otel_env,
     terraform_output,
     wait_deployment,
+    rand_cluster_id,
 )
 from invoke import Context, Exit, task
 
 VALIDATORS = OTEL_VALIDATORS
-
-
-def rand_cluster_id() -> str:
-    return "".join(
-        random.choice(string.digits + string.ascii_letters) for _ in range(6)
-    )
 
 
 def service_outputs(c: Context) -> tuple[str, str, str]:

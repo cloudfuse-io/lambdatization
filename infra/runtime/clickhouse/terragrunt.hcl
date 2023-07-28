@@ -29,7 +29,8 @@ terraform {
 }
 
 inputs = {
-  region_name      = local.region_name
-  clickhouse_image = "dummy_overriden_by_before_hook"
-  bucket_arn       = dependency.core.outputs.bucket_arn
+  region_name                  = local.region_name
+  clickhouse_standalone_image  = "dummy_overriden_by_before_hook"
+  clickhouse_distributed_image = "dummy_overriden_by_before_hook"
+  bucket_arn                   = dependency.core.outputs.bucket_arn
 }

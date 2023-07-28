@@ -1,6 +1,8 @@
 variable "region_name" {}
 
-variable "clickhouse_image" {}
+variable "clickhouse_standalone_image" {}
+
+variable "clickhouse_distributed_image" {}
 
 variable "bucket_arn" {}
 
@@ -44,7 +46,7 @@ module "engine" {
 
   function_base_name = "clickhouse"
   region_name        = var.region_name
-  docker_image       = var.clickhouse_image
+  docker_image       = var.clickhouse_standalone_image
   memory_size        = 2048
   timeout            = 300
 
@@ -53,6 +55,26 @@ module "engine" {
 
 }
 
+module "distributed_engine" {
+  source = "../../common/lambda"
+
+  function_base_name = "clickhouse-distributed"
+  region_name        = var.region_name
+  docker_image       = var.clickhouse_distributed_image
+  memory_size        = 2048
+  timeout            = 300
+
+  additional_policies = [aws_iam_policy.s3_access.arn]
+  environment         = {
+    CHAPPY_VIRTUAL_SUBNET : "172.28.0.0/16",
+  }
+
+}
+
 output "lambda_name" {
   value = module.engine.lambda_name
+}
+
+output "distributed_lambda_name" {
+  value = module.distributed_engine.lambda_name
 }

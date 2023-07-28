@@ -24,20 +24,7 @@ services:
       context: ../..
       dockerfile: docker/ballista/distributed.Dockerfile
     image: cloudfuse-io/l12n:ballista-distributed
-    cap_drop:
-      - ALL
-    read_only: true
-    volumes:
-      - ballista-tmp:/tmp
-    entrypoint:
-      - python3
-      - distributed-handler.py
-    environment:
-      - AWS_ACCESS_KEY_ID=$LAMBDA_ACCESS_KEY_ID
-      - AWS_SECRET_ACCESS_KEY=$LAMBDA_SECRET_ACCESS_KEY
-      - AWS_SESSION_TOKEN=$LAMBDA_SESSION_TOKEN
-      - AWS_DEFAULT_REGION=$L12N_AWS_REGION
-      - DATA_BUCKET_NAME
+    # unfortunately local tests of distributed images is not supported yet
 
 volumes:
   ballista-tmp:
