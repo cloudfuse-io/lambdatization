@@ -167,19 +167,18 @@ def handle_event(event) -> dict[str, Any]:
     global IS_COLD_START
     is_cold_start = IS_COLD_START
     IS_COLD_START = False
+    if not is_cold_start:
+        raise Exception(f"Only cold starts supported")
 
     logging.info(f"role :{event['role']}")
     timeout_sec = float(event["timeout_sec"])
 
-    if is_cold_start:
-        if event["role"] == "scheduler":
-            srv_proc = init_scheduler()
-        elif event["role"] == "executor":
-            srv_proc = init_executor(event["scheduler_ip"])
-        else:
-            raise Exception(f'Unknown role {event["role"]}')
+    if event["role"] == "scheduler":
+        srv_proc = init_scheduler()
+    elif event["role"] == "executor":
+        srv_proc = init_executor(event["scheduler_ip"])
     else:
-        raise Exception(f"Only cold starts supported")
+        raise Exception(f'Unknown role {event["role"]}')
 
     init_duration = time.time() - start
 

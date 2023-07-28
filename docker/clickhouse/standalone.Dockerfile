@@ -21,7 +21,7 @@ RUN mkdir -p ${FUNCTION_DIR}
 RUN pip3 install \
     --target ${FUNCTION_DIR} \
     awslambdaric
-COPY lambda-handler.py ${FUNCTION_DIR}
+COPY standalone-handler.py ${FUNCTION_DIR}/lambda-handler.py
 
 
 FROM ghcr.io/cloudfuse-io/lambdatization:clickhouse-v$CLICKHOUSE_VERSION-patch

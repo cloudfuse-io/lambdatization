@@ -1,7 +1,9 @@
 version: "3.9"
 services:
-  clickhouse:
-    build: .
+  clickhouse_standalone:
+    build:
+      context: .
+      dockerfile: standalone.Dockerfile
     image: cloudfuse-io/l12n:clickhouse
     cap_drop:
       - ALL
@@ -23,6 +25,14 @@ services:
       nofile:
         soft: 1024
         hard: 1024
+
+  clickhouse_distributed:
+    build:
+      context: ../..
+      dockerfile: docker/clickhouse/distributed.Dockerfile
+    image: cloudfuse-io/l12n:clickhouse-distributed
+    # unfortunately local tests of distributed images is not supported yet
+
 
 volumes:
   clickhouse-tmp:

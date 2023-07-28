@@ -2,8 +2,6 @@
 
 import base64
 import json
-import random
-import string
 import time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -11,20 +9,14 @@ import core
 from common import (
     OTEL_VALIDATORS,
     aws,
-    conf,
     format_lambda_output,
     get_otel_env,
+    rand_cluster_id,
     terraform_output,
 )
 from invoke import Exit, task
 
 VALIDATORS = OTEL_VALIDATORS
-
-
-def rand_cluster_id() -> str:
-    return "".join(
-        random.choice(string.digits + string.ascii_letters) for _ in range(6)
-    )
 
 
 @task(autoprint=True)
@@ -55,7 +47,6 @@ def format_lambda_result(name, external_duration, lambda_res):
 
 def run_executor(
     lambda_name: str,
-    bucket_name: str,
     seed_ip: str,
     virtual_ip: str,
     scheduler_ip: str,
@@ -78,7 +69,6 @@ def run_executor(
         Payload=json.dumps(
             {
                 "role": "executor",
-                "bucket_name": bucket_name,
                 "timeout_sec": 40,
                 "scheduler_ip": scheduler_ip,
                 "env": env,
@@ -93,7 +83,6 @@ def run_executor(
 
 def run_scheduler(
     lambda_name: str,
-    bucket_name: str,
     seed_ip: str,
     virtual_ip: str,
     query: str,
@@ -116,7 +105,6 @@ def run_scheduler(
         Payload=json.dumps(
             {
                 "role": "scheduler",
-                "bucket_name": bucket_name,
                 "timeout_sec": 38,
                 "query": base64.b64encode(query.encode()).decode(),
                 "env": env,
@@ -149,7 +137,6 @@ LIMIT 10;"""
         scheduler_fut = ex.submit(
             run_scheduler,
             lambda_name,
-            bucket_name,
             seed,
             "172.28.0.1",
             sql,
@@ -162,7 +149,6 @@ LIMIT 10;"""
                 ex.submit(
                     run_executor,
                     lambda_name,
-                    bucket_name,
                     seed,
                     f"172.28.0.{i+2}",
                     "172.28.0.1",

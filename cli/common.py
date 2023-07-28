@@ -1,6 +1,8 @@
 import json
 import os
+import random
 import shutil
+import string
 import sys
 import time
 from dataclasses import dataclass
@@ -419,3 +421,9 @@ def get_otel_env() -> dict:
         env[url_var] = conf(OTEL_VALIDATORS)[f"L12N_{url_var}"]
         env[auth_var] = conf(OTEL_VALIDATORS)[f"L12N_{auth_var}"]
     return env
+
+
+def rand_cluster_id() -> str:
+    return "".join(
+        random.choice(string.digits + string.ascii_letters) for _ in range(6)
+    )
